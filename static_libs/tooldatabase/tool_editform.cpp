@@ -115,6 +115,7 @@ ToolEditForm::ToolEditForm(QWidget* parent)
     ui->lblWarn->setToolTip(QApplication::translate("ToolEditForm",
         "If the offset value is more than 50%, unmilled areas are possible.\nThese errors do not appear in the visualization.",
         "При значении отступа более 50% возможны не отфрезерованные участки. Эти ошибки не отображаются в визуализации."));
+    ui->lblWarn->setVisible(false);
 
     QSettings settings;
     ui->cbxFeedSpeeds->setCurrentIndex(settings.value(u"cbxFeedSpeeds"_s).toInt());
@@ -183,6 +184,7 @@ void ToolEditForm::setTool(const Tool& tool) {
     ui->chbxAutoName->setChecked(tool.autoName());
     ui->leName->setText(tool.name());
     ui->teNote->setText(tool.note());
+    updateWarn();
 }
 
 void ToolEditForm::setChanged(bool fl) {
@@ -307,9 +309,16 @@ void ToolEditForm::setupToolWidgets(int) {
 void ToolEditForm::valueChanged(double val) {
     if(auto dsbx = qobject_cast<QDoubleSpinBox*>(sender()); dsbx)
         (this->*update[dsbx])(val);
-    ui->lblWarn->setVisible(ui->dsbxStepover->value() > (ui->dsbxDiameter->value() * 0.5)); // WARNING возможны 'непрорезы'
+    updateWarn(); // WARNING возможны 'непрорезы'
     updateName();
     setChanged();
+}
+
+void ToolEditForm::updateWarn() {
+    // Ровно 50 % (ввод в процентах) не должен зажигать значок из-за погрешности double.
+    const double stepover = ui->dsbxStepover->value();
+    const double halfDiameter = ui->dsbxDiameter->value() * 0.5;
+    ui->lblWarn->setVisible(stepover > halfDiameter && !qFuzzyCompare(stepover, halfDiameter));
 }
 
 void ToolEditForm::on_pbApply_clicked() {
