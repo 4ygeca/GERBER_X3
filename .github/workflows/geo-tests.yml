@@ -66,9 +66,39 @@ jobs:
         run: ctest --test-dir build/static_libs/geo --output-on-failure
 
       # stdout в канал на Windows буферизуется целиком, и упавший процесс
-      # уносит вывод с собой -- повтор с -V хотя бы покажет код выхода.
+      # уносит вывод с собой: упавшие тесты запускаются ещё раз напрямую,
+      # с выводом QTest в файл, и печатается код выхода.
       - name: Rerun failed tests verbosely
         if: failure()
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir build/static_libs/geo --rerun-failed -V
+        run: |
+          for name in $(sed -n 's/^[0-9]*:geo_//p' build/static_libs/geo/Testing/Temporary/LastTestsFailed.log); do
+            exe="$(find bin -name "geo_test_${name}.exe" | head -n1)"
+            echo "=== geo_test_${name}: $exe"
+            set +e
+            "$exe" -o "geo_${name}.txt,txt" -o -,txt
+            code=$?
+            set -e
+            echo "=== exit code: $code ($(printf '0x%08X' "$code"))"
+            cat "geo_${name}.txt" || echo "(отчёт QTest не записан)"
+          done
+          exit 1
+
+      # Полный NTSTATUS (0xC0000005 и т.п.) bash обрезает до байта -- его
+      # видно только из нативной оболочки.
+      - name: Exit codes of failed tests (native)
+        if: failure()
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $env:PATH = "${{ runner.temp }}\msys64\ucrt64\bin;" + $env:PATH
+          $failed = Get-Content build/static_libs/geo/Testing/Temporary/LastTestsFailed.log -ErrorAction SilentlyContinue
+          foreach ($line in $failed) {
+            $name = ($line -split ':', 2)[1] -replace '^geo_', ''
+            $exe = Get-ChildItem -Recurse -Path bin -Filter "geo_test_$name.exe" | Select-Object -First 1
+            Write-Host "=== $($exe.FullName)"
+            & $exe.FullName -o -,txt
+            Write-Host ("=== exit code: 0x{0:X8}" -f $LASTEXITCODE)
+          }
