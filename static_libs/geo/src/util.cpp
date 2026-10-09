@@ -398,10 +398,14 @@ void flattenArcs(Polyline& polyline, double tolerance) {
         const Vertex& to = polyline[(i + 1) % count];
         const auto arc = arcOf(from, to, from.bulge);
         if(!arc) continue;
+        // Угол хорды со стрелкой tolerance: 2*acos(1 - tol/r), записанный через
+        // 1 - cos(x) = 2*sin^2(x/2) -- на огромном радиусе 1 - tol/r округлился бы
+        // до единицы, шаг до нуля, а число отрезков до бесконечности.
         const double step = arc->radius > tolerance
-            ? 2.0 * std::acos(1.0 - tolerance / arc->radius)
+            ? 4.0 * std::asin(std::sqrt(tolerance / (2.0 * arc->radius)))
             : pi / 2.0;
-        const int segments = std::max(2, static_cast<int>(std::ceil(std::abs(arc->theta) / step)));
+        const double pieces = std::ceil(std::abs(arc->theta) / step);
+        const int segments = static_cast<int>(std::clamp(pieces, 1.0, 1.0e6));
         for(int k = 1; k < segments; ++k)
             flat.emplace_back(arc->pointAt(static_cast<double>(k) / segments));
     }
@@ -413,8 +417,16 @@ void flattenArcs(Polyline& polyline, double tolerance) {
 Polyline& transform(Polyline& polyline, const QTransform& tr) {
     if(tr.isIdentity()) return polyline;
 
-    if(!isSimilarity(tr) && hasArcs(polyline))
-        flattenArcs(polyline, arcFlattenTolerance);
+    if(!isSimilarity(tr) && hasArcs(polyline)) {
+        // Хорды режутся ДО отображения, а отклонение хорды от образа дуги
+        // растягивается вместе с плоскостью -- не больше чем в старшее
+        // сингулярное число линейной части. Допуск делим на него, чтобы
+        // arcFlattenTolerance держался уже на результате.
+        const double sum = tr.m11() * tr.m11() + tr.m12() * tr.m12() + tr.m21() * tr.m21() + tr.m22() * tr.m22();
+        const double det = tr.m11() * tr.m22() - tr.m12() * tr.m21();
+        const double stretch = std::sqrt((sum + std::sqrt(std::max(0.0, sum * sum - 4.0 * det * det))) / 2.0);
+        flattenArcs(polyline, arcFlattenTolerance / std::max(stretch, 1.0));
+    }
 
     for(auto& vertex: polyline)
         static_cast<QPointF&>(vertex) = tr.map(static_cast<const QPointF&>(vertex));
