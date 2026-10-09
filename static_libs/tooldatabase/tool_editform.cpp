@@ -389,7 +389,7 @@ void ToolEditForm::updateDsbxFeedRate(double val) {
 void ToolEditForm::updateDsbxOneTurnCut(double val) {
     // qDebug() << __FUNCTION__ << val;
     tool_.setOneTurnCut(val);
-    ui->dsbxOneTurnCutPercent->setValue(tool_.diameter() > 0. ? val / (tool_.diameter() * 0.1) : 0.);
+    ui->dsbxOneTurnCutPercent->setValue(tool_.diameter() > 0. ? val / (tool_.diameter() * 0.01) : 0.);
     if(ui->chbxFeedRate->isChecked())
         ui->dsbxFeedRate->setValue(tool_.oneTurnCut() * tool_.spindleSpeed() * feed);
     if(ui->chbxPlungeRate->isChecked())
@@ -418,7 +418,7 @@ void ToolEditForm::updateDsbxSpindleSpeed(double val) {
 void ToolEditForm::updateDsbxStepover(double val) {
     // qDebug() << __FUNCTION__ << val;
     tool_.setStepover(val);
-    ui->dsbxStepoverPercent->setValue(tool_.diameter() > 0. ? val / (tool_.diameter() * 0.1) : 0.);
+    ui->dsbxStepoverPercent->setValue(tool_.diameter() > 0. ? val / (tool_.diameter() * 0.01) : 0.);
 }
 
 void ToolEditForm::updateDsbxLenght(double val) {
@@ -428,12 +428,12 @@ void ToolEditForm::updateDsbxLenght(double val) {
 
 void ToolEditForm::updateDsbxOneTurnCutPercent(double val) {
     // qDebug() << __FUNCTION__ << val;
-    ui->dsbxOneTurnCut->setValue(val * (tool_.diameter() * 0.1));
+    ui->dsbxOneTurnCut->setValue(val * (tool_.diameter() * 0.01));
 }
 
 void ToolEditForm::updateDsbxStepoverPercent(double val) {
     // qDebug() << __FUNCTION__ << val;
-    ui->dsbxStepover->setValue(val * (tool_.diameter() * 0.1));
+    ui->dsbxStepover->setValue(val * (tool_.diameter() * 0.01));
 }
 
 #include "moc_tool_editform.cpp"
