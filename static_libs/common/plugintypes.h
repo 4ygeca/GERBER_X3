@@ -57,6 +57,7 @@ struct Transform {
     double angle{};
     QPointF translate{};
     QPointF scale{1, 1};
+    QPointF shear{}; // наклон осей, градусы: x += y*tan(shear.x), y += x*tan(shear.y)
 
     QTransform toQTransform() const;
     operator QTransform() const;

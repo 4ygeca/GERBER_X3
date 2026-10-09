@@ -185,8 +185,11 @@ bool isSimilarity(const QTransform& tr);
 // Есть ли в полилинии хоть один дуговой сегмент.
 bool hasArcs(const Polyline& polyline);
 
-Polyline& transform(Polyline& polyline, const QTransform& tr)
-    pre(isSimilarity(tr) || !hasArcs(polyline));
+// Неподобие (неравный масштаб, наклон) дугу окружности в дугу не переводит:
+// дуги перед ним разворачиваются в хорды с отклонением не больше
+// arcFlattenTolerance, и результат -- уже ломаная, без дуг.
+inline constexpr double arcFlattenTolerance = 1e-3;
+Polyline& transform(Polyline& polyline, const QTransform& tr);
 Polylines& transform(Polylines& polylines, const QTransform& tr);
 
 Polyline& translate(Polyline& polyline, QPointF offset);

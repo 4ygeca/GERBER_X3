@@ -21,11 +21,14 @@
 #include "geo/util.h"
 
 #include <QTransform>
+#include <QtMath>
 
 QTransform Transform::toQTransform() const {
     QTransform t;
     t.translate(translate.x(), translate.y());
     t.rotate(angle);
+    if(!shear.isNull())
+        t.shear(std::tan(qDegreesToRadians(shear.x())), std::tan(qDegreesToRadians(shear.y())));
     t.scale(scale.x(), scale.y());
     return t;
 }

@@ -382,8 +382,39 @@ bool hasArcs(const Polyline& polyline) {
     return std::ranges::any_of(polyline, &Vertex::isArc);
 }
 
+namespace {
+
+// Дуги -- в хорды: стрелка прогиба каждой хорды не больше tolerance.
+void flattenArcs(Polyline& polyline, double tolerance) {
+    Polyline flat;
+    flat.closed = polyline.closed;
+    flat.width = polyline.width;
+    flat.reserve(polyline.size());
+    const std::size_t count = polyline.size();
+    for(std::size_t i{}; i < count; ++i) {
+        const Vertex& from = polyline[i];
+        flat.emplace_back(static_cast<const QPointF&>(from));
+        if(!from.isArc() || (!polyline.closed && i + 1 == count)) continue;
+        const Vertex& to = polyline[(i + 1) % count];
+        const auto arc = arcOf(from, to, from.bulge);
+        if(!arc) continue;
+        const double step = arc->radius > tolerance
+            ? 2.0 * std::acos(1.0 - tolerance / arc->radius)
+            : pi / 2.0;
+        const int segments = std::max(2, static_cast<int>(std::ceil(std::abs(arc->theta) / step)));
+        for(int k = 1; k < segments; ++k)
+            flat.emplace_back(arc->pointAt(static_cast<double>(k) / segments));
+    }
+    polyline = std::move(flat);
+}
+
+} // namespace
+
 Polyline& transform(Polyline& polyline, const QTransform& tr) {
     if(tr.isIdentity()) return polyline;
+
+    if(!isSimilarity(tr) && hasArcs(polyline))
+        flattenArcs(polyline, arcFlattenTolerance);
 
     for(auto& vertex: polyline)
         static_cast<QPointF&>(vertex) = tr.map(static_cast<const QPointF&>(vertex));

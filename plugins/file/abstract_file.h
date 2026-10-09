@@ -254,9 +254,11 @@ class TransformDialog : public QDialog {
         TrX,
         TrY,
         ScX,
-        ScY
+        ScY,
+        ShX,
+        ShY
     };
-    DoubleSpinBox* dsbx[5];
+    DoubleSpinBox* dsbx[7];
     std::vector<AbstractFile*> files_;
     std::unordered_map<AbstractFile*, Transform> backup;
 
@@ -279,6 +281,10 @@ public:
         dsbx[TrX]->setSuffix(tr(" mm"));
         dsbx[TrY]->setRange(-1000, +1000);
         dsbx[TrY]->setSuffix(tr(" mm"));
+        dsbx[ShX]->setRange(-60, +60);
+        dsbx[ShX]->setSuffix(tr(" °"));
+        dsbx[ShY]->setRange(-60, +60);
+        dsbx[ShY]->setSuffix(tr(" °"));
 
         // QPushButton button(tr("Apply"), &d);
         // layout.addRow(new QWidget{&d), &button};
@@ -291,6 +297,8 @@ public:
         dsbx[TrY]->setValue(transform.translate.y());
         dsbx[ScX]->setValue(transform.scale.x());
         dsbx[ScY]->setValue(transform.scale.y());
+        dsbx[ShX]->setValue(transform.shear.x());
+        dsbx[ShY]->setValue(transform.shear.y());
 
         for(auto* file: files_)
             backup.try_emplace(file, file->transform());
@@ -313,6 +321,8 @@ public:
         layout->addRow(new QLabel{tr("Translate Y:"), this}, dsbx[TrY]);
         layout->addRow(new QLabel{tr("Scale X:"), this}, dsbx[ScX]);
         layout->addRow(new QLabel{tr("Scale Y:"), this}, dsbx[ScY]);
+        layout->addRow(new QLabel{tr("Shear X:"), this}, dsbx[ShX]);
+        layout->addRow(new QLabel{tr("Shear Y:"), this}, dsbx[ShY]);
         layout->setLabelAlignment(Qt::AlignRight);
         layout->addRow(buttonBox);
 
@@ -326,6 +336,7 @@ public:
             .angle = dsbx[Ang]->value(),
             .translate{dsbx[TrX]->value(), dsbx[TrY]->value()},
             .scale{dsbx[ScX]->value(), dsbx[ScY]->value()},
+            .shear{dsbx[ShX]->value(), dsbx[ShY]->value()},
         };
         for(auto* file: files_)
             file->setTransform(transform);

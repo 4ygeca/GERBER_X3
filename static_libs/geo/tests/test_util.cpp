@@ -36,6 +36,7 @@ private slots:
     void fromPathRecognisesArcsOfEllipse();
     void transformedPolygonKeepsOrientationCanon();
     void transformedRegionKeepsBodyInsideForeignHole();
+    void shearFlattensArcs();
     void decimatedKeepsShapeWithinTolerance();
 };
 
@@ -254,6 +255,24 @@ void UtilTest::transformedRegionKeepsBodyInsideForeignHole() {
     const Polygons rotated = transformed(region, QTransform{}.translate(3.0, -2.0).rotate(37.0));
     QVERIFY(near(rotated.area(), area, 1e-6));
     QCOMPARE(rotated.size(), std::size_t(2));
+}
+
+void UtilTest::shearFlattensArcs() {
+    // Наклон дугу окружности в дугу не переводит: дуги уходят в хорды, а
+    // площадь (определитель наклона -- единица) сохраняется.
+    Polyline c = circle(10.0);
+    const double area = c.area();
+    transform(c, QTransform{}.shear(0.3, 0.0));
+    QVERIFY(!hasArcs(c));
+    QVERIFY(near(c.area(), area, area * 1e-3));
+    QVERIFY(near(c.boundingRect().width(), 2.0 * std::hypot(5.0, 0.3 * 5.0), 1e-2));
+
+    // Неравный масштаб -- так же.
+    Polyline e = circle(10.0);
+    transform(e, QTransform::fromScale(2.0, 1.0));
+    QVERIFY(!hasArcs(e));
+    QVERIFY(near(e.area(), 2.0 * area, 2.0 * area * 1e-3));
+    QVERIFY(near(e.boundingRect().width(), 20.0, 1e-6));
 }
 
 void UtilTest::decimatedKeepsShapeWithinTolerance() {
