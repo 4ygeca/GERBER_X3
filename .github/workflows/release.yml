@@ -81,7 +81,9 @@ jobs:
         run: |
           set -eu
           BIN_DIR="$(dirname "$(find bin -maxdepth 3 -type d -name plugins)")"
-          VERSION="${{ github.ref_name }}"
+          # Имя ветки может содержать '/' (fix/raster-nesting) -- в имени папки
+          # и архива это лишний каталог, и маска upload-artifact его не найдёт.
+          VERSION="$(printf '%s' "${{ github.ref_name }}" | tr '/' '-')"
           OUT="GGEasy-${VERSION}-windows-x64"
 
           mkdir -p "$OUT"
