@@ -35,6 +35,7 @@ private slots:
     void closeAndReversedKeepArcs();
     void fromPathRecognisesArcsOfEllipse();
     void transformedPolygonKeepsOrientationCanon();
+    void transformedRegionKeepsBodyInsideForeignHole();
     void decimatedKeepsShapeWithinTolerance();
 };
 
@@ -231,6 +232,28 @@ void UtilTest::transformedPolygonKeepsOrientationCanon() {
 
     const Polygons region = transformed(Polygons{polygon}, QTransform::fromScale(-1.0, 1.0));
     QVERIFY(near(region.area(), area, 1e-6));
+}
+
+void UtilTest::transformedRegionKeepsBodyInsideForeignHole() {
+    // Заливка с вырезом и площадка внутри выреза -- два тела, второе лежит
+    // в дырке первого (растр HLDI по залитой меди).
+    Polyline hole = rectangle(10.0, 10.0);
+    hole.reverse();
+    const Polygon frame{rectangle(20.0, 20.0), {hole}};
+    const Polygon island{rectangle(4.0, 4.0)};
+    const Polygons region{frame, island};
+    const double area = 400.0 - 100.0 + 16.0;
+    QVERIFY(near(region.area(), area, 1e-6));
+
+    // Плоский список контуров вложенности не помнит: дырка заливки вычитается
+    // из объединения ВСЕХ тел и уносит площадку с собой. Это поведение
+    // конструктора, из-за него растр и собирает регион не так.
+    QVERIFY(near(Polygons{region.contours()}.area(), 400.0 - 100.0, 1e-6));
+
+    // Поворот региона идёт по телу -- площадка остаётся на месте.
+    const Polygons rotated = transformed(region, QTransform{}.translate(3.0, -2.0).rotate(37.0));
+    QVERIFY(near(rotated.area(), area, 1e-6));
+    QCOMPARE(rotated.size(), std::size_t(2));
 }
 
 void UtilTest::decimatedKeepsShapeWithinTolerance() {

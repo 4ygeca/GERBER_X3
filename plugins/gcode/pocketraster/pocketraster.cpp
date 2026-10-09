@@ -19,6 +19,8 @@
 #include "geo/fill.h"
 #include "geo/util.h"
 
+#include <QTransform>
+
 #include <algorithm>
 
 namespace PocketRaster {
@@ -143,7 +145,19 @@ void Creator::createRasterAccLaser(const Tool& tool, const double depth, const d
     }
 
     { // calculate
-        const Geo::Polygons region{laserPath};
+        // Регион -- сам frames, а не сборка из laserPath: в плоском списке
+        // контуров вложенность выражена одной ориентацией, и Polygons{Polylines}
+        // вычитает объединение всех пустот из объединения всех тел -- тело,
+        // лежащее внутри чужой дырки (дорожка в вырезе заливки), пропадает.
+        // Geo::transformed поворачивает регион ПО ТЕЛУ, без поворота -- точно.
+        Geo::Polygons region = frames;
+        if(!qFuzzyIsNull(angle)) {
+            QTransform tr;
+            tr.translate(center.x(), center.y());
+            tr.rotate(angle);
+            tr.translate(-center.x(), -center.y());
+            region = Geo::transformed(frames, tr);
+        }
         laserPath = Geo::clipOpen(Geo::ClipType_::Intersection, {zPath}, region); // laser on
         if(laserPath.empty()) return;
         addAcc(laserPath, gcp.params[AccDistance].toDouble()); // add laser off paths
