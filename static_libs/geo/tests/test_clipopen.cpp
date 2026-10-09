@@ -12,6 +12,7 @@
 #include "geo/util.h"
 
 #include <QTest>
+#include <QTransform>
 
 #include <cmath>
 
@@ -72,6 +73,7 @@ private slots:
     void closedRingCutByStrip();
     void closedRingUntouched();
     void closedRingInsideRegion();
+    void rasterLineKeepsIslandInsideHole();
 };
 
 void ClipOpenTest::segmentThroughSquare() {
@@ -212,4 +214,33 @@ void ClipOpenTest::closedRingInsideRegion() {
 }
 
 QTEST_APPLESS_MAIN(ClipOpenTest)
+// Строка растра HLDI (pocketraster, createRasterAccLaser): заливка с вырезом
+// и площадка в вырезе. Регион, пересобранный из плоского списка контуров,
+// площадку теряет -- дырка заливки вычитается из объединения ВСЕХ тел; сам
+// регион и его поворот по телу (Geo::transformed) -- нет.
+void ClipOpenTest::rasterLineKeepsIslandInsideHole() {
+    const Polygon pour{rect(-10, -10, 10, 10), {rect(-5, -5, 5, 5).reversed()}};
+    const Polygon pad{rect(-2, -2, 2, 2)};
+    const Polygons region{pour, pad};
+    const Polylines line{openSeg({-20, 0}, {20, 0})};
+
+    // Заливка 2 x 5 и площадка 4.
+    const Polylines lit = clipOpen(BooleanOp_::Intersection, line, region);
+    QCOMPARE(lit.size(), std::size_t(3));
+    QVERIFY(std::abs(totalLength(lit) - 14.0) < lengthTolerance);
+
+    // Так растр и терял площадку: остаются только два куска заливки.
+    const Polylines lost = clipOpen(BooleanOp_::Intersection, line, Polygons{region.contours()});
+    QCOMPARE(lost.size(), std::size_t(2));
+    QVERIFY(std::abs(totalLength(lost) - 10.0) < lengthTolerance);
+
+    // Повёрнутый регион (угол растра): та же прямая через центр режет каждую
+    // полосу в 1/cos раз длиннее.
+    const double angle = 30.0;
+    const Polygons rotated = transformed(region, QTransform{}.rotate(angle));
+    const Polylines litRotated = clipOpen(BooleanOp_::Intersection, line, rotated);
+    QCOMPARE(litRotated.size(), std::size_t(3));
+    QVERIFY(std::abs(totalLength(litRotated) - 14.0 / std::cos(angle * pi / 180.0)) < 1e-6);
+}
+
 #include "test_clipopen.moc"
