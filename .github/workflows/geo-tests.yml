@@ -64,3 +64,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/static_libs/geo --output-on-failure
+
+      # stdout в канал на Windows буферизуется целиком, и упавший процесс
+      # уносит вывод с собой -- повтор с -V хотя бы покажет код выхода.
+      - name: Rerun failed tests verbosely
+        if: failure()
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build/static_libs/geo --rerun-failed -V
