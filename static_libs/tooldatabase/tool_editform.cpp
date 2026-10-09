@@ -304,6 +304,7 @@ void ToolEditForm::setupToolWidgets(int) {
 
     setChanged();
     updateName();
+    updateWarn(); // setRowVisible(hlayStepover) показывает и lblWarn -- он в той же строке
 }
 
 void ToolEditForm::valueChanged(double val) {
@@ -318,7 +319,9 @@ void ToolEditForm::updateWarn() {
     // Ровно 50 % (ввод в процентах) не должен зажигать значок из-за погрешности double.
     const double stepover = ui->dsbxStepover->value();
     const double halfDiameter = ui->dsbxDiameter->value() * 0.5;
-    ui->lblWarn->setVisible(stepover > halfDiameter && !qFuzzyCompare(stepover, halfDiameter));
+    // У сверла строки шага нет -- и значку негде стоять.
+    ui->lblWarn->setVisible(ui->formCutParam->isRowVisible(ui->hlayStepover)
+        && stepover > halfDiameter && !qFuzzyCompare(stepover, halfDiameter));
 }
 
 void ToolEditForm::on_pbApply_clicked() {
