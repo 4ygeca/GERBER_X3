@@ -261,6 +261,7 @@ class TransformDialog : public QDialog {
     DoubleSpinBox* dsbx[7];
     std::vector<AbstractFile*> files_;
     std::unordered_map<AbstractFile*, Transform> backup;
+    QPushButton* okButton_{};
 
 public:
     TransformDialog(std::vector<AbstractFile*>&& files, QWidget* parent = nullptr)
@@ -311,6 +312,7 @@ public:
         buttonBox->setGeometry(QRect(30, 240, 341, 32));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel | QDialogButtonBox::Ok);
+        okButton_ = buttonBox->button(QDialogButtonBox::Ok);
 
         connect(buttonBox, &QDialogButtonBox::accepted, this, &TransformDialog::accept);
         connect(buttonBox, &QDialogButtonBox::rejected, this, &TransformDialog::reject);
@@ -332,6 +334,16 @@ public:
     ~TransformDialog() override = default;
 
     void setTransform() {
+        // Определитель наклона 1 - tan(ShX)*tan(ShY): у нуля плата сплющивается
+        // в линию, ниже нуля -- ещё и зеркалится, хотя зеркала никто не просил.
+        // Такое не применяем: остаётся последнее годное преобразование.
+        const double shearDet = 1.0
+            - std::tan(qDegreesToRadians(dsbx[ShX]->value())) * std::tan(qDegreesToRadians(dsbx[ShY]->value()));
+        const bool valid = shearDet > 0.1;
+        if(okButton_) okButton_->setEnabled(valid);
+        for(int sh: {ShX, ShY})
+            dsbx[sh]->setStyleSheet(valid ? QString{} : u"QWidget{ background-color: red; }"_s);
+        if(!valid) return;
         Transform transform{
             .angle = dsbx[Ang]->value(),
             .translate{dsbx[TrX]->value(), dsbx[TrY]->value()},
