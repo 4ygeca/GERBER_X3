@@ -110,10 +110,11 @@ void Creator::createRasterAccLaser(const Tool& tool, const double depth, const d
     case GCode::On   : return;
     }
 
-    // Кадры экспозиции: все группы разом, сжатые на пол-луча (луч тоньше
-    // фрезы, delta у Inflate -- полная ширина, граница уезжает на половину).
+    // Кадры экспозиции: все группы разом, сжатые на пол-луча. delta у Inflate
+    // -- полная ширина, граница уезжает на её половину: пол-луча -- это
+    // delta = -toolDiameter (с -dOffset сжатие выходило на четверть луча).
     const Geo::Polygons frames = Geo::Inflate(
-        Geo::Polygons{std::span<const Geo::Polygon>{groupedPss}}, -dOffset);
+        Geo::Polygons{std::span<const Geo::Polygon>{groupedPss}}, -toolDiameter);
     Geo::Polylines profilePaths = frames.contours();
     if(profilePaths.empty()) return;
 
