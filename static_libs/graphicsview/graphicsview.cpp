@@ -22,6 +22,7 @@
 #include "ruler.h"
 #include "utils.h"
 
+#include <QContextMenuEvent>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QGraphicsSceneMouseEvent>
@@ -43,6 +44,16 @@
 
 constexpr double zoomFactor = 1.5;
 constexpr double zoomFactorAnim = 1.7;
+// Пределы масштаба, px/мм -- общие для колеса и кнопок. Ниже 1 не хватает
+// запаса выделения DataPath (gi_datapath.cpp), выше 1e5 нет смысла.
+constexpr double kMinScale = 1.0;
+constexpr double kMaxScale = 100000.0;
+// ПКМ: сдвиг больше порога -- панорама, меньше -- клик (меню). Как у Viewer3d.
+constexpr int kPanThresholdPx = 4;
+// Запас диапазона прокрутки вида вокруг данных, мм. При kMinScale это
+// 5000 px с каждой стороны -- больше любого вьюпорта, а при kMaxScale
+// (W + 10 м) * 1e5 px ещё помещается в int для любой реальной платы.
+constexpr double kViewPadMm = 5000.0;
 
 void setCursor(QWidget* w) {
     enum {
@@ -165,6 +176,9 @@ GraphicsView::GraphicsView(QWidget* parent)
     setBackgroundBrush(App::settings().guiColor(GuiColors::Background));
 
     scale(1.0, -1.0); // flip vertical
+    // Диапазон прокрутки вида теперь шире вьюпорта, и Qt больше не центрирует
+    // маленькую сцену сам -- начало координат в центр, как было.
+    centerOn(QPointF{});
 }
 
 GraphicsView::~GraphicsView() { App::grView.set(nullptr); }
@@ -208,17 +222,26 @@ void GraphicsView::zoomToSelected() {
 }
 
 void GraphicsView::zoomIn() {
-    if(getScale() > 100000.0) return;
-    App::settings().guiSmoothScSh()
-        ? animate(this, "scale"_ba, getScale(), getScale() * zoomFactorAnim)
-        : scale(zoomFactor, zoomFactor);
+    // Те же пределы, что у колеса (zoomAt), -- последний шаг укорачивается.
+    const double s = getScale();
+    if(s >= kMaxScale) return;
+    if(App::settings().guiSmoothScSh()) {
+        animate(this, "scale"_ba, s, std::min(s * zoomFactorAnim, kMaxScale));
+    } else {
+        const double k = std::min(zoomFactor, kMaxScale / s);
+        scale(k, k);
+    }
 }
 
 void GraphicsView::zoomOut() {
-    if(getScale() < 1.0) return;
-    App::settings().guiSmoothScSh()
-        ? animate(this, "scale"_ba, getScale(), getScale() * (1.0 / zoomFactorAnim))
-        : scale(1.0 / zoomFactor, 1.0 / zoomFactor);
+    const double s = getScale();
+    if(s <= kMinScale) return;
+    if(App::settings().guiSmoothScSh()) {
+        animate(this, "scale"_ba, s, std::max(s / zoomFactorAnim, kMinScale));
+    } else {
+        const double k = std::max(1.0 / zoomFactor, kMinScale / s);
+        scale(k, k);
+    }
 }
 
 void GraphicsView::fitInView(QRectF dstRect, bool withBorders) {
@@ -231,6 +254,16 @@ void GraphicsView::fitInView(QRectF dstRect, bool withBorders) {
             padding.width(),
             padding.height(),
         };
+    }
+    // Не крупнее kMaxScale: точка или отрезок без толщины в выделении давали
+    // бы сколь угодно большой масштаб (а нулевую сторону Qt не вписывает
+    // вовсе). Нижний предел не применяем -- большая раскладка должна
+    // вписываться целиком.
+    if(const QSizeF minSize = QSizeF{viewport()->size()} / kMaxScale;
+        dstRect.width() < minSize.width() || dstRect.height() < minSize.height()) {
+        const QPointF center = dstRect.center();
+        dstRect.setSize(dstRect.size().expandedTo(minSize));
+        dstRect.moveCenter(center);
     }
     // const auto r1(getViewRect().toRect());
     // const auto r2(dstRect.toRect());
@@ -280,6 +313,29 @@ void GraphicsView::setScale(double s) noexcept {
 
 void GraphicsView::scale(double sx, double sy) {
     QGraphicsView::scale(sx, sy);
+    onTransformChanged();
+}
+
+void GraphicsView::scrollViewBy(QPointF delta) {
+    if(const int dx = qRound(delta.x())) horizontalScrollBar()->setValue(horizontalScrollBar()->value() + dx);
+    if(const int dy = qRound(delta.y())) verticalScrollBar()->setValue(verticalScrollBar()->value() + dy);
+}
+
+void GraphicsView::zoomAt(QPointF viewPos, double factor) {
+    const double from = getScale();
+    // Если масштаб уже вне пределов (fitInView большой раскладки), дальше от
+    // них не уходим, но и не прыгаем к ним.
+    const double to = std::clamp(from * factor, std::min(kMinScale, from), std::max(kMaxScale, from));
+    if(to == from) return;
+    // Якорь считаем сами: AnchorUnderMouse берёт lastMouseMoveScenePoint,
+    // округлённый до пикселя и не обновляемый колесом. Чужой якорь на время
+    // снимаем -- он нужен кнопкам зума (mainwindow.cpp).
+    const QPointF anchor = mapToScene(viewPos);
+    const auto keepAnchor = transformationAnchor();
+    setTransformationAnchor(NoAnchor);
+    QGraphicsView::scale(to / from, to / from); // m22 остаётся отрицательным
+    setTransformationAnchor(keepAnchor);
+    scrollViewBy(mapFromScene(anchor) - viewPos);
     onTransformChanged();
 }
 
@@ -333,6 +389,11 @@ void GraphicsView::updateSceneRectToContents() {
     if(r.isEmpty()) r = {-100, -100, 200, 200};             // пустой проект, мм
     const auto pad = std::max(r.width(), r.height()) * 0.5; // запас на панорамирование
     scene()->setSceneRect(r.adjusted(-pad, -pad, pad, pad));
+    // У вида свой, широкий, sceneRect: QGraphicsView::setSceneRect задаёт
+    // только диапазон прокрутки и BSP сцены не трогает. С узким диапазоном
+    // сцены панорама и зум под курсором упирались в края, а при малом
+    // масштабе Qt центрировал сцену и не давал её двигать вовсе.
+    QGraphicsView::setSceneRect(r.adjusted(-kViewPadMm, -kViewPadMm, kViewPadMm, kViewPadMm));
 }
 
 void GraphicsView::scheduleSceneRectUpdate() {
@@ -655,29 +716,36 @@ void GraphicsView::resizeEvent(QResizeEvent* event) {
 }
 
 void GraphicsView::wheelEvent(QWheelEvent* event) {
-    const auto delta = event->angleDelta();
-    if(event->buttons() & Qt::RightButton) {
-        if(abs(delta.y()) == 120) (delta.y() > 0) ? zoomIn() : zoomOut();
+    QPoint delta = event->angleDelta();
+    if(delta.isNull()) delta = event->pixelDelta(); // некоторые тачпады шлют только пиксели
+    // Alt -- переключатель привязки к сетке (getSnappedPos), не навигация. Но
+    // Qt на Windows и X11 сам переводит Alt+колесо в горизонтальное --
+    // возвращаем ось на место.
+    if((event->modifiers() & Qt::AltModifier) && !delta.y()) delta = delta.transposed();
+    auto mods = event->modifiers();
+    mods.setFlag(Qt::AltModifier, false);
+    // Как в KiCad: колесо -- зум под курсором, Shift -- вверх/вниз, Ctrl --
+    // влево/вправо. Сразу, без анимации: анимация на каждый щелчок дралась
+    // со следующей. macOS сам переводит Shift-прокрутку в x -- берём ту ось,
+    // что пришла.
+    const int along = delta.y() ? delta.y() : delta.x();
+    if(mods == Qt::ShiftModifier) {
+        scrollViewBy({0.0, -double(along)});
+    } else if(mods == Qt::ControlModifier) {
+        scrollViewBy({-double(along), 0.0});
+    } else if(mods == Qt::NoModifier) {
+        // Множитель непрерывный: 1.5 за щелчок (120), доли щелчка -- колёсам
+        // высокого разрешения и тачпадам (раньше зум ждал ровно 120).
+        if(delta.y()) zoomAt(event->position(), std::pow(zoomFactor, delta.y() / 120.0));
+        if(delta.x()) scrollViewBy({-double(delta.x()), 0.0}); // наклон колеса
     } else {
-        auto sbUpdate = [&delta, this, scale = 3](QScrollBar* sb) {
-            auto value = sb->value();
-            App::settings().guiSmoothScSh()
-                ? animate(sb, "value", value, value - sb->pageStep() / (delta.y() > 0 ? +scale : -scale))
-                : sb->setValue(value - delta.y());
-        };
-        switch(event->modifiers()) {
-        case Qt::ControlModifier:
-            if(abs(delta.y()) == 120) (delta.y() > 0) ? zoomIn() : zoomOut();
-            break;
-        case Qt::ShiftModifier:
-            if(!delta.x()) sbUpdate(horizontalScrollBar());
-            break;
-        case Qt::NoModifier:
-            if(!delta.x()) sbUpdate(verticalScrollBar());
-            break;
-        default: // QGraphicsView::wheelEvent(event);
-            return;
-        }
+        return; // прочие сочетания -- не навигация
+    }
+    if(panState_ != PanState::Idle) {
+        // Вид сдвинулся под курсором: панорама продолжится от новой точки, а
+        // ПКМ+колесо -- уже жест, меню на отпускании не нужно.
+        panAnchor_ = mapToScene(event->position());
+        if(panState_ == PanState::Armed) panState_ = PanState::Consumed;
     }
     // После зума и прокрутки под курсором ДРУГАЯ точка сцены, поэтому scenePos
     // надо пересчитать -- как это делает mouseMoveEvent. Раньше здесь только
@@ -704,53 +772,36 @@ void GraphicsView::scrollContentsBy(int dx, int dy) {
     viewport()->update(region | region.translated(dx, dy));
 }
 
-auto mouseDragEvent(QMouseEvent* event, QEvent::Type type, Qt::MouseButton button, bool add) {
-    return std::make_unique<QMouseEvent>(
-        type,
-        event->position(),
-        event->scenePosition(),
-        event->globalPosition(),
-        button,
-        add ? event->buttons() | button : event->buttons() & ~button,
-        event->modifiers());
-}
-
 void GraphicsView::mousePressEvent(QMouseEvent* event) {
-    pressPos = mapToScene(event->position());
     toScenePos(event);
-    qDebug() << event->button();
-    if(event->buttons() & Qt::MiddleButton) {
+    // Нажатие посреди панорамы глотаем вместе с его отпусканием: ЛКМ иначе
+    // ставила бы точку фигуры (mouseClickL), а ПКМ при СКМ-панораме -- меню.
+    // Аккорд при нажатой ПКМ -- уже жест, меню на её отпускании не нужно.
+    swallowed_.setFlag(event->button(), false); // прежнее отпускание потерялось
+    if(panState_ != PanState::Idle && event->button() != panButton_) {
+        swallowed_.setFlag(event->button());
+        if(panState_ == PanState::Armed) panState_ = PanState::Consumed;
+        return event->accept();
+    }
+    if(event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
+        // В базу НЕ отдаём: в режиме RubberBandDrag она на любую кнопку, не
+        // принятую сценой, заводит резинку и снимает выделение, а подвижные
+        // item'ы захватили бы мышь правой кнопкой. Прежняя СКМ-панорама через
+        // ScrollHandDrag, setInteractive(false) и поддельную ЛКМ больше не нужна.
         event->accept();
-        setDragMode(ScrollHandDrag);
-        setInteractive(false);
-        QMouseEvent fakeEvent{event->type(),
-            event->position(), event->scenePosition(), event->globalPosition(),
-            Qt::LeftButton, event->buttons() | Qt::LeftButton, event->modifiers()};
-        QGraphicsView::mousePressEvent(&fakeEvent);
-    } else if(event->button() == Qt::RightButton) {
-        // { // удаление мостика
-        // QGraphicsItem* item = scene()->itemAt(mapToScene(event->position().toPoint()), transform());
-        // if (item && item->type() == Gi::Type::Bridge && !static_cast<BridgeItem*>(item)->ok())
-        // delete item;
-        // }
-
-        // setDragMode(NoDrag);
-        // setInteractive(true);
-        // QGraphicsView::mousePressEvent(event);
-
-        // это что бы при вызове контекстного меню ничего постороннего не было
-        emit mouseClickR(scenePos);
-#if 0
-        QGraphicsItem* item = scene()->itemAt(/*mapToScene(event->position().toPoint())*/
-            scenePos, transform());
-
-        if(item && contains<Gi::Type::Drill, Gi::Type::DataSolid>(item->type()))
-            GiToShapeEvent(event, item);
-#endif
+        // Прежнее отпускание могло потеряться (модальное окно, Alt+Tab).
+        endPan();
+        if(event->buttons() != event->button()) return; // аккорд с ЛКМ -- без панорамы
+        panButton_ = event->button();
+        panPressPos_ = event->position().toPoint();
+        panAnchor_ = mapToScene(event->position());
+        if(panButton_ == Qt::MiddleButton)
+            startPan(); // СКМ -- сразу, кликом она ничего не делает
+        else
+            panState_ = PanState::Armed; // ПКМ -- клик (меню) или панорама, решит порог
     } else {
-        qInfo("else");
+        pressPos = mapToScene(event->position());
         QGraphicsView::mousePressEvent(event);
-        // setDragMode(RubberBandDrag);
         // это для выделения рамкой  - работа по-умолчанию левой кнопки мыши
         if(ruler_ && !(rulerCtr++ & 0x1)) rulPt1 = scenePos;
 
@@ -777,23 +828,23 @@ void GraphicsView::mousePressEvent(QMouseEvent* event) {
 }
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent* event) {
-    qWarning() << event->button();
-    if(event->button() == Qt::MiddleButton) {
+    if(swallowed_ & event->button()) { // нажатие проглотила панорама
+        swallowed_.setFlag(event->button(), false);
+        return event->accept();
+    }
+    if(event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
         event->accept();
-        // отпускаем левую кнопку мыши которую виртуально зажали в mousePressEvent
-        QMouseEvent fakeEvent{event->type(),
-            event->position(), event->scenePosition(), event->globalPosition(),
-            Qt::LeftButton, event->buttons() & ~Qt::LeftButton, event->modifiers()};
-        QGraphicsView::mouseReleaseEvent(&fakeEvent);
-        setDragMode(RubberBandDrag);
-        setInteractive(true);
-    } else if(event->button() == Qt::RightButton) {
-        // это что бы при вызове контекстного меню ничего постороннего не было
-        // QGraphicsView::mousePressEvent(event);
-        setDragMode(RubberBandDrag);
-        // setDragMode(RubberBandDrag);
-        // setInteractive(true);
-        // emit mouseClickR(toScenePos(event));
+        if(event->button() != panButton_) return; // нажатие было не наше: аккорд, закрытие меню
+        const auto state = panState_;
+        // Сброс до меню: QMenu::exec крутит вложенный цикл событий.
+        endPan();
+        if(state == PanState::Armed) { // чистый клик ПКМ
+            // Раньше испускался на нажатии -- теперь панорама посреди рисования
+            // фигуры её не завершает. До меню -- чтобы при его вызове ничего
+            // постороннего (недорисованной фигуры) не было.
+            emit mouseClickR(toScenePos(event));
+            showSceneContextMenu(event);
+        }
     } else {
         QGraphicsView::mouseReleaseEvent(event);
         emit mouseClickL(toScenePos(event));
@@ -801,6 +852,19 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void GraphicsView::mouseMoveEvent(QMouseEvent* event) {
+    swallowed_ &= event->buttons(); // отпущенные мимо нас -- забыть
+    if(panState_ != PanState::Idle) {
+        if(!(event->buttons() & panButton_)) { // отпускание потерялось
+            endPan();
+        } else {
+            if(panState_ != PanState::Panning
+                && (event->position().toPoint() - panPressPos_).manhattanLength() > kPanThresholdPx)
+                startPan();
+            // Точка сцены под курсором едет за ним. Сдвиг -- от якоря, а не от
+            // прошлого события: дробные позиции (HiDPI) не копят ошибку.
+            if(panState_ == PanState::Panning) scrollViewBy(mapFromScene(panAnchor_) - event->position());
+        }
+    }
     QGraphicsView::mouseMoveEvent(event);
 
     auto dir = pressPos - mapToScene(event->position());
@@ -821,7 +885,45 @@ void GraphicsView::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void GraphicsView::mouseDoubleClickEvent(QMouseEvent* event) {
+    // Второе быстрое нажатие приходит как DblClick, а не Press. Без этого
+    // вторая панорама подряд не начиналась бы, а двойной клик ПКМ/СКМ доходил
+    // бы до item'ов: Marker/Pin -- resetPos(), фигура -- редактор.
+    if(event->button() == Qt::RightButton || event->button() == Qt::MiddleButton
+        || panState_ != PanState::Idle)
+        return mousePressEvent(event);
     QGraphicsView::mouseDoubleClickEvent(event);
+}
+
+void GraphicsView::contextMenuEvent(QContextMenuEvent* event) {
+    // Мышиное меню Qt синтезирует сам -- после НАЖАТИЯ ПКМ (X11, Wayland,
+    // macOS) или после отпускания (Windows), принято нажатие или нет. Нажатие
+    // ПКМ теперь ещё и начало панорамы, поэтому такое меню глотаем, а по
+    // чистому клику его открывает mouseReleaseEvent. С клавиатуры (Menu,
+    // Shift+F10) -- как было.
+    if(event->reason() == QContextMenuEvent::Mouse) return event->accept();
+    QGraphicsView::contextMenuEvent(event);
+}
+
+void GraphicsView::showSceneContextMenu(const QMouseEvent* event) {
+    QContextMenuEvent menuEvent{QContextMenuEvent::Mouse, event->position().toPoint(),
+        event->globalPosition().toPoint(), event->modifiers()};
+    menuEvent.setTimestamp(event->timestamp());
+    // Квалифицированно -- мимо своего фильтра, сразу к сцене и item'ам.
+    QGraphicsView::contextMenuEvent(&menuEvent);
+}
+
+void GraphicsView::startPan() {
+    panState_ = PanState::Panning;
+    // Не ::setCursor(): тот рисует перекрестье. Сохраняем то, что стоит, и
+    // вернём его в endPan().
+    panSavedCursor_ = viewport()->cursor();
+    viewport()->setCursor(Qt::ClosedHandCursor);
+}
+
+void GraphicsView::endPan() {
+    if(std::exchange(panState_, PanState::Idle) == PanState::Panning)
+        viewport()->setCursor(panSavedCursor_);
+    panButton_ = Qt::NoButton;
 }
 
 void GraphicsView::drawForeground(QPainter* painter, const QRectF& rect) {
