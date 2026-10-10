@@ -54,12 +54,23 @@ void Creator::createThermal(AbstractFile* file, const Tool& tool, const double d
       // Медь собирается ОДНИМ конструктором (параллельное дерево слияний в
       // joinAll), а не цепочкой |=: пообъектное объединение -- квадратичное
       // число точных свипов, на плотном гербере это зависание.
-        const auto graphicObjects(file->graphicObjects());
+        //
+        // Вся медь -- готовый слой файла (mergedCurves): вырезы %LPC учтены, а у
+        // гербера с компенсацией подтрава это уже раздутая медь -- та же, что у
+        // тел площадок из getDataForGC. Сборка из сырых graphicObjects давала
+        // нераздутых соседей, и кольцо срезало их компенсацию.
         const bool allCopper = !gcp.params[IgnoreCopper].toInt();
-        std::vector<Geo::Polygon> copper;
-        for(auto go: graphicObjects | v::filter([allCopper](auto* go) { return allCopper || go->positive(); }))
-            copper.append_range(go->fill.all());
-        frame = Geo::Inflate(Geo::Polygons{std::span<const Geo::Polygon>{copper}}, toolDiameter - 0.01);
+        Geo::Polygons copper;
+        if(allCopper) {
+            copper = file->mergedCurves();
+        } else {
+            const auto graphicObjects(file->graphicObjects());
+            std::vector<Geo::Polygon> parts;
+            for(auto go: graphicObjects | v::filter([](auto* go) { return go->positive(); }))
+                parts.append_range(go->fill.all());
+            copper = Geo::Polygons{std::span<const Geo::Polygon>{parts}};
+        }
+        frame = Geo::Inflate(copper, toolDiameter - 0.01);
 
         // Спицы уже в своём размере -- их не раздувать; и тоже одним слиянием.
         std::vector<Geo::Polygon> spokes;

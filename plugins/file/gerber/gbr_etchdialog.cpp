@@ -42,7 +42,9 @@ namespace Gerber {
 
 namespace {
 
-enum Column {
+// Не Column: в unity-сборке этот файл попадает в один пакет с gbr_netlist.cpp,
+// где в том же безымянном пространстве Gerber уже есть enum Column.
+enum EtchColumn {
     ColName,
     ColFunction,
     ColObjects,

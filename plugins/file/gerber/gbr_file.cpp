@@ -501,6 +501,18 @@ void File::initFrom(AbstractFile* file_) {
     // и трансформация, и переживает её. Разбор собрал слой без неё.
     if(auto* old = dynamic_cast<File*>(file_)) {
         etch_ = old->etch_;
+        // Ручной выбор по D-коду переносится, только если под этим кодом всё та
+        // же апертура: CAD при каждой выгрузке нумерует D10, D11... заново, и
+        // чужой выбор молча лёг бы на другую апертуру (площадку вместо логотипа).
+        // Ключи областей -- по функции X2, они от нумерации не зависят.
+        std::erase_if(etch_.overrides, [old, this](const auto& entry) {
+            const int32_t key = entry.first;
+            if(key < 0) return false;
+            const auto was = old->apertures_.find(key);
+            const auto now = apertures_.find(key);
+            return was == old->apertures_.end() || now == apertures_.end()
+                || !was->second || !now->second || was->second->name() != now->second->name();
+        });
         if(etch_.active()) {
             try {
                 rebuild();
