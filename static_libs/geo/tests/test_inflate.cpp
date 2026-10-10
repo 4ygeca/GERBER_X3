@@ -64,6 +64,21 @@ double grownSquareArea(double side, double r) {
     return side * side + 4.0 * side * r + std::numbers::pi * r * r;
 }
 
+// Контур вершина в вершину, со всеми знаками double, и у дуг -- центр,
+// радиус и размах: по сообщению упавшей проверки видно, где именно разошлось
+// (стык замыкания посреди дуги, несшитая пара, оборот не узнан).
+QString dump(const Polyline& p) {
+    QString s;
+    for(std::size_t i = 0; i < p.size(); ++i) {
+        const Vertex& v = p[i];
+        s += QString::asprintf("\n  [%zu] (%.17g, %.17g) bulge %.17g", i, v.x(), v.y(), v.bulge);
+        if(const auto a = arcOf(v, p[(i + 1) % p.size()], v.bulge))
+            s += QString::asprintf("  c (%.17g, %.17g) r %.17g theta %.17g",
+                a->center.x(), a->center.y(), a->radius, a->theta);
+    }
+    return s;
+}
+
 } // namespace
 
 class InflateTest : public QObject {
@@ -78,6 +93,7 @@ private slots:
     void erosionThickerThanBodyEmptiesIt();
     void arcSmallerThanOffsetStaysOneArc();
     void shrunkDiscKeepsTwoVertices();
+    void unevenCircleComesBackAsTwoHalves();
     void coarseOffsetUndershootsWithinTolerance();
     void coarseOffsetOfTinyCircleStaysWithinTolerance();
 };
@@ -140,8 +156,8 @@ void InflateTest::coarseOffsetUndershootsWithinTolerance() {
 // дуга осталась ОДНОЙ.
 void InflateTest::arcSmallerThanOffsetStaysOneArc() {
     constexpr double R = 1.0, delta = 6.0, r = delta / 2; // r = 3 > R
-    // Полукруг: две вершины, дуга сверху (прогиб +1 -- полуокружность) и
-    // прямая обратно.
+    // Полукруг: две вершины, дуга снизу (прогиб +1 слева направо --
+    // полуокружность против часовой через (0, -R)) и прямая обратно.
     Polyline half{Vertex(-R, 0.0, 1.0), Vertex(R, 0.0)};
     half.closed = true;
     const Polygons base{Polylines{half}};
@@ -149,19 +165,21 @@ void InflateTest::arcSmallerThanOffsetStaysOneArc() {
 
     const Polygons grown = Inflate(base, +delta);
 
-    // Раздутый полукруг: круг радиуса R + r сверху, снизу -- прямоугольник
+    // Раздутый полукруг: круг радиуса R + r снизу, сверху -- прямоугольник
     // 2R x r и два четвертькруга по концам диаметра.
-    const double expected = std::numbers::pi * (R + r) * (R + r) / 2 // верх
-        + 2 * R * r                                                  // полоса под диаметром
+    const double expected = std::numbers::pi * (R + r) * (R + r) / 2 // низ
+        + 2 * R * r                                                  // полоса над диаметром
         + std::numbers::pi * r * r / 2;                              // два конца
     QVERIFY(std::abs(rasterArea(grown) - expected) < areaTolerance);
 
     // Дуг в контуре ровно столько, сколько их в фигуре: одна снаружи и по
-    // одной на конец диаметра. Цепочка хорд дала бы их десятки.
+    // одной на конец диаметра. Цепочка хорд дала бы их десятки. Начало обхода
+    // у CGAL произвольно и может прийтись на середину внешней дуги -- она и
+    // тогда обязана выйти одной вершиной, а не первой и последней.
     const Polylines contours = grown.contours(); // отдаётся ЗНАЧЕНИЕМ
     QCOMPARE(contours.size(), 1u);
     const auto arcs = std::ranges::count_if(contours.front(), &Vertex::isArc);
-    QVERIFY2(arcs <= 3, qPrintable(QString::number(arcs)));
+    QVERIFY2(arcs <= 3, qPrintable(u"дуг %1:%2"_s.arg(arcs).arg(dump(contours.front()))));
 }
 
 void InflateTest::outwardGrowsByMinkowskiDisc() {
@@ -235,10 +253,13 @@ void InflateTest::erosionThickerThanBodyEmptiesIt() {
 // виток -- Inflate ИСХОДНОГО диска внутрь на свою глубину. Свип режет
 // окружность на несколько x-монотонных кусков, и при материализации они
 // сшиваются обратно в одну дугу; размах кусков считается по округлённым
-// концам и в сумме недобирает до 2*pi на ~1e-8 -- порог полного оборота это
-// пропускало, и окружность схлопывалась в ОДНУ вершину с прогибом ~1e8, а
-// contours() её потом браковал как вырожденную. В pocket так пропадали все
-// витки заливки, кроме первого. Окружность обязана оставаться двумя вершинами.
+// концам, и сумма ложится у 2*pi как придётся. Недобор (~1e-8 -- микрокуски
+// на стыках, выброшенные сваркой) порог полного оборота пропускал, и
+// окружность схлопывалась в ОДНУ вершину с прогибом ~1e8, а contours() её
+// потом браковал как вырожденную: в pocket так пропадали все витки заливки,
+// кроме первого. Чисто замкнувшуюся (сумма у 2*pi до ~1e-15) тот же порог не
+// пускал вовсе -- и выходили две вершины с прогибами 2.414 и 0.414. Окружность
+// обязана оставаться двумя вершинами с прогибом +-1.
 void InflateTest::shrunkDiscKeepsTwoVertices() {
     // Диск с дыркой -- как приходит из чертежа; дырка -- как её отдаёт
     // разность «граница минус медь» (Polygon без дырок).
@@ -258,11 +279,53 @@ void InflateTest::shrunkDiscKeepsTwoVertices() {
         // Канон окружности -- две половины (прогиб +-1): такой её пишет
         // одной командой вывод УП, и такой её пересобирает поворот начала.
         const Polyline& loop0 = contours.front();
-        QVERIFY2(loop0.size() == 2, qPrintable(u"виток %1: вершин %2"_s.arg(i).arg(loop0.size())));
-        QVERIFY(std::abs(std::abs(loop0.front().bulge) - 1.0) < 1e-9);
-        QVERIFY(std::abs(std::abs(loop0.back().bulge) - 1.0) < 1e-9);
+        QVERIFY2(loop0.size() == 2,
+            qPrintable(u"виток %1: вершин %2%3"_s.arg(i).arg(loop0.size()).arg(dump(loop0))));
+        QVERIFY2(std::abs(std::abs(loop0.front().bulge) - 1.0) < 1e-9,
+            qPrintable(u"виток %1:%2"_s.arg(i).arg(dump(loop0))));
+        QVERIFY2(std::abs(std::abs(loop0.back().bulge) - 1.0) < 1e-9,
+            qPrintable(u"виток %1:%2"_s.arg(i).arg(dump(loop0))));
         QVERIFY(std::abs(loop0.perimeter() - 2.0 * std::numbers::pi * r) < 1e-6);
     }
+}
+
+// Окружность, поданная НЕ половинами (3/4 + 1/4): Offset::fullCircleOf её не
+// узнаёт, toGPoly строит её кусками по трём точкам -- у каждой четверти своя
+// опорная окружность, -- и сумма размахов кусков после свипа сходится к 2*pi
+// без всяких микропотерь. Тот же порог полного оборота её не пускал на ЛЮБОЙ
+// сборке: замыкающий кусок ложился своей вершиной, и окружность выходила
+// двумя вершинами с прогибами 2.414 и 0.414. Из точного домена она обязана
+// выйти каноном -- двумя половинами с прогибом ровно +-1 (их и сверяют на
+// равенство fullCircleOf и поворот начала в выводе УП) -- и телом, и дыркой.
+void InflateTest::unevenCircleComesBackAsTwoHalves() {
+    constexpr double r = 2.0;
+    // Против часовой: из (r, 0) на три четверти через (0, r) и (-r, 0) в
+    // (0, -r), оттуда четвертью обратно.
+    Polyline uneven{Vertex(r, 0.0, std::tan(3.0 * std::numbers::pi / 8.0)),
+        Vertex(0.0, -r, std::tan(std::numbers::pi / 8.0))};
+    uneven.closed = true;
+    QVERIFY(uneven.signedArea() > 0.0);
+
+    const Polygons body{Polylines{uneven}};
+    QVERIFY(std::abs(body.area() - std::numbers::pi * r * r) < 1e-6);
+    const Polylines contours = body.contours();
+    QCOMPARE(contours.size(), 1u);
+    const Polyline& c = contours.front();
+    QVERIFY2(c.size() == 2, qPrintable(dump(c)));
+    QVERIFY2(c.front().bulge == 1.0 && c.back().bulge == 1.0, qPrintable(dump(c)));
+    QVERIFY(std::abs(c.perimeter() - 2.0 * std::numbers::pi * r) < 1e-6);
+
+    // Та же окружность дыркой в квадрате: обход по часовой, прогиб -1.
+    const Polygons framed{
+        Polylines{rectangle(-5, -5, 5, 5, true), uneven.reversed()}
+    };
+    QVERIFY(std::abs(framed.area() - (100.0 - std::numbers::pi * r * r)) < 1e-6);
+    const Polylines framedContours = framed.contours(); // внешний, затем дырка
+    QCOMPARE(framedContours.size(), 2u);
+    const Polyline& h = framedContours.back();
+    QVERIFY2(h.size() == 2, qPrintable(dump(h)));
+    QVERIFY2(h.front().bulge == -1.0 && h.back().bulge == -1.0, qPrintable(dump(h)));
+    QVERIFY(std::abs(h.perimeter() - 2.0 * std::numbers::pi * r) < 1e-6);
 }
 
 QTEST_APPLESS_MAIN(InflateTest)

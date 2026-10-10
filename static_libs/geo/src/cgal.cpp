@@ -372,6 +372,77 @@ Polyline removeCollinearSlivers(const Polyline& poly) {
     return out;
 }
 
+// Одна ли окружность у двух дуг -- тем же мерилом, что у Geo::stitchArcs:
+// центр и радиус в пределах допуска сварки выхода, ход в одну сторону.
+bool sameCircle(const Geo::Arc& a, const Geo::Arc& b) {
+    return (a.theta > 0.0) == (b.theta > 0.0)
+        && Geo::distance(a.center, b.center) <= exitWeldTolerance
+        && std::abs(a.radius - b.radius) <= exitWeldTolerance;
+}
+
+// Стык замыкания контура из точного домена -- последний шаг toPolyline.
+//
+// Начало обхода -- ребро-представитель грани в разбиении CGAL. Оно
+// произвольно (история свипа, последние биты входа) и может прийтись на
+// середину дуги: тогда дуга выходит и первой, и последней вершиной, а через
+// этот стык не сшивают ни sameSupport (цепочка идёт только вперёд), ни
+// Geo::stitchArcs (та нарочно: у путей вывода начало -- врезка). Здесь
+// начало никто не выбирал, и двигать его можно.
+//  * Контур ЦЕЛИКОМ на одной окружности -- окружность, как бы её ни нарезали
+//    и сколько бы микрокусков ни выбросила сварка: канон -- две половины с
+//    прогибом ровно +-1 от первой вершины. Так её строит Geo::circle, узнаёт
+//    Offset::fullCircleOf и пишет одной командой вывод УП, а поворот начала
+//    (GCode::rotateToClosest) сверяет прогибы половин на равенство.
+//  * Иначе последняя и первая вершины -- куски одной дуги -- сливаются в
+//    одну: прогиб суммы у последней, первая уходит, и обход начинается с
+//    настоящего стыка.
+void canonicalizeClosure(Polyline& poly) {
+    const std::size_t n = poly.size();
+    if(!poly.closed || n < 2) return;
+    auto arcAt = [&poly, n](std::size_t i) { return Geo::arcOf(poly[i], poly[(i + 1) % n], poly[i].bulge); };
+
+    const std::optional<Geo::Arc> first = arcAt(0);
+    if(!first) return;
+
+    // Центр канона -- у самого длинного куска: у короткого, чью вершину
+    // сдвинула сварка микрокривой, центр по хорде уплывает сильнее всех.
+    std::optional<Geo::Arc> widest = first;
+    double total = 0.0;
+    bool onCircle = true;
+    for(std::size_t i = 0; i < n; ++i) {
+        const std::optional<Geo::Arc> arc = i ? arcAt(i) : first;
+        onCircle = arc && sameCircle(*first, *arc);
+        if(!onCircle) break;
+        total += arc->theta;
+        if(std::abs(arc->theta) > std::abs(widest->theta)) widest = arc;
+    }
+    // Простой замкнутый контур на одной окружности обходит её ровно раз:
+    // допуск -- лишь на протяжённость микрокусков, выброшенных сваркой.
+    if(onCircle && std::abs(std::abs(total) - 2.0 * pi) < 1e-3) {
+        const double bulge = std::copysign(1.0, total);
+        // Уже канон -- не трогаем: антипод, поставленный замыканием в
+        // toPolyline по центру точной окружности, точнее пересчитанного по
+        // хорде через arcOf.
+        if(n == 2 && poly[0].bulge == bulge && poly[1].bulge == bulge) return;
+        const QPointF start = poly.front();
+        Polyline halves;
+        halves.closed = true;
+        halves.width = poly.width;
+        halves.emplace_back(start, bulge);
+        halves.emplace_back(widest->center * 2.0 - start, bulge);
+        poly = std::move(halves);
+        return;
+    }
+
+    if(n < 3) return;
+    const std::optional<Geo::Arc> last = arcAt(n - 1);
+    if(!last || !sameCircle(*last, *first)) return;
+    const double sweep = last->theta + first->theta;
+    if(std::abs(sweep) >= maxBulgeSweep) return;
+    poly.back().bulge = Geo::bulgeOf(sweep);
+    poly.erase(poly.begin()); // последняя ведёт дугу до бывшей второй -- нового начала
+}
+
 } // namespace
 
 namespace {
@@ -579,6 +650,11 @@ bool sameSupport(const XCurve& a, const CurveGeometry& ga, const XCurve& b, cons
 }
 
 Polyline toPolyline(const GPoly& pgn) {
+    // GEO_TRACE_TOPOLYLINE -- диагностика: каждая кривая контура с решением
+    // по ней, затем готовые вершины. Для разбора падений там, где отладчика
+    // нет (CI); по умолчанию выключено -- строка на кривую.
+    static const bool trace = qEnvironmentVariableIsSet("GEO_TRACE_TOPOLYLINE");
+
     Polyline out;
     out.closed = true;
 
@@ -601,38 +677,64 @@ Polyline toPolyline(const GPoly& pgn) {
         //
         // Кусок, которым дуга замыкается на собственное начало, -- это уже
         // ОКРУЖНОСТЬ, а она прогибом не выражается и держится двумя
-        // половинами. Ловить её по размаху нельзя: размах куска считается по
-        // округлённым концам, и у окружности, нарезанной свипом на несколько
-        // кусков, сумма недобирает до 2*pi на ~1e-8 -- порог maxBulgeSweep
-        // такой «оборот» пропускал, контур схлопывался в одну вершину с
-        // прогибом ~1e8, и contours() браковал её как вырожденную: в pocket
-        // так пропадали все витки заливки круглой дырки, кроме первого.
-        // Замыкание -- признак геометрический (конец куска у начала
-        // накопленной дуги, допуск сварки), и размах при этом больше
-        // полуоборота: конец у самого начала бывает и у МИКРОдуги в пару
-        // нанометров, а та никакая не окружность.
+        // половинами. Замыкание -- признак ГЕОМЕТРИЧЕСКИЙ: конец куска у
+        // начала накопленной дуги (допуск сварки), и размах вместе с этим
+        // куском больше полуоборота -- конец у самого начала бывает и у
+        // МИКРОдуги в пару нанометров, а та никакая не окружность. Размах
+        // берётся С текущим куском: последний x-монотонный кусок бывает ровно
+        // полуокружностью, и накопленное до него ровно pi строгое «больше pi»
+        // не проходит.
+        //
+        // С порогом maxBulgeSweep сумма у замыкания НЕ сверяется: она ложится
+        // у 2*pi как придётся, и недобором, и перебором. Размах куска
+        // считается по округлённым концам, а у каждой капсулы своя опорная
+        // окружность (дуги по трём точкам, см. buildGPoly), и чисто
+        // замкнувшаяся окружность добирает до 2*pi с точностью ~1e-15 --
+        // порог её не пускал: замыкающий кусок ложился своей вершиной, и
+        // выходили две вершины с прогибами tan((2*pi-s)/4) и tan(s/4) (у
+        // четвертей -- 2.414 и 0.414), а stitchArcs две вершины не трогает.
+        // Недобор же в ~1e-8, на котором канон прежде держался, -- не
+        // округление концов, а протяжённость микрокусков, выброшенная сваркой
+        // ниже: диск стыка (appendCapsules) касается внутренней окружности
+        // кольцевого сектора и в последних битах то задевает её, то нет, --
+        // смотря по арифметике сборки (вероятно, FMA при -march=native против
+        // сборки CI без неё). Без замыкания вовсе (сумма ниже порога) контур
+        // схлопывался в одну вершину с прогибом ~1e8, и contours() браковал
+        // её как вырожденную: в pocket так пропадали все витки заливки
+        // круглой дырки, кроме первого.
         //
         // Замыкающий микрокусок (короче допуска) принимается и без общей
         // опорной окружности: у капсул из разных построений центры сходятся
         // не всегда, и иначе он ложился бы отдельной вершиной впритык к
         // началу -- контур из дуги в почти полный оборот и микродуги, который
         // на выводе схлопывается в «G2 I J» без X и Y.
-        const bool closes = lastCurve && !out.empty() && std::abs(lastSweep) > pi
+        //
+        // Что мимо замыкания всё же прошло (кусок окружности, сошедшейся лишь
+        // в допуске сварки, сброс цепочки на микрокривой), доводит до канона
+        // canonicalizeClosure в конце.
+        const double total = lastSweep + curve.sweep;
+        const bool same = lastCurve && sameSupport(*lastCurve, lastGeom, *it, curve);
+        const bool closes = lastCurve && !out.empty() && std::abs(total) > pi
             && std::hypot(curve.to.x() - QPointF(out.back()).x(), curve.to.y() - QPointF(out.back()).y())
                 < exitWeldTolerance;
         const bool micro = std::hypot(curve.to.x() - src.x(), curve.to.y() - src.y()) < exitWeldTolerance;
-        if(lastCurve && (sameSupport(*lastCurve, lastGeom, *it, curve) || (closes && micro))
-            && std::abs(lastSweep + curve.sweep) < maxBulgeSweep) {
+        if(trace)
+            qDebug("toPolyline %s (%.17g, %.17g) -> (%.17g, %.17g) c (%.17g, %.17g) r %.17g sweep %.17g"
+                   " | last %.17g same %d closes %d micro %d out %zu",
+                curve.linear ? "seg" : "arc", curve.from.x(), curve.from.y(), curve.to.x(), curve.to.y(),
+                curve.center.x(), curve.center.y(), curve.radius, curve.sweep, lastSweep, int(same),
+                int(closes), int(micro), out.size());
+        if((same || (closes && micro)) && (closes || std::abs(total) < maxBulgeSweep)) {
             const QPointF start = out.back();
-            lastSweep += curve.sweep;
+            lastSweep = total;
             if(closes) {
                 // Накопленная дуга делится пополам: вторая вершина --
                 // диаметрально противоположная точка. Отдельно отбрасывать
                 // замыкающий кусок нельзя -- микрокусок ниже сварился бы с
                 // началом и унёс прогиб всей окружности.
-                // Недобор до полного оборота -- шум округления концов, и
-                // половины берутся ровно по pi: прогиб +-1, как у Geo::circle,
-                // -- по нему окружность узнаёт и вывод УП.
+                // Расхождение с полным оборотом -- шум, и половины берутся
+                // ровно по pi: прогиб +-1, как у Geo::circle, -- по нему
+                // окружность узнаёт и вывод УП.
                 const double half = std::copysign(pi, lastSweep);
                 out.back().bulge = std::copysign(1.0, half);
                 out.emplace_back(lastGeom.center * 2.0 - start, std::copysign(1.0, half));
@@ -646,7 +748,9 @@ Polyline toPolyline(const GPoly& pgn) {
         // вырождается. Схлопываем МИКРОКРИВУЮ: если предыдущая вершина
         // легла вплотную, текущая забирает её позицию и прогиб -- выбросить
         // текущую вершину нельзя, с ней пропал бы прогиб целой настоящей
-        // дуги, начинающейся сразу за микрофрагментом.
+        // дуги, начинающейся сразу за микрофрагментом. Размах микрокривой
+        // при этом теряется, а цепочка дуги начинается заново -- отсюда и
+        // недобор суммы размахов у окружности (см. выше).
         if(!out.empty()
             && std::hypot(src.x() - QPointF(out.back()).x(), src.y() - QPointF(out.back()).y())
                 < exitWeldTolerance) {
@@ -667,6 +771,9 @@ Polyline toPolyline(const GPoly& pgn) {
 
     out = removeCollinearSlivers(out);
     stitchArcs(out);
+    canonicalizeClosure(out);
+    if(trace)
+        for(const Vertex& v: out) qDebug("toPolyline   out (%.17g, %.17g) bulge %.17g", v.x(), v.y(), v.bulge);
     return out;
 }
 
