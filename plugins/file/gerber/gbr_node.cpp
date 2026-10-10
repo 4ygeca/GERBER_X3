@@ -11,11 +11,13 @@
  * http://www.boost.org/LICENSE_1_0.txt                                         *
  *******************************************************************************/
 #include "gbr_node.h"
+#include "gbr_etchdialog.h"
 #include "gbr_file.h"
 #include "gbr_highlighter.h"
 #include "gbr_netlist.h"
 #include "abstract_fileplugin.h"
 #include "graphicsview.h"
+#include "project.h"
 
 #include "ft_view.h"
 #include "gbrcomp_dialog.h"
@@ -24,6 +26,7 @@
 #include <QColorDialog>
 #include <QDialog>
 #include <QFileInfo>
+#include <QItemSelectionModel>
 #include <QMenu>
 #include <QPainter>
 #include <QScrollBar>
@@ -97,8 +100,13 @@ QVariant Node::data(const QModelIndex& index, int role) const {
     switch(FileTree::Column(index.column())) {
     case FileTree::Column::NameColorVisible:
         switch(role) {
-        case Qt::DisplayRole   : return file->shortName();
-        case Qt::ToolTipRole   : return {file->shortName() + u'\n' + file->name()};
+        case Qt::DisplayRole: return file->shortName();
+        case Qt::ToolTipRole: {
+            QString toolTip = file->shortName() + u'\n' + file->name();
+            if(file->etchComp().active())
+                toolTip += u'\n' + GbrObj::tr("Etch compensation: %1 mm").arg(file->etchComp().offset);
+            return toolTip;
+        }
         case Qt::CheckStateRole: return file->itemGroup()->isVisible() ? Qt::Checked : Qt::Unchecked;
         case Qt::DecorationRole: return file->icon();
         case FileTree::Id      : return id();
@@ -175,6 +183,19 @@ void Node::menu(QMenu& menu, FileTree::View* tv) {
             file->setColor(color);
             file->setUserColor(true);
         }
+    });
+    menu.addAction(GbrObj::tr("Etch compensation…"), [tv, this] {
+        // Все выделенные герберы -- узлы той же папки, -- а если этот файл
+        // не среди них, то он один.
+        const QModelIndex folder = index().parent();
+        std::vector<File*> files;
+        for(const QModelIndex& row: tv->selectionModel()->selectedRows())
+            if(row.parent() == folder)
+                if(auto* gerber = dynamic_cast<File*>(App::project().file(row.data(FileTree::Id).toInt())))
+                    files.push_back(gerber);
+        if(!r::contains(files, file)) files = {file};
+        EtchDialog dialog{std::move(files), tv};
+        dialog.exec();
     });
     menu.addSeparator();
     menu.addAction(QIcon::fromTheme(u"document-close"_s), GbrObj::tr("&Close"), tv, &FileTree::View::closeFile);

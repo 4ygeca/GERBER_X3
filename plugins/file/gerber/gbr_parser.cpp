@@ -250,6 +250,9 @@ void Parser::parseLines(const QString& gerberLines, const QString& fileName) {
             if(attFile.function_ && attFile.function_->function == Attr::File::Profile)
                 file->setItemType(File::ApPaths);
 
+            if(attFile.function_)
+                file->fileFunction_ = static_cast<int32_t>(attFile.function_->function);
+
             file->mergedCurves();
             file->components_ = components.values();
             file->nets_ = std::move(nets_);
@@ -482,6 +485,13 @@ void Parser::addPath() {
         && aperFunctionMap[state_.aperture()].function_->function == Attr::Aperture::ComponentOutline)
         components[refDes].addFootprint(path_);
 
+    // Функция объекта: у штриха -- снимок словаря на %AD его апертуры, у
+    // области -- то, что в словаре сейчас (KiCad ставит %TA.AperFunction перед
+    // G36 и снимает %TD.AperFunction после G37).
+    state_.setAperFunction(state_.region() == On
+            ? (attAper.function_ ? static_cast<int32_t>(attAper.function_->function) : -1)
+            : aperFunctionOf(state_.aperture()));
+
     switch(state_.region()) {
     case On:
         type |= GrObject::Polygon;
@@ -595,6 +605,8 @@ void Parser::addFlash() {
     default       : break;
     }
 
+    state_.setAperFunction(aperFunctionOf(state_.aperture()));
+
     switch(abSrIdStack_.top().workingType) {
     case WorkingType::Normal: {
         auto& go = file->graphicObjects_.emplace_back(
@@ -643,6 +655,9 @@ void Parser::reset() {
     aperFunctionMap.clear();
     netIds_.clear();
     nets_.clear();
+    // Разборщик один на все файлы: без сброса функция (и сторона) файла с %TF
+    // доставалась следующему файлу без атрибутов.
+    attFile = {};
     attAper = {};
     components.clear();
     abSrIdStack_.clear();
@@ -802,6 +817,11 @@ bool Parser::parseAperture(const QString& gLine) {
     return false;
 }
 
+int32_t Parser::aperFunctionOf(int aperture) const {
+    const auto it = aperFunctionMap.constFind(aperture);
+    return it != aperFunctionMap.cend() && it->function_ ? static_cast<int32_t>(it->function_->function) : -1;
+}
+
 bool Parser::parseApertureBlock(const QString& gLine) {
     static constexpr ctll::fixed_string ptrnApertureBlock{R"(^%ABD(\d+)\*%$)"};
     if(auto [whole, id]
@@ -809,6 +829,9 @@ bool Parser::parseApertureBlock(const QString& gLine) {
         whole) {
         abSrIdStack_.push({WorkingType::ApertureBlock, int(CtreCapTo(id))});
         file->apertures_.try_emplace(abSrIdStack_.top().apertureBlockId, std::make_shared<ApBlock>(file));
+        // Атрибуты словаря на %ABD -- атрибуты блока как апертуры (как у %AD).
+        if(attAper.function_)
+            aperFunctionMap[abSrIdStack_.top().apertureBlockId] = attAper;
         return true;
     }
     if(gLine == u"%AB*%"_s) {
@@ -1036,20 +1059,19 @@ bool Parser::parseAttributes(const QString& gLine) {
             }
         } break;
         case Attr::Command::TD:
-            // Пока снимается только цепь: сброс refDes/attAper ниже заглушен
-            // давно, и включать его -- отдельная история (пины компонентов).
+            // %TD*% снимает весь словарь, %TD.<имя>*% -- один атрибут. Прежде
+            // сброс attAper стоял ПОСЛЕ break и не исполнялся: функция последней
+            // %TA жила до конца файла и доставалась чужим апертурам и областям.
+            // Апертуры берут снимок словаря на %AD (aperFunctionMap), так что
+            // сброс их не трогает. refDes не снимается по-прежнему -- отдельная
+            // история (пины компонентов).
+            if(cap[3].isEmpty())
+                attAper = {};
+            else if(cap[3] == u"AperFunction"_s)
+                attAper.function_.reset(); // KiCad -- после каждой области
             if((cap[3].isEmpty() || cap[3] == u"N"_s) && state_.net() != -1) {
                 if(state_.region() == Off) addPath(); // см. TO
                 state_.setNet(-1);
-            }
-            break;
-            {
-                enum {
-                    Command,
-                    AttributeName
-                };
-                refDes.clear();
-                attAper = {};
             }
             break;
         }
@@ -1333,6 +1355,23 @@ bool Parser::parseGCode(const QString& gLine) {
             break;
         default: qWarning() << u"Erroror, unknown G-code "_s << gLine; //<< match.capturedTexts(); break;
         }
+        return true;
+    }
+    // Атрибуты комментарием -- так их пишет KiCad с выключенным X2 («G04 #@!
+    // TA.AperFunction,Conductor*»): разбираются как обычные %...*%. Неизвестная
+    // функция файла в таком комментарии -- лишь справка, файл она не роняет.
+    static constexpr ctll::fixed_string ptrnAttrComment{R"(^G0?4 *#@! *(T[FAOD].*)\*$)"};
+    if(auto [whole, attr] = ctre::match<ptrnAttrComment>(data); whole) {
+        const QString attrLine = u'%' + QString{attr} + u"*%"_s;
+        if(attr.view().starts_with(u"TF")) {
+            try {
+                parseAttributes(attrLine);
+            } catch(const QString& error) {
+                qWarning() << u"Attribute comment ignored (%1):"_s.arg(lineNum_) << gLine << error;
+            }
+        } else
+            parseAttributes(attrLine);
+        state_.setGCode(G04);
         return true;
     }
     static constexpr ctll::fixed_string ptrnGCodeComment{R"(^G0?4(.*)$)"};

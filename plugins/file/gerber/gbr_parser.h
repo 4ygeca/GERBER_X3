@@ -81,6 +81,9 @@ protected:
     Attr::File attFile;
     Attr::Aperture attAper;
 
+    // X2-функция апертуры по снимку словаря на её %AD (%ABD), -1 -- нет.
+    int32_t aperFunctionOf(int aperture) const;
+
     bool parseAperture(const QString& gLine);
     bool parseApertureBlock(const QString& gLine);
     bool parseApertureMacros(const QString& gLine);
