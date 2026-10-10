@@ -48,8 +48,13 @@ void ToolSelectorForm::on_pbSelect_clicked() {
         this,
         std::array{Tool::EndMill, Tool::Engraver, Tool::Laser},
     };
-    // Открыть базу на текущем инструменте. Его id мог из базы уже пропасть -- тогда без выбора.
-    tdb.setCurrentTool(tool_.id());
+    // Открыть базу на текущем инструменте -- только если под его id в базе
+    // тот же инструмент: id локальны для tools.json и после удаления
+    // переиспользуются, а инструмент формы мог прийти из проекта или из её json.
+    const auto& tools = App::toolHolder().tools();
+    if(auto it = tools.find(tool_.id()); it != tools.end()
+        && it->second.type() == tool_.type() && it->second.name() == tool_.name())
+        tdb.setCurrentTool(tool_.id());
     if(tdb.exec()) setTool(tdb.tool());
 }
 
