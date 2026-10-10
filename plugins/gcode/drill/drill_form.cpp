@@ -17,6 +17,7 @@
 #include "drill_model.h"
 #include "gi_point.h"
 #include "tool_database.h"
+#include "tool_editdialog.h"
 #include "ui_drillform.h"
 #include <boost/graph/bellman_ford_shortest_paths.hpp>
 
@@ -38,6 +39,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QWidget>
 #include <set>
 
@@ -48,6 +50,22 @@ namespace Drilling {
 // контуры руками больше не нужно: из точного домена они приходят замкнутыми.
 Geo::Polylines offset(const Geo::Polyline& path, double offset) {
     return Geo::Inflate(Geo::Polylines{path}, offset * 2.0).contours();
+}
+
+// Ключ программы для строки: инструмент базы плюс хэш правки, если она есть.
+static ToolKey toolKeyOf(const Row& row) {
+    return {row.toolId, row.toolOverride ? row.toolOverride->hash() : size_t{}};
+}
+
+// Имя программы по инструменту. У правленного -- хвост из хэша правки: без
+// него обычная и правленная программы одного инструмента звались бы одинаково,
+// а по имени fileHandler() находит id асинхронного прогона, и groupProgram()
+// сложил бы обе в одну папку. '*' тут нельзя -- после сохранения имя
+// становится путём на диске.
+static QString programTag(const Tool& tool, const ToolKey& key) {
+    if(!key.hash)
+        return tool.nameEnc();
+    return tool.nameEnc() + u"_E"_s + QString::number(key.hash % 1679616u, 36).rightJustified(4, u'0').toUpper();
 }
 
 /////////////////////////////////////////////
@@ -306,17 +324,81 @@ void Form::on_cbxFileCurrentIndexChanged() {
     delete ui->toolTable->model();
     ui->toolTable->setModel(model);
     connect(model, &Model::set, header, &Header::set);
+    initEditButtons();
     ui->toolTable->resizeColumnsToContents();
     ui->toolTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     ui->toolTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ui->toolTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    // Ширина -- по кнопке правки (index-виджеты view учитывает в sizeHint столбца).
+    ui->toolTable->horizontalHeader()->setSectionResizeMode(Model::Edit, QHeaderView::ResizeToContents);
     connect(ui->toolTable->selectionModel(), &QItemSelectionModel::selectionChanged, this, &Form::on_selectionChanged);
 
     header->onChecked();
 }
 
+void Form::initEditButtons() {
+    if(!model)
+        return;
+    for(int row{}; row < model->rowCount(); ++row) {
+        auto* button = new QToolButton{ui->toolTable};
+        button->setFocusPolicy(Qt::NoFocus);
+        button->setAutoRaise(true);
+        button->setIcon(QIcon::fromTheme(u"document-edit"_s));
+        button->setToolTip(tr("Edit tool for this toolpath only (the tool database is not changed)"));
+        // Править можно только назначенный инструмент. pickUpTool() отработал
+        // ещё до setModel() и без этой связи -- начальное состояние из модели.
+        button->setEnabled(model->toolId(row) > Tool::ID::Null);
+        connect(button, &QToolButton::clicked, this, [this, row] { editRowTool(row); });
+        // Index-виджет view удаляет сам при смене или удалении модели.
+        ui->toolTable->setIndexWidget(model->index(row, Model::Edit), button);
+    }
+    connect(model, &Model::set, this, [this, tableModel = model](int row, bool on) {
+        if(auto* button = ui->toolTable->indexWidget(tableModel->index(row, Model::Edit)))
+            button->setEnabled(on);
+    });
+}
+
+void Form::editRowTool(int row) {
+    if(!model || row < 0 || row >= model->rowCount() || model->toolId(row) <= Tool::ID::Null)
+        return;
+    const Model* const tableModel = model;
+    const Tool::ID id = model->toolId(row);
+
+    // Правится КОПИЯ действующего инструмента строки -- база не трогается.
+    ToolEditDialog dialog{this};
+    dialog.setTool(model->tool(row));
+    // setTool() сам взводит признак правки (поля дёргают valueChanged) --
+    // сброс: OK без единой правки ничего не меняет.
+    dialog.setWindowModified(false);
+    if(dialog.exec() != QDialog::Accepted || !dialog.isWindowModified())
+        return;
+    // Пока был открыт диалог, таблицу могли перестроить.
+    if(model != tableModel || model->toolId(row) != id)
+        return;
+
+    Tool tool = dialog.tool();
+    // Диалог при OK обнуляет id (tool_editdialog.cpp) -- возвращаем id базы:
+    // на нём держатся связь строки с базой, ключ программы и восстановление
+    // при правке УП.
+    tool.setId(id);
+    // Правка, совпавшая с инструментом базы, -- уже не правка.
+    ToolOverride toolOverride;
+    const auto& tools = App::toolHolder().tools();
+    if(auto it = tools.find(id); it == tools.end() || it->second.hash() != tool.hash())
+        toolOverride = std::move(tool);
+
+    // Строка среди выделенных -- правка всем выделенным с тем же инструментом базы.
+    std::set<int> rows{row};
+    if(ui->toolTable->selectionModel()->isSelected(model->index(row, Model::Tool)))
+        for(const QModelIndex& index: selectedIndexes())
+            if(model->toolId(index.row()) == id)
+                rows.insert(index.row());
+    for(int r: rows)
+        model->setToolOverride(r, toolOverride);
+}
+
 void Form::on_doubleClicked(const QModelIndex& current) {
-    if(current.column() == 1) {
+    if(current.column() == Model::Tool) {
         std::vector<Tool::Type> tools;
         // FIXME       tools = model->isSlot(current.row()) ? std::vector<Tool::Type> {Tool::EndMill} : ((worckType == GCType::Profile || worckType == GCType::Pocket) ? std::vector<Tool::Type> {Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser} : std::vector<Tool::Type> {Tool::Drill, Tool::EndMill});
         ToolDatabase tdb(this, tools);
@@ -372,6 +454,33 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
             }
         }
     });
+
+    // Правка "только для этой УП": строка под курсором, иначе первая выделенная
+    // с инструментом; уходит и остальным выделенным с тем же инструментом базы.
+    int editRow = -1;
+    if(const QModelIndex at = ui->toolTable->indexAt(pos); at.isValid() && model->toolId(at.row()) > Tool::ID::Null)
+        editRow = at.row();
+    else
+        for(QModelIndex current: selectedIndexes())
+            if(model->toolId(current.row()) > Tool::ID::Null) {
+                editRow = current.row();
+                break;
+            }
+    if(editRow > -1)
+        menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Edit tool for this toolpath…"), [this, editRow] {
+            editRowTool(editRow);
+        });
+
+    for(QModelIndex current: selectedIndexes()) {
+        if(model->hasOverride(current.row())) {
+            menu.addAction(QIcon::fromTheme(u"edit-undo"_s), tr("Reset to &database tool"), [this] {
+                for(QModelIndex current: selectedIndexes())
+                    if(model->hasOverride(current.row()))
+                        model->setToolOverride(current.row(), std::nullopt);
+            });
+            break;
+        }
+    }
 
     for(QModelIndex current: selectedIndexes()) {
         if(model->toolId(current.row()) != Tool::ID::Null) {
@@ -488,33 +597,38 @@ void Form::computePaths() {
     };
 
     if(worckType == GCType::Drill) { // slots only
+        // Инструмент -- копией в самих данных: у правленной строки он не из
+        // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
         struct Data {
+            Tool tool;
             Geo::Polylines paths;
             std::vector<int> toolsApertures;
         };
 
-        std::map<Tool::ID, Data> pathsMap;
+        std::map<ToolKey, Data> pathsMap;
 
         for(int i{}; auto&& row: *model) {
             if(row.toolId > Tool::ID::Null && row.useForCalc && row.isSlot) {
-                pathsMap[row.toolId].toolsApertures.push_back(i);
+                auto& data = pathsMap[toolKeyOf(row)];
+                data.tool = row.tool();
+                data.toolsApertures.push_back(i);
                 for(auto& item: row.items) {
                     if(!item->isUsed()) continue;
                     if(item->fit(dsbxDepth->value()))
-                        for(Geo::Polyline& path: offset(item->paths().front(), item->sourceDiameter() - App::toolHolder().tool(item->toolId()).diameter()))
-                            pathsMap[row.toolId].paths.push_back(path);
+                        for(Geo::Polyline& path: offset(item->paths().front(), item->sourceDiameter() - item->tool().diameter()))
+                            data.paths.push_back(path);
                     else
-                        pathsMap[row.toolId].paths.push_back(item->paths().front());
+                        data.paths.push_back(item->paths().front());
                 }
             }
             ++i;
         }
 
-        for(auto [usedToolId, data]: pathsMap) {
+        for(auto& [key, data]: pathsMap) {
             if(data.paths.size()) {
                 auto* gcode = new File{
                     GCode::Params{
-                                  App::toolHolder().tool(usedToolId),
+                                  data.tool,
                                   dsbxDepth->value(),
                                   std::move(data.paths),
                                   }
@@ -523,15 +637,15 @@ void Form::computePaths() {
                 gcode->setWorckType(static_cast<int>(worckType));
                 gcode->setSrcFileId(file ? file->id() : -1);
                 gcode->setFileName(
-                    App::toolHolder().tool(usedToolId).nameEnc()
-                    + u"_T"_s + indexes(pathsMap[usedToolId].toolsApertures));
+                    programTag(data.tool, key)
+                    + u"_T"_s + indexes(data.toolsApertures));
                 if(file) gcode->setSide(file->side());
 
-                auto it = createdSlotFileIds_.find(usedToolId);
+                auto it = createdSlotFileIds_.find(key);
                 if(it != createdSlotFileIds_.end() && App::project().file(it->second))
                     App::project().replaceFile(it->second, gcode);
                 else
-                    createdSlotFileIds_[usedToolId] = App::project().addFile(gcode);
+                    createdSlotFileIds_[key] = App::project().addFile(gcode);
 
                 // УП по этим строкам реально получилась -- только теперь снимаем галки.
                 for(int row: data.toolsApertures)
@@ -542,48 +656,54 @@ void Form::computePaths() {
 
     { // other
         struct Data {
+            Tool tool; // действующий: правка строки или инструмент базы
             Geo::Polyline drillPath;
             Geo::Polylines paths;
             std::vector<int> toolsApertures;
         };
 
-        std::map<Tool::ID, Data> pathsMap;
+        std::map<ToolKey, Data> pathsMap;
 
         for(int i{}; auto&& row: *model) {
             if(row.toolId > Tool::ID::Null && row.useForCalc) {
-                pathsMap[row.toolId].toolsApertures.push_back(i);
+                auto& data = pathsMap[toolKeyOf(row)];
+                data.tool = row.tool();
+                const Tool::Type toolType = data.tool.type();
+                data.toolsApertures.push_back(i);
                 for(auto& item: row.items) {
                     if(!item->isUsed()) continue;
                     // if (item->isSlot())
                     // continue;
                     switch(worckType) {
                     case GCType::Profile:
-                        if(App::toolHolder().tool(row.toolId).type() != Tool::Drill) {
+                        if(toolType != Tool::Drill) {
                             switch(side) {
                             case GCode::On:
-                                pathsMap[row.toolId].paths.append_range(item->paths());
+                                data.paths.append_range(item->paths());
                                 break;
                             case GCode::Outer:
-                                pathsMap[row.toolId].paths.append_range(item->offset());
+                                data.paths.append_range(item->offset());
                                 break;
                             case GCode::Inner:
                                 // if (item->fit(dsbxDepth->value())) {
-                                pathsMap[row.toolId].paths.append_range(item->offset());
+                                data.paths.append_range(item->offset());
                                 // }
                                 break;
                             }
                         }
                         break;
                     case GCType::Pocket:
-                        if(App::toolHolder().tool(row.toolId).type() != Tool::Drill) {
-                            // if (App::toolHolder().tool(row.toolId).type() != Tool::Drill && item->fit(dsbxDepth->value())) {
-                            pathsMap[row.toolId].paths.append_range(item->offset());
+                        if(toolType != Tool::Drill) {
+                            // if (toolType != Tool::Drill && item->fit(dsbxDepth->value())) {
+                            data.paths.append_range(item->offset());
                             // }
                         }
                         break;
                     case GCType::Drill:
-                        if(App::toolHolder().tool(row.toolId).type() != Tool::Engraver || App::toolHolder().tool(row.toolId).type() != Tool::Laser) {
-                            pathsMap[row.toolId].drillPath.emplace_back(item->pos());
+                        // Гравёр и лазер не сверлят. Было "!= Engraver || != Laser" --
+                        // истинно всегда, и сверлил любой инструмент.
+                        if(toolType != Tool::Engraver && toolType != Tool::Laser) {
+                            data.drillPath.emplace_back(item->pos());
                         }
                         break;
                     default:;
@@ -593,7 +713,7 @@ void Form::computePaths() {
             ++i;
         }
 
-        for(auto& [toolId, val]: pathsMap) {
+        for(auto& [key, val]: pathsMap) {
             if(val.drillPath.size()) {
                 GCode::sortByProximity(val.drillPath, App::home().pos());
                 // Центры отверстий едут одной полилинией: saveDrill читает их
@@ -601,7 +721,7 @@ void Form::computePaths() {
                 // задаётся, у набора точек нет ни площади, ни обхода.
                 auto* gcode = new File{
                     GCode::Params{
-                                  App::toolHolder().tool(toolId),
+                                  val.tool,
                                   dsbxDepth->value(),
                                   Geo::Polylines{std::move(val.drillPath)},
                                   }
@@ -610,14 +730,14 @@ void Form::computePaths() {
                 gcode->setRows(rowRefs(val.toolsApertures));
                 gcode->setWorckType(static_cast<int>(worckType));
                 gcode->setSrcFileId(file ? file->id() : -1);
-                gcode->setFileName(App::toolHolder().tool(toolId).nameEnc() + /*type_ +*/ indexes(val.toolsApertures));
+                gcode->setFileName(programTag(val.tool, key) + /*type_ +*/ indexes(val.toolsApertures));
                 if(file) gcode->setSide(file->side());
 
-                auto it = createdDrillFileIds_.find(toolId);
+                auto it = createdDrillFileIds_.find(key);
                 if(it != createdDrillFileIds_.end() && App::project().file(it->second))
                     App::project().replaceFile(it->second, gcode);
                 else
-                    createdDrillFileIds_[toolId] = App::project().addFile(gcode);
+                    createdDrillFileIds_[key] = App::project().addFile(gcode);
 
                 // УП по этим строкам реально получилась -- только теперь снимаем галки.
                 for(int row: val.toolsApertures)
@@ -626,17 +746,17 @@ void Form::computePaths() {
             if(val.paths.size()) {
                 switch(worckType) {
                 case GCType::Profile: {
-                    const QString programName = App::toolHolder().tool(toolId).nameEnc();
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Profile, toolId, programName});
+                    const QString programName = programTag(val.tool, key);
+                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Profile, key, programName});
                     fileName_ = programName;
                     replacedIds_.clear();
-                    if(auto it = createdProfileFileIds_.find(toolId);
+                    if(auto it = createdProfileFileIds_.find(key);
                         it != createdProfileFileIds_.end() && App::project().file(it->second))
                         replacedIds_ = {it->second};
                     gcp = {};
                     gcp.setConvent(ui->rbConventional->isChecked());
                     gcp.setSide(side);
-                    gcp.tools = {App::toolHolder().tool(toolId)};
+                    gcp.tools = {val.tool};
                     gcp.params[GCode::Params::Depth] = dsbxDepth->value();
                     gcp.closedCurves = Geo::Polygons{val.paths};
                     setCreator(new Profile::Creator);
@@ -644,17 +764,17 @@ void Form::computePaths() {
                     emit createToolpath(&gcp);
                 } break;
                 case GCType::Pocket: {
-                    const QString programName = App::toolHolder().tool(toolId).nameEnc();
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Pocket, toolId, programName});
+                    const QString programName = programTag(val.tool, key);
+                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Pocket, key, programName});
                     fileName_ = programName;
                     replacedIds_.clear();
-                    if(auto it = createdPocketFileIds_.find(toolId);
+                    if(auto it = createdPocketFileIds_.find(key);
                         it != createdPocketFileIds_.end() && App::project().file(it->second))
                         replacedIds_ = {it->second};
                     gcp = {};
                     gcp.setConvent(ui->rbConventional->isChecked());
                     gcp.setSide(GCode::Inner);
-                    gcp.tools = {App::toolHolder().tool(toolId)};
+                    gcp.tools = {val.tool};
                     gcp.params[GCode::Params::Depth] = dsbxDepth->value();
                     gcp.closedCurves = Geo::Polygons{val.paths};
                     setCreator(new PocketOffset::Creator);
@@ -676,7 +796,7 @@ std::vector<RowRef> Form::rowRefs(const std::vector<int>& indexes) const {
     const auto& rows = model->data();
     for(int i: indexes)
         if(0 <= i && std::cmp_less(i, rows.size()))
-            refs.emplace_back(rows[i].name.join(u'|'), rows[i].toolId, rows[i].useForCalc);
+            refs.emplace_back(rows[i].name.join(u'|'), rows[i].toolId, rows[i].useForCalc, rows[i].toolOverride.has_value());
     return refs;
 }
 
@@ -717,11 +837,11 @@ void Form::fileHandler(GCode::File* file_) {
     GCode::Form::fileHandler(file_);
 
     // file_ после вызова базы трогать нельзя (canceled_ его удаляет) -- берём
-    // итоговый id по имени программы, оно уникально на toolId (tool.nameEnc()).
+    // итоговый id по имени программы, оно уникально на ключ (programTag()).
     if(isAsyncRun && file_) {
         auto& map = run.worckType == GCType::Profile ? createdProfileFileIds_ : createdPocketFileIds_;
         if(auto ids = programIds(run.programName); !ids.empty())
-            map[run.toolId] = ids.front();
+            map[run.key] = ids.front();
     }
 }
 
@@ -757,8 +877,16 @@ void Form::editFile(GCode::File* file_) {
         for(size_t i{}; i < rows.size(); ++i) {
             auto it = byName.find(rows[i].name.join(u'|'));
             const bool mine = it != byName.end();
-            if(mine && it->second->toolId > Tool::ID::Null)
-                model->setToolId(static_cast<int>(i), it->second->toolId);
+            if(mine && it->second->toolId > Tool::ID::Null) {
+                // Правка "только для этой УП" живёт лишь копией в самой УП
+                // (gcp.tools) -- оттуда и восстанавливается. Копия берётся и
+                // тогда, когда инструмента в базе уже нет: иначе .at() уронил бы
+                // и таблицу, и превью.
+                ToolOverride toolOverride;
+                if(it->second->overridden || !App::toolHolder().tools().contains(it->second->toolId))
+                    toolOverride = drillFile->tool();
+                model->setToolId(static_cast<int>(i), it->second->toolId, std::move(toolOverride));
+            }
             model->setCreate(static_cast<int>(i), mine && it->second->useForCalc);
         }
         header->onChecked();

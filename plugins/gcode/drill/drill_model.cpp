@@ -27,10 +27,13 @@ Model::Model(size_t rowCount, QObject* parent)
     data_.resize(rowCount);
 }
 
-void Model::setToolId(int row, Tool::ID id) {
+void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
     if(data_[row].toolId != id)
         data_[row].useForCalc = id > Tool::ID::Null;
     data_[row].toolId = id;
+    // Правка -- вместе с id и ДО updateTool(): превью берёт действующий
+    // инструмент, а инструмента восстановленной УП в базе может уже не быть.
+    data_[row].toolOverride = id > Tool::ID::Null ? std::move(toolOverride) : ToolOverride{};
     for(auto item: data_[row].items) {
         // Флаг должен быть выставлен ДО updateTool(), т.к. тот в конце вызывает
         // changeColor(), которая читает ItemIsSelectable как признак "Used" —
@@ -39,7 +42,20 @@ void Model::setToolId(int row, Tool::ID id) {
         item->updateTool();
     }
     emit set(row, id > Tool::ID::Null);
-    emit dataChanged(createIndex(row, 0), createIndex(row, 1));
+    emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
+}
+
+void Model::setToolOverride(int row, ToolOverride toolOverride) {
+    if(data_[row].toolId == Tool::ID::Null)
+        return;
+    data_[row].toolOverride = std::move(toolOverride);
+    // Диаметр мог измениться -- перекрестье и контур инструмента на превью тоже.
+    for(auto item: data_[row].items)
+        item->updateTool();
+    // Инструмент строки стал другим -- строку снова в расчёт, как и при новом
+    // выборе из базы (галку взводит Header по сигналу set).
+    emit set(row, true);
+    emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
 }
 
 void Model::setCreate(int row, bool create) {
@@ -50,14 +66,14 @@ void Model::setCreate(int row, bool create) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, create);
         item->changeColor();
     }
-    emit dataChanged(createIndex(row, 0), createIndex(row, 1));
+    emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
     emit headerDataChanged(Qt::Vertical, row, row);
 }
 
 void Model::setCreate(bool create) {
     for(int row{}; row < rowCount(); ++row)
         data_[row].useForCalc = create && data_[row].toolId != Tool::ID::Null;
-    emit dataChanged(createIndex(0, 0), createIndex(rowCount() - 1, 1));
+    emit dataChanged(createIndex(0, 0), createIndex(rowCount() - 1, ColumnCount - 1));
 }
 
 int Model::rowCount(const QModelIndex& /*parent*/) const { return static_cast<int>(data_.size()); }
@@ -99,7 +115,7 @@ QVariant Model::data(const QModelIndex& index, int role) const {
         case Qt::UserRole: return row;
         default          : break;
         }
-    } else {
+    } else if(index.column() == Tool) {
         if(data_[row].toolId == Tool::ID::Null)
             switch(role) {
             case Qt::DisplayRole      : return tr("Select Tool");
@@ -107,14 +123,35 @@ QVariant Model::data(const QModelIndex& index, int role) const {
             case Qt::UserRole         : return +data_[row].toolId;
             default                   : break;
             }
-        else
+        else {
+            // Действующий инструмент: правка "только для этой УП" помечается
+            // звёздочкой и курсивом, чтобы её не спутать с инструментом базы.
+            const bool edited = data_[row].toolOverride.has_value();
+            const ::Tool& effective = data_[row].tool();
             switch(role) {
-            case Qt::DisplayRole   : return App::toolHolder().tool(data_[row].toolId).name();
-            case Qt::DecorationRole: return App::toolHolder().tool(data_[row].toolId).icon();
-            case Qt::UserRole      : return +data_[row].toolId;
-            default                : break;
+            case Qt::DisplayRole   : return edited ? u"%1 *"_s.arg(effective.name()) : effective.name();
+            case Qt::DecorationRole: return effective.icon();
+            case Qt::FontRole:
+                if(edited) {
+                    QFont font;
+                    font.setItalic(true);
+                    return QVariant::fromValue(font);
+                }
+                break;
+            case Qt::ToolTipRole:
+                if(edited) {
+                    QString tip = tr("Edited for this toolpath only (the tool database is not changed)");
+                    if(!effective.note().isEmpty())
+                        tip += u"\n\n"_s + effective.note();
+                    return tip;
+                }
+                break;
+            case Qt::UserRole: return +data_[row].toolId;
+            default          : break;
             }
+        }
     }
+    // Edit: в ячейке живёт кнопка формы (index-виджет), данных у неё нет.
     return {};
 }
 
@@ -126,6 +163,7 @@ QVariant Model::headerData(int section, Qt::Orientation orientation, int role) c
             case Name: return {tr("Aperture") + u" / "_s + tr("Tool")};
             case Tool:;
                 return tr("Tool");
+            default: return {}; // Edit -- без заголовка, там только кнопки
             }
         }
         return data_[section].name.value(0);
@@ -144,10 +182,16 @@ QVariant Model::headerData(int section, Qt::Orientation orientation, int role) c
 Qt::ItemFlags Model::flags(const QModelIndex& index) const {
     if(index.column() == Name)
         return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable;
+    // Edit не выделяется: selectedIndexes() формы по-прежнему даёт ровно
+    // один индекс (столбец Tool) на строку.
+    if(index.column() == Edit)
+        return Qt::ItemIsEnabled;
     return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
 }
 
 Row::~Row() { qDeleteAll(items); }
+
+const Tool& Row::tool() const { return toolOverride ? *toolOverride : App::toolHolder().tool(toolId); }
 
 } // namespace Drilling
 
