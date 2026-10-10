@@ -35,8 +35,9 @@ class File : public AbstractFile {
     friend class GcFileProxy;
 
 protected:
-    // Производные от gcp (заполняет конструктор от Params) — не сериализуются,
-    // как и раньше: после загрузки их восстанавливает regenerate().
+    // Производные от gcp (заполняет конструктор от Params) — не сериализуются:
+    // после загрузки проекта их восстанавливает postLoad() из прочитанного gcp.
+    // regenerate() их только читает.
     [[= Serial::skip]] double feedRate{};
     [[= Serial::skip]] double plungeRate{};
     [[= Serial::skip]] int spindleSpeed{};
@@ -72,6 +73,27 @@ public:
 
     File() = default;
     ~File() override = default;
+
+    // Восстановление после чтения (зовёт движок Serial; прячет одноимённый крюк
+    // AbstractFile, поэтому зовёт его сам). Поля подач/оборотов/типа -- skip,
+    // проект их не хранит, а инструмент в gcp хранит: без этого УП из
+    // открытого проекта при любом regenerate() теряла слова F и S ("M3 S0"),
+    // а лазер считала сверлом (toolType 0 == Tool::Drill). Поля -- до базы:
+    // та зовёт createGi().
+    void postLoad() {
+        const auto it = gcp.params.find(Params::MultiToolIndex);
+        const qsizetype index = it != gcp.params.end() ? it->second.toInt() : -1;
+        if(0 <= index && std::cmp_less(index, gcp.tools.size())) {
+            feedRate = gcp.feedRate();
+            plungeRate = gcp.plungeRate();
+            spindleSpeed = gcp.spindleSpeed();
+            toolType = gcp.toolType();
+            strFeed = u'F' + formatValue(feedRate);
+            strPlungeFeed = u'F' + formatValue(plungeRate);
+            strSpindle = u'S' + formatValue(spindleSpeed);
+        }
+        AbstractFile::postLoad();
+    }
 
     std::vector<QString> gCodeText() const { return lines_; }
     const Tool& tool() const { return gcp.tool(); }
