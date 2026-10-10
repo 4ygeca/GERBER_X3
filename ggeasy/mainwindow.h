@@ -299,6 +299,9 @@ private:
     Recent recentProjects;
 
     QAction* closeAllAct_ = nullptr;
+    // Кнопка «Закрыть проект» на панели -- своё действие, не closeAllAct_: её
+    // прячут из контекстного меню панели, и меню при этом трогать нельзя.
+    QAction* closeToolBarAct_ = nullptr;
     QAction* redoAct = nullptr;
     QAction* undoAct = nullptr;
 
@@ -388,6 +391,7 @@ private:
 private:
     bool saveFile(const QString& fileName);
     void setCurrentFile(const QString& fileName);
+    void updateWindowTitle();
     bool cli(std::span<std::string_view> commands = {});
 
     // QWidget interface

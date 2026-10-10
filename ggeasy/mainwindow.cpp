@@ -204,9 +204,20 @@ void MainWindow::loggingHandler(QtMsgType type, const QStringList& context, cons
 void MainWindow::loadFile(const QString& fileName) {
     if(!QFileInfo::exists(fileName)) return;
     lastPath = QFileInfo(fileName).absolutePath();
-    if(fileName.endsWith(u".g2g"_s)) {
+    if(fileName.endsWith(u".g2g"_s, Qt::CaseInsensitive)) {
         if(closeProject()) {
-            project_->open(fileName);
+            if(!project_->open(fileName)) {
+                // Проект не прочитан -- имя файла ему НЕ даём: иначе Ctrl+S молча
+                // записал бы пустой проект поверх исходного. Окно с причиной (не
+                // JSON) уже показал Project::open, здесь -- откат загруженного до
+                // сбоя и запись в журнал (строку состояния тут же затрёт вывод
+                // координат мыши).
+                App::fileModel().closeProject();
+                setCurrentFile(QString());
+                project_->close();
+                fileError(fileName, tr("The project could not be opened."));
+                return;
+            }
             setCurrentFile(fileName);
             ui.treeView->selectionModel()->select(ui.treeView->model()->index(0, 0), QItemSelectionModel::Select);
             return;
@@ -297,8 +308,13 @@ void MainWindow::fileCanceled(const QString& fileName) {
 
 void MainWindow::addFileToPro(AbstractFile* file) {
     if(project_->isUntitled()) {
-        QString name(QFileInfo(file->name()).path());
-        setCurrentFile(name + u'/' + name.split(u'/').back() + u".g2g"_s);
+        // Имя -- по каталогу первого файла, но только если такого проекта там
+        // ещё нет: иначе Ctrl+S без всякого диалога затёр бы существующий.
+        // Есть -- проект остаётся безымянным, и Save сам спросит имя.
+        const QString dir(QFileInfo(file->name()).path());
+        const QString name(dir + u'/' + dir.split(u'/').back() + u".g2g"_s);
+        if(!QFileInfo::exists(name))
+            setCurrentFile(name);
     }
     project_->addFile(file);
     recentFiles.prependToRecentFiles(file->name());
@@ -333,8 +349,14 @@ bool MainWindow::save() {
 }
 
 bool MainWindow::saveAs() {
+    // Имя безымянного проекта («Новый_проект.g2g») без каталога -- диалог
+    // отсчитал бы его от текущего каталога процесса. Кладём в последний
+    // каталог, с которым работали.
+    const QString path{project_->isUntitled()
+            ? QDir(lastPath.isEmpty() ? QDir::homePath() : lastPath).filePath(strippedName(project_->name()))
+            : project_->name()};
     QString file(
-        QFileDialog::getSaveFileName(this, tr("Open File"), project_->name(), tr("Project (*.g2g)")));
+        QFileDialog::getSaveFileName(this, tr("Save project as"), path, tr("Project (*.g2g)")));
     if(file.isEmpty())
         return false;
     return saveFile(file);
@@ -560,7 +582,7 @@ void MainWindow::createActionsFile() {
     closeAllAct_->setShortcuts(QKeySequence::Close);
     closeAllAct_->setStatusTip(tr("Close project"));
     // closeAllAct_->setEnabled(false);
-    fileToolBar->addAction(QIcon::fromTheme(u"document-close"_s), tr("&Close project \"%1\"").arg(u""), this, &MainWindow::closeProject);
+    closeToolBarAct_ = fileToolBar->addAction(QIcon::fromTheme(u"document-close"_s), tr("&Close project \"%1\"").arg(u""), this, &MainWindow::closeProject);
 
     fileMenu->addSeparator();
     fileToolBar->addSeparator();
@@ -1058,15 +1080,27 @@ bool MainWindow::saveFile(const QString& fileName) {
 }
 
 void MainWindow::setCurrentFile(const QString& fileName) {
-    if(fileName.isEmpty())
-        setWindowTitle(tr("Untitled") + u".g2g[*]"_s);
-    project_->setName(fileName);
-    project_->setModified(false);
-    setWindowModified(false);
+    // Путь -- абсолютный: по нему пишет Save и он же уходит в «Недавние», а
+    // относительный (из командной строки) после запуска из другого каталога
+    // указывал бы уже не туда.
+    project_->setName(fileName.isEmpty() ? QString{} : QFileInfo(fileName).absoluteFilePath());
+    project_->setModified(false); // setName -> setUntitled -> setChanged флаг взвёл
     if(!project_->isUntitled())
         recentProjects.prependToRecentFiles(project_->name());
-    closeAllAct_->setText(tr(R"(&Close project "%1")").arg(strippedName(project_->name())));
-    setWindowFilePath(project_->name());
+    const QString closeText{tr(R"(&Close project "%1")").arg(strippedName(project_->name()))};
+    closeAllAct_->setText(closeText);
+    closeToolBarAct_->setText(closeText);
+    setWindowFilePath(project_->name()); // заголовок не меняет -- см. updateWindowTitle
+    updateWindowTitle();
+    setWindowModified(false);
+}
+
+void MainWindow::updateWindowTitle() {
+    // windowFilePath Qt выводит в заголовок, только пока windowTitle пуст, а пуст
+    // он не бывает (его задаёт уже setupUi) -- поэтому имя проекта ставим явно.
+    // [*] -- место под звёздочку setWindowModified: без него пометка «изменён»
+    // пропадёт, а Qt ещё и предупредит.
+    setWindowTitle(u"%1[*] - GGEasy"_s.arg(strippedName(project_->name())));
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -1093,8 +1127,10 @@ void MainWindow::showEvent(QShowEvent* event) {
 
 void MainWindow::changeEvent(QEvent* event) {
     // В случае получения события изменения языка приложения
-    if(event->type() == QEvent::LanguageChange)
+    if(event->type() == QEvent::LanguageChange) {
         ui.retranslateUi(this); // переведём окно заново
+        updateWindowTitle();
+    }
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
