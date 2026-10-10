@@ -15,6 +15,7 @@
 #include "tool_model.h"
 #include <QTreeView>
 
+class QDropEvent;
 class QPushButton;
 
 class GGCORE_EXPORT ToolTreeView : public QTreeView {
@@ -28,6 +29,9 @@ public:
 signals:
     void itemSelected(ToolItem* item);
 
+protected:
+    void dropEvent(QDropEvent* event) override;
+
 private:
     void newGroup();
     void newTool();
@@ -35,6 +39,8 @@ private:
     void copyTool();
 
     void updateActions();
+    void selectAndReveal(const QModelIndex& index);
+    void restoreExpanded(const QModelIndex& index);
     ToolModel* model_;
     enum {
         Copy,

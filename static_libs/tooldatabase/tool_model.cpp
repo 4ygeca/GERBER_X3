@@ -251,6 +251,7 @@ void ToolModel::saveTools() {
             } else {
                 treeNode[u"name"_s] = item->name();
                 treeNode[u"note"_s] = item->note();
+                treeNode[u"expanded"_s] = item->isExpanded();
             }
             treeNode[u"tool"_s] = item->isTool();
             treeNode[u"tab"_s] = row.size() - 1;
@@ -317,6 +318,7 @@ void ToolModel::loadTools() {
             item = new ToolItem{};
             item->setName(json[u"name"_s].toString());
             item->setNote(json[u"note"_s].toString());
+            item->setExpanded(json.value(u"expanded"_s).toBool(true)); // нет ключа -- раскрыта
         }
         parent->insertChild(parent->childCount(), item);
     }

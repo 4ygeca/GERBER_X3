@@ -13,6 +13,7 @@
 #include "tool_treeview.h"
 #include "tool_item.h"
 
+#include <QDropEvent>
 #include <QFile>
 #include <QHeaderView>
 #include <QMessageBox>
@@ -29,6 +30,23 @@ ToolTreeView::ToolTreeView(QWidget* parent)
     model_ = new ToolModel{this};
     setModel(model_); // NOTE V1053. Calling the 'foo' virtual function in the constructor/destructor may lead to unexpected result at runtime.
     connect(selectionModel(), &QItemSelectionModel::selectionChanged, this, &ToolTreeView::updateActions);
+
+    // Раскрытие групп -- как оставил пользователь (флаг ToolItem, хранится в tools.json),
+    // дальше его меняет только он сам: выбор строки больше ничего не раскрывает.
+    restoreExpanded({});
+    // NOTE: expandAll() сигнала expanded по узлам не шлёт -- флаги разойдутся с видом,
+    // раскрывать только через expand()/setExpanded()/expandRecursively().
+    connect(this, &QTreeView::expanded, this, [](const QModelIndex& index) {
+        if(auto* item = static_cast<ToolItem*>(index.internalPointer()); item)
+            item->setExpanded(true);
+    });
+    connect(this, &QTreeView::collapsed, this, [](const QModelIndex& index) {
+        if(auto* item = static_cast<ToolItem*>(index.internalPointer()); item)
+            item->setExpanded(false);
+    });
+    // Группы теперь бывают свёрнуты -- при перетаскивании раскрываем по наведению.
+    setAutoExpandDelay(600);
+
     header()->setSectionResizeMode(QHeaderView::ResizeToContents);
     header()->setSectionResizeMode(1, QHeaderView::Stretch);
     setMinimumWidth(400);
@@ -43,7 +61,7 @@ void ToolTreeView::newGroup() {
         return;
     index = model_->index(0, 0, index);
     model_->setData(index, tr("New Group"), Qt::EditRole);
-    selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    selectAndReveal(index);
 }
 
 void ToolTreeView::newTool() {
@@ -64,7 +82,7 @@ void ToolTreeView::newTool() {
         item->setIsTool();
         item->tool().setName(tr("New Tool ") + QString::number(+item->toolId()));
         index = model_->createIndex(item->row(), 0, item);
-        selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        selectAndReveal(index);
     }
 }
 
@@ -93,7 +111,7 @@ void ToolTreeView::copyTool() {
     // Присваивание Tool целиком тащит и id источника -- вернуть только что
     // выданный свежий id, иначе копия дублирует id оригинала.
     itemDst->tool().setId(newId);
-    selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    selectAndReveal(index);
 }
 
 void ToolTreeView::updateActions() {
@@ -105,7 +123,6 @@ void ToolTreeView::updateActions() {
         emit itemSelected(item);
     } else
         buttons_[Copy]->setEnabled(false);
-    expandAll();
 }
 
 void ToolTreeView::setButtons(const std::vector<QPushButton*>& buttons) {
@@ -121,6 +138,55 @@ void ToolTreeView::updateItem() {
     resizeColumnToContents(0);
     for(QModelIndex index: selectionModel()->selection().indexes())
         update(index);
+}
+
+void ToolTreeView::selectAndReveal(const QModelIndex& index) {
+    if(!index.isValid())
+        return;
+    // Раскрываем только цепочку предков -- свёрнутые пользователем соседние группы не трогаем.
+    // Сам scrollTo() раскрывает предков лишь при state() == NoState, поэтому явно.
+    for(QModelIndex parent = index.parent(); parent.isValid(); parent = parent.parent())
+        expand(parent);
+    selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    scrollTo(index);
+}
+
+void ToolTreeView::restoreExpanded(const QModelIndex& index) {
+    if(index.isValid()) {
+        auto* item = static_cast<ToolItem*>(index.internalPointer());
+        if(!item || item->isTool())
+            return;
+        setExpanded(index, item->isExpanded());
+    }
+    for(int row{}, count = model_->rowCount(index); row < count; ++row)
+        restoreExpanded(model_->index(row, 0, index));
+}
+
+void ToolTreeView::dropEvent(QDropEvent* event) {
+    // ToolModel::dropMimeData: insertRows() (rowsInserted с ЗАГЛУШКОЙ), затем setChild()
+    // подменяет заглушку копией и удаляет её. Поэтому здесь запоминаем только родителя и строку,
+    // а индекс берём заново ПОСЛЕ базового dropEvent -- раскрыть индекс заглушки нельзя:
+    // в expandedIndexes остался бы висячий internalPointer (use-after-free при следующем rowCount).
+    QPersistentModelIndex parent;
+    int row = -1;
+    const auto connection = connect(model_, &QAbstractItemModel::rowsInserted, this,
+        [&parent, &row](const QModelIndex& insertParent, int first, int /*last*/) {
+            if(row < 0) {
+                parent = insertParent;
+                row = first;
+            }
+        });
+    QTreeView::dropEvent(event);
+    disconnect(connection);
+    if(row < 0)
+        return;
+    // Источник удалится уже после выхода отсюда (QAbstractItemView::startDrag -> clearOrRemove),
+    // QPersistentModelIndex в expandedIndexes сам сдвинет строки. По той же причине копию
+    // здесь не выделять: clearOrRemove удаляет ВЫДЕЛЕННЫЕ строки -- ушла бы она, а не источник.
+    if(parent.isValid())
+        expand(parent); // группа-приёмник -- брошенное видно
+    if(const QModelIndex dropped = model_->index(row, 0, parent); dropped.isValid())
+        restoreExpanded(dropped); // перенесённая группа раскрыта, как была (флаги уехали с копией)
 }
 
 #include "moc_tool_treeview.cpp"
