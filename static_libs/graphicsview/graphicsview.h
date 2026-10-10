@@ -11,6 +11,7 @@
 #pragma once
 
 #include "ggcore_export.h"
+#include <QCursor>
 #include <QGraphicsItem>
 #include <QGraphicsView>
 #include <QScreen>
@@ -93,7 +94,7 @@ public:
 
     // Пересчитать sceneRect по фактическим данным. Звать при добавлении и
     // удалении файла, но НЕ покадрово: setSceneRect перестраивает индекс BSP
-    // целиком.
+    // целиком. Заодно задаёт виду собственный, широкий, диапазон прокрутки.
     void updateSceneRectToContents();
     // То же, но с откладыванием на конец такта событий: при загрузке проекта
     // файлы добавляются по одному, а itemsBoundingRect() обходит всю сцену.
@@ -180,6 +181,29 @@ private:
 
     bool sceneRectUpdatePending_{};
 
+    // Навигация как в KiCad: ПКМ/СКМ-перетаскивание -- панорама, колесо -- зум
+    // под курсором. Клик ПКМ без сдвига -- mouseClickR и контекстное меню.
+    enum class PanState {
+        Idle,     // кнопка панорамы не нажата
+        Armed,    // ПКМ нажата, порог не пройден -- это ещё может быть клик
+        Consumed, // то же, но уже был жест (колесо, аккорд) -- меню не нужно
+        Panning,  // точка сцены под курсором едет за ним
+    };
+    PanState panState_{PanState::Idle};
+    Qt::MouseButton panButton_{Qt::NoButton};
+    Qt::MouseButtons swallowed_{}; // нажатия посреди панорамы -- глотаются вместе с отпусканием
+    QPoint panPressPos_;           // вьюпорт, px -- для порога
+    QPointF panAnchor_;            // точка СЦЕНЫ, которая едет за курсором
+    QCursor panSavedCursor_;
+    void startPan();
+    void endPan();
+    // Сдвинуть вид на delta пикселей вьюпорта (полосы прокрутки целые).
+    void scrollViewBy(QPointF delta);
+    // Масштаб в factor раз в пределах kMinScale..kMaxScale; точка сцены под
+    // viewPos остаётся на месте.
+    void zoomAt(QPointF viewPos, double factor);
+    void showSceneContextMenu(const QMouseEvent* event);
+
     void GiToShapeEvent(QMouseEvent* event, QGraphicsItem* item);
     // QWidget interface
 protected:
@@ -194,6 +218,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
     // Фон рисует сам QGraphicsView кистью из setBackgroundBrush.
     void drawForeground(QPainter* painter, const QRectF& rect) override;
