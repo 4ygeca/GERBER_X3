@@ -342,7 +342,6 @@ private:
 
     void initWidgets();
 
-    void printDialog();
     void plotExport();
 
     void loadSettings();

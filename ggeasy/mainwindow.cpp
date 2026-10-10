@@ -389,11 +389,6 @@ void MainWindow::initWidgets() {
 // масштабе, а не картинка сцены. Прежний QGraphicsScene::render вписывал
 // сцену в лист (масштаб 1:1 выходил случайно), тащил маркеры, траектории и
 // подсветку выделения и красил слои полупрозрачными цветами.
-void MainWindow::printDialog() {
-    PlotDialog dialog{lastPath, PlotDialog::PrintMode, this};
-    dialog.exec();
-}
-
 void MainWindow::plotExport() {
     PlotDialog dialog{lastPath, PlotDialog::ExportMode, this};
     dialog.exec();
@@ -541,22 +536,17 @@ void MainWindow::createActionsFile() {
     action->setStatusTip(tr("Save selected toolpaths"));
     fileToolBar->addAction(QIcon::fromTheme(u"document-save-all"_s), tr("&Save Selected Tool Paths..."), this, &MainWindow::saveSelectedGCodeFiles);
 
-    // Plot / Export: SVG, DXF, PDF в точном масштабе
-    action = fileMenu->addAction(QIcon::fromTheme(u"document-export"_s), tr("&Plot / Export..."), this, &MainWindow::plotExport);
-    action->setStatusTip(tr("Export layers at exact scale to SVG, DXF or PDF, with mirror and negative"));
-    fileToolBar->addAction(QIcon::fromTheme(u"document-export"_s), tr("&Plot / Export..."), this, &MainWindow::plotExport);
+    // Экспорт и печать -- одно окно: SVG, DXF, PDF и принтер в точном масштабе.
+    action = fileMenu->addAction(QIcon::fromTheme(u"document-export"_s), tr("&Export / Print..."), this, &MainWindow::plotExport);
+    action->setShortcuts(QKeySequence::Print);
+    action->setStatusTip(tr("Export layers at exact scale to SVG, DXF or PDF, or print them, with mirror and negative"));
+    fileToolBar->addAction(QIcon::fromTheme(u"document-export"_s), tr("&Export / Print..."), this, &MainWindow::plotExport);
 
     fileMenu->addSeparator();
     fileMenu->addSeparator();
 
     recentFiles.createMenu(fileMenu, tr("Recent Files..."));
     recentProjects.createMenu(fileMenu, tr("Recent Projects..."));
-
-    fileMenu->addSeparator();
-
-    action = fileMenu->addAction(QIcon::fromTheme(u"document-print"_s), tr("P&rint"), this, &MainWindow::printDialog);
-    action->setShortcuts(QKeySequence::Print);
-    action->setStatusTip(tr("Print"));
 
     fileMenu->addSeparator();
 
