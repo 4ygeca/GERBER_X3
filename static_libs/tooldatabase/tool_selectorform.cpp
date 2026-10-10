@@ -48,14 +48,22 @@ void ToolSelectorForm::on_pbSelect_clicked() {
         this,
         std::array{Tool::EndMill, Tool::Engraver, Tool::Laser},
     };
+    // Открыть базу на текущем инструменте. Его id мог из базы уже пропасть -- тогда без выбора.
+    tdb.setCurrentTool(tool_.id());
     if(tdb.exec()) setTool(tdb.tool());
 }
 
 void ToolSelectorForm::on_pbEdit_clicked() {
-    ToolEditDialog d;
+    ToolEditDialog d{this};
     d.setTool(tool_);
-    if(d.exec())
-        setTool(d.tool());
+    if(d.exec()) {
+        // ToolEditDialog по Ok обнуляет id, но правка тут локальная -- инструмент всё тот же
+        // из базы, и по id «Select» откроет базу на нём. Сам id инструмента формы нигде
+        // не ищут (УП при сохранении группируются по hash2(), без id).
+        Tool t = d.tool();
+        t.setId(tool_.id());
+        setTool(t);
+    }
 }
 
 void ToolSelectorForm::updateForm() {

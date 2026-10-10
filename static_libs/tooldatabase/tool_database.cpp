@@ -76,6 +76,8 @@ ToolDatabase::~ToolDatabase() {
 
 Tool ToolDatabase::tool() const { return tool_; }
 
+void ToolDatabase::setCurrentTool(Tool::ID id) { ui->treeView->selectTool(id); }
+
 void ToolDatabase::keyPressEvent(QKeyEvent* evt) {
     if(evt->key() == Qt::Key_Enter || evt->key() == Qt::Key_Return) {
         ui->toolEdit->on_pbApply_clicked();

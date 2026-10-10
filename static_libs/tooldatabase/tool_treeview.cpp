@@ -140,6 +140,14 @@ void ToolTreeView::updateItem() {
         update(index);
 }
 
+bool ToolTreeView::selectTool(Tool::ID id) {
+    if(id <= Tool::ID::Null) // Null == Folder -- такой id у любой группы
+        return false;
+    const QModelIndex index = findTool({}, id);
+    selectAndReveal(index); // -> selectionChanged -> updateActions -> itemSelected
+    return index.isValid();
+}
+
 void ToolTreeView::selectAndReveal(const QModelIndex& index) {
     if(!index.isValid())
         return;
@@ -149,6 +157,17 @@ void ToolTreeView::selectAndReveal(const QModelIndex& index) {
         expand(parent);
     selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
     scrollTo(index);
+}
+
+QModelIndex ToolTreeView::findTool(const QModelIndex& parent, Tool::ID id) const {
+    for(int row{}, count = model_->rowCount(parent); row < count; ++row) {
+        const QModelIndex index = model_->index(row, 0, parent);
+        if(auto* item = static_cast<const ToolItem*>(index.internalPointer()); item && item->toolId() == id)
+            return index;
+        if(QModelIndex found = findTool(index, id); found.isValid())
+            return found;
+    }
+    return {};
 }
 
 void ToolTreeView::restoreExpanded(const QModelIndex& index) {

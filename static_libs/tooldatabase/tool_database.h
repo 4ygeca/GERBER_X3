@@ -34,6 +34,8 @@ public:
 
 public:
     Tool tool() const;
+    // Открыть базу на этом инструменте: выделить его, раскрыв только его группы.
+    void setCurrentTool(Tool::ID id);
 
 private:
     Ui::ToolDatabase* ui;
