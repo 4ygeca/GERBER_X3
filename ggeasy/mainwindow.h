@@ -343,7 +343,7 @@ private:
     void initWidgets();
 
     void printDialog();
-    void renderPdf();
+    void plotExport();
 
     void loadSettings();
     void saveSettings();
