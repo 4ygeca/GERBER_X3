@@ -67,11 +67,14 @@ jobs:
 
       # stdout в канал на Windows буферизуется целиком, и упавший процесс
       # уносит вывод с собой: упавшие тесты запускаются ещё раз напрямую,
-      # с выводом QTest в файл, и печатается код выхода.
+      # с выводом QTest в файл, и печатается код выхода. GEO_TRACE_TOPOLYLINE
+      # -- трасса Cgal::toPolyline (кривая за кривой, затем вершины) в тот же
+      # отчёт: по ней видно, как контур вышел из точного домена.
       - name: Rerun failed tests verbosely
         if: failure()
         env:
           QT_QPA_PLATFORM: offscreen
+          GEO_TRACE_TOPOLYLINE: "1"
         run: |
           for name in $(sed -n 's/^[0-9]*:geo_//p' build/static_libs/geo/Testing/Temporary/LastTestsFailed.log); do
             exe="$(find bin -name "geo_test_${name}.exe" | head -n1)"
