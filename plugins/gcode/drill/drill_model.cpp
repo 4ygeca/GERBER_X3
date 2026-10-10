@@ -48,6 +48,10 @@ void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
 void Model::setToolOverride(int row, ToolOverride toolOverride) {
     if(data_[row].toolId == Tool::ID::Null)
         return;
+    // Инструмента строки в базе уже нет (программа из проекта, другая база):
+    // без копии строка смотрела бы на пропавший id, и .at() бросил бы.
+    if(!toolOverride && !App::toolHolder().tools().contains(data_[row].toolId))
+        return;
     data_[row].toolOverride = std::move(toolOverride);
     // Диаметр мог измениться -- перекрестье и контур инструмента на превью тоже.
     for(auto item: data_[row].items)

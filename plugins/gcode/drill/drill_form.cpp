@@ -399,8 +399,12 @@ void Form::editRowTool(int row) {
 
 void Form::on_doubleClicked(const QModelIndex& current) {
     if(current.column() == Model::Tool) {
-        std::vector<Tool::Type> tools;
-        // FIXME       tools = model->isSlot(current.row()) ? std::vector<Tool::Type> {Tool::EndMill} : ((worckType == GCType::Profile || worckType == GCType::Pocket) ? std::vector<Tool::Type> {Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser} : std::vector<Tool::Type> {Tool::Drill, Tool::EndMill});
+        // Тот же выбор типов, что в контекстном меню: паз -- концевая фреза,
+        // сверловка -- сверло или фреза, обработка по отверстиям -- любой.
+        const std::vector<Tool::Type> tools = model->isSlot(current.row())
+            ? std::vector<Tool::Type>{Tool::EndMill}
+            : (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill}
+                                           : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
         ToolDatabase tdb(this, tools);
         if(tdb.exec()) {
             const Tool tool(tdb.tool());
@@ -471,11 +475,15 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
             editRowTool(editRow);
         });
 
+    // Сброс -- только там, где инструмент строки ещё есть в базе.
+    auto resettable = [this](int row) {
+        return model->hasOverride(row) && App::toolHolder().tools().contains(model->toolId(row));
+    };
     for(QModelIndex current: selectedIndexes()) {
-        if(model->hasOverride(current.row())) {
-            menu.addAction(QIcon::fromTheme(u"edit-undo"_s), tr("Reset to &database tool"), [this] {
+        if(resettable(current.row())) {
+            menu.addAction(QIcon::fromTheme(u"edit-undo"_s), tr("Reset to &database tool"), [this, resettable] {
                 for(QModelIndex current: selectedIndexes())
-                    if(model->hasOverride(current.row()))
+                    if(resettable(current.row()))
                         model->setToolOverride(current.row(), std::nullopt);
             });
             break;
@@ -700,9 +708,9 @@ void Form::computePaths() {
                         }
                         break;
                     case GCType::Drill:
-                        // Гравёр и лазер не сверлят. Было "!= Engraver || != Laser" --
-                        // истинно всегда, и сверлил любой инструмент.
-                        if(toolType != Tool::Engraver && toolType != Tool::Laser) {
+                        // Лазер не сверлит. Было "!= Engraver || != Laser" -- истинно
+                        // всегда; гравёр (V-фреза) оставлен: им накернивают центры.
+                        if(toolType != Tool::Laser) {
                             data.drillPath.emplace_back(item->pos());
                         }
                         break;

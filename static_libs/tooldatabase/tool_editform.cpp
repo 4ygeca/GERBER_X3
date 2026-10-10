@@ -77,6 +77,8 @@ ToolEditForm::ToolEditForm(QWidget* parent)
 
     connect(ui->cbxFeedSpeeds, &QComboBox::currentIndexChanged, this, [this](int index) {
         double lastFeed = feed;
+        // Смена единиц -- не правка подач: точные мм/мин переживают пересчёт полей.
+        const double feedRate = tool_.feedRate(), plungeRate = tool_.plungeRate();
         switch(index) {
         case mmPerSec: feed = 1. / 60.; break;   // mm/sec
         case mmPerMin: feed = 1.; break;         // mm/min!!!
@@ -93,6 +95,8 @@ ToolEditForm::ToolEditForm(QWidget* parent)
 
         ui->dsbxPlungeRate->setSuffix(u" "_s + ui->cbxFeedSpeeds->currentText());
         ui->dsbxPlungeRate->setValue((ui->dsbxPlungeRate->value() / lastFeed) * feed);
+        tool_.setFeedRate(feedRate);
+        tool_.setPlungeRate(plungeRate);
 
         parentWidget()->setWindowModified(fl1);
         ui->pbApply->setEnabled(fl2);
@@ -166,8 +170,16 @@ void ToolEditForm::setTool(const Tool& tool) {
     for(DoubleSpinBox* dsbx: dsbxList)
         dsbx->setMaximum(std::numeric_limits<double>::max());
 
-    for(auto [dsbx, get]: get)
-        dsbx->setValue((tool.*get)());
+    // Подачи в инструменте -- мм/мин, в полях -- в выбранных единицах (feed),
+    // как и в updateDsbxFeedRate/PlungeRate (val / feed). Прежде сюда писались
+    // сырые мм/мин, и при мм/сек правка в диалоге возвращала подачи x60.
+    for(auto [dsbx, get]: get) {
+        const bool rate = dsbx == ui->dsbxFeedRate || dsbx == ui->dsbxPlungeRate;
+        dsbx->setValue((tool.*get)() * (rate ? feed : 1.0));
+    }
+    // Поле округляет до своих знаков -- точные значения берём из инструмента.
+    tool_.setFeedRate(tool.feedRate());
+    tool_.setPlungeRate(tool.plungeRate());
 
     for(DoubleSpinBox* dsbx: dsbxList)
         dsbx->setProperty("lastVal", qFuzzyIsNull(dsbx->value()) ? QVariant{} : QVariant{dsbx->value()});
@@ -334,8 +346,10 @@ void ToolEditForm::on_pbApply_clicked() {
     if(fl)
         return;
 
+    // Подачи в tool_ уже в мм/мин (setTool, updateDsbx*Rate) -- из полей их не
+    // перечитываем: там выбранные единицы, округлённые до знаков поля.
     for(auto [dsbx, set]: set)
-        if(dsbx->isVisible())
+        if(dsbx->isVisible() && dsbx != ui->dsbxFeedRate && dsbx != ui->dsbxPlungeRate)
             (tool_.*set)(dsbx->value());
 
     if(item_ && tool_.isValid()) {
