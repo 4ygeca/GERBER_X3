@@ -29,6 +29,9 @@ public:
 
     // AbstractDrillPrGI interface
     Tool::ID toolId() const override;
+    // Действующий инструмент: правка строки, если она есть (Row::tool()), --
+    // по нему рисуется превью и считается УП. Только при toolId() > Null.
+    const Tool& tool() const;
 
     // QGraphicsItem interface
     int type() const override;

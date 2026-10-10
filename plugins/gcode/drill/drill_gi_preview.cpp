@@ -38,7 +38,7 @@ Preview::Preview(Geo::Polyline&& path, double diameter, Tool::ID toolId, Row& ro
 void Preview::updateTool() {
     if(toolId() > Tool::ID{}) {
         colorState |= ColorState::Tool;
-        const auto& tool = App::toolHolder().tool(toolId());
+        const auto& tool = this->tool();
         const double diameter = tool.getDiameter(tool.getDepth());
         // Перекрестье в центре -- отметка врезки; вылет за габарит инструмента
         // делает её видимой и на мелких отверстиях.
@@ -81,11 +81,13 @@ Geo::Polylines Preview::paths() const {
 }
 
 bool Preview::fit(double depth) const {
-    const auto diameter = App::toolHolder().tool(toolId()).getDiameter(depth) * 0.999;
+    const auto diameter = tool().getDiameter(depth) * 0.999;
     return sourceDiameter_ > diameter; // && !qFuzzyCompare(sourceDiameter_, diameter); FIXME logic
 }
 
 Tool::ID Preview::toolId() const { return (toolId_ < Tool::ID::Tool) ? row.toolId : toolId_; }
+
+const Tool& Preview::tool() const { return (toolId_ < Tool::ID::Tool) ? row.tool() : App::toolHolder().tool(toolId_); }
 
 int Preview::type() const { return int(::Gi::Type::Preview) + (path_.size() > 1); }
 

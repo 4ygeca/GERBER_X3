@@ -14,6 +14,7 @@
 #include "gc_form.h"
 #include "gc_plugin.h"
 
+#include <compare>
 #include <deque>
 
 namespace Ui {
@@ -35,6 +36,16 @@ namespace Drilling {
 class Model;
 class Header;
 
+// Ключ программы: инструмент из базы плюс, если строка правлена только для
+// этой УП, хэш правки (0 -- инструмент базы как есть). Строки одного toolId с
+// правкой и без неё (или с разными правками) -- РАЗНЫЕ программы: у каждой
+// свой инструмент, а значит и свои подачи, обороты и note для скриптов.
+struct ToolKey {
+    Tool::ID id{};
+    size_t hash{};
+    auto operator<=>(const ToolKey&) const = default;
+};
+
 class Form final : public GCode::Form {
     Q_OBJECT
 
@@ -53,19 +64,25 @@ private:
     class QCheckBox* checkBox;
     GCType worckType = GCType::Drill;
     GCode::SideOfMilling side = GCode::Inner;
-    // УП, пересчитанные за текущий показ формы: id проекта по toolId, чтобы
+    // УП, пересчитанные за текущий показ формы: id проекта по ToolKey, чтобы
     // повторный Create ЗАМЕНЯЛ их, а не плодил дубли. Четыре карты, а не одна --
     // ветка пазов (worckType == Drill), ветка простых отверстий ("other", тот
     // же worckType) и асинхронные ветки Profile/Pocket по отверстиям считают
-    // НЕЗАВИСИМЫЕ pathsMap и могут за один клик дать по файлу на один toolId
+    // НЕЗАВИСИМЫЕ pathsMap и могут за один клик дать по файлу на один ключ
     // из каждой; смешивать их id в одном ключе нельзя.
     // Сбрасываются в showEvent() -- после закрытия/переоткрытия формы снова add-new.
-    std::map<Tool::ID, int32_t> createdSlotFileIds_;
-    std::map<Tool::ID, int32_t> createdDrillFileIds_;
-    std::map<Tool::ID, int32_t> createdProfileFileIds_;
-    std::map<Tool::ID, int32_t> createdPocketFileIds_;
+    std::map<ToolKey, int32_t> createdSlotFileIds_;
+    std::map<ToolKey, int32_t> createdDrillFileIds_;
+    std::map<ToolKey, int32_t> createdProfileFileIds_;
+    std::map<ToolKey, int32_t> createdPocketFileIds_;
 
     void initToolTable();
+    // Кнопки правки инструмента в столбце Edit -- по одной на строку модели.
+    void initEditButtons();
+    // Правка инструмента строки только для этой УП (в базу не пишется). Та же
+    // правка уходит и остальным выделенным строкам с тем же инструментом базы,
+    // если сама строка среди выделенных.
+    void editRowTool(int row);
 
     void on_cbxFileCurrentIndexChanged();
     void on_doubleClicked(const QModelIndex& current);
@@ -98,7 +115,7 @@ protected:
     void uncheckRows(const std::vector<RowRef>& rows);
     // Профиль/карман по отверстиям считает чужой Creator и результат приходит
     // асинхронно; при этом computePaths() может за один клик прогнать НЕСКОЛЬКО
-    // независимых по toolId прогонов подряд -- каждый следующий стартует, только
+    // независимых по ToolKey прогонов подряд -- каждый следующий стартует, только
     // дождавшись предыдущего worker'а (startCompute -> stopWorker блокирует), но
     // их fileReady доставляются позже, все разом, уже после выхода из
     // computePaths(). Раз состояние одно на форму, а прогонов может быть N,
@@ -107,12 +124,12 @@ protected:
     struct PendingRun {
         std::vector<RowRef> rows;
         GCType worckType{};
-        Tool::ID toolId{};
+        ToolKey key{};
         QString programName;
     };
     std::deque<PendingRun> pendingRuns_;
     // Плагины с собственной независимой моделью "что сейчас правится" (свои
-    // карты toolId->fileId на каждую ветку) не пользуются единым fileId/
+    // карты ToolKey->fileId на каждую ветку) не пользуются единым fileId/
     // editMode_ базового класса -- он бы не различил несколько программ,
     // получившихся за один клик.
     bool autoEnterEditMode() const override { return false; }

@@ -24,6 +24,9 @@ struct RowRef {
     QString name;
     Tool::ID toolId{};
     bool useForCalc{};
+    // Инструмент правлен только для этой УП: при правке строка берёт его копию
+    // из самой УП (gcp.tools), а не из базы. В старых проектах ключа нет -- false.
+    bool overridden{};
 };
 
 class[[= Serial::name("Drilling")]] File final : public GCode::File {
