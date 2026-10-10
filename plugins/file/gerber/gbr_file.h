@@ -70,6 +70,10 @@ public:
     int32_t shorts() const { return shorts_; }
     // Слить слой заново и пересоздать элементы сцены (GUI-поток).
     void rebuild();
+    // Ключи (EtchComp::objectKey) тёмных объектов, что лежат в выделенных
+    // элементах сцены этого файла: в телах слоя (Normal) или на осевых
+    // (ApPaths). По возрастанию, без повторов; чужие элементы пропускаются.
+    std::vector<int64_t> objectKeys(std::span<Gi::Item* const> items) const;
 
 protected:
     Geo::Polygons merge() const override;
@@ -107,13 +111,7 @@ public:
     void serialize(Serial::Writer& sb) const override { Serial::writeInto(sb, *this); }
     // Апертуры при чтении цепляются к текущему файлу — крюк ДО чтения полей.
     void preLoad() { crutch = this; }
-    void postLoad() {
-        for(GrObject& go: graphicObjects_) {
-            go.gFile = this;
-            go.state.file_ = this;
-        }
-        AbstractFile::postLoad();
-    }
+    void postLoad();
 
     // FileTree::Node interface
 public:
