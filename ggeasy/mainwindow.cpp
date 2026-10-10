@@ -204,9 +204,20 @@ void MainWindow::loggingHandler(QtMsgType type, const QStringList& context, cons
 void MainWindow::loadFile(const QString& fileName) {
     if(!QFileInfo::exists(fileName)) return;
     lastPath = QFileInfo(fileName).absolutePath();
-    if(fileName.endsWith(u".g2g"_s)) {
+    if(fileName.endsWith(u".g2g"_s, Qt::CaseInsensitive)) {
         if(closeProject()) {
-            project_->open(fileName);
+            if(!project_->open(fileName)) {
+                // Проект не прочитан -- имя файла ему НЕ даём: иначе Ctrl+S молча
+                // записал бы пустой проект поверх исходного. Окно с причиной (не
+                // JSON) уже показал Project::open, здесь -- откат загруженного до
+                // сбоя и запись в журнал (строку состояния тут же затрёт вывод
+                // координат мыши).
+                App::fileModel().closeProject();
+                setCurrentFile(QString());
+                project_->close();
+                fileError(fileName, tr("The project could not be opened."));
+                return;
+            }
             setCurrentFile(fileName);
             ui.treeView->selectionModel()->select(ui.treeView->model()->index(0, 0), QItemSelectionModel::Select);
             return;
@@ -297,8 +308,13 @@ void MainWindow::fileCanceled(const QString& fileName) {
 
 void MainWindow::addFileToPro(AbstractFile* file) {
     if(project_->isUntitled()) {
-        QString name(QFileInfo(file->name()).path());
-        setCurrentFile(name + u'/' + name.split(u'/').back() + u".g2g"_s);
+        // Имя -- по каталогу первого файла, но только если такого проекта там
+        // ещё нет: иначе Ctrl+S без всякого диалога затёр бы существующий.
+        // Есть -- проект остаётся безымянным, и Save сам спросит имя.
+        const QString dir(QFileInfo(file->name()).path());
+        const QString name(dir + u'/' + dir.split(u'/').back() + u".g2g"_s);
+        if(!QFileInfo::exists(name))
+            setCurrentFile(name);
     }
     project_->addFile(file);
     recentFiles.prependToRecentFiles(file->name());
