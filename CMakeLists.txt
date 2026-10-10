@@ -16,6 +16,9 @@ cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 # Единственное место, где задаётся версия продукта: отсюда её берут
 # подпроект GGEasy, ресурсы Windows (versioninfo.rc) и version.h.
 project(GERBER_X3 VERSION 0.9.7.4)
+# Суффикс сборки форка: в строке версии (О программе) -- 0.9.7.4f. Числовые
+# поля версии (ресурсы Windows, манифест) буквы не допускают и остаются как есть.
+set(GGEASY_VERSION_SUFFIX "f")
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
