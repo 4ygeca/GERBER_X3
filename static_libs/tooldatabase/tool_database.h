@@ -12,6 +12,8 @@
 
 #include "tool.h"
 #include <QDialog>
+#include <span>
+#include <vector>
 
 namespace Ui {
 class ToolDatabase;
@@ -32,12 +34,15 @@ public:
 
 public:
     Tool tool() const;
+    // Открыть базу на этом инструменте: выделить его, раскрыв только его группы.
+    void setCurrentTool(Tool::ID id);
 
 private:
     Ui::ToolDatabase* ui;
     Tool tool_;
     ToolItem* item_;
-    std::span<const Tool::Type> types_;
+    // Копия, не span: зовут с временным std::array{...}, который умирает до exec().
+    std::vector<Tool::Type> types_;
 
 protected:
     void keyPressEvent(QKeyEvent* evt) override;

@@ -21,7 +21,7 @@
 ToolDatabase::ToolDatabase(QWidget* parent, std::span<const Tool::Type> types)
     : QDialog{parent}
     , ui(new Ui::ToolDatabase)
-    , types_(types) {
+    , types_(types.begin(), types.end()) {
 
     ui->setupUi(this);
     ui->treeView->setButtons({ui->pbCopy, ui->pbDelete, ui->pbNew, ui->pbNewGroup});
@@ -75,6 +75,8 @@ ToolDatabase::~ToolDatabase() {
 }
 
 Tool ToolDatabase::tool() const { return tool_; }
+
+void ToolDatabase::setCurrentTool(Tool::ID id) { ui->treeView->selectTool(id); }
 
 void ToolDatabase::keyPressEvent(QKeyEvent* evt) {
     if(evt->key() == Qt::Key_Enter || evt->key() == Qt::Key_Return) {

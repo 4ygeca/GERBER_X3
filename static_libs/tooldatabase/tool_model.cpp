@@ -172,7 +172,7 @@ QMimeData* ToolModel::mimeData(const QModelIndexList& indexes) const {
     return mimeData;
 }
 
-bool ToolModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column, const QModelIndex& parent) {
+bool ToolModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column, const QModelIndex& target) {
     if(action == Qt::IgnoreAction)
         return true;
 
@@ -182,14 +182,15 @@ bool ToolModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
     if(column > 0)
         return false;
 
-    int beginRow;
+    // Бросок на ячейку Note/Id группы приходит индексом колонки 1/2, а дети в дереве
+    // висят на колонке 0 -- для такого родителя rowCount() == 0 и rowsInserted мимо вида.
+    const QModelIndex parent = target.siblingAtColumn(0);
 
-    if(row != -1)
-        beginRow = row;
-    else if(parent.isValid())
-        beginRow = parent.row();
-    else
-        beginRow = rowCount(QModelIndex());
+    // row == -1 -- бросили на саму группу (или в пустое место): дописываем в конец её детей.
+    // Раньше бралось parent.row() -- номер группы у её же родителя (код из примера Qt для
+    // плоского списка): узел вставал не туда, а при parent.row() > rowCount(parent)
+    // rowsInserted сообщал строку, которой нет.
+    int beginRow = row != -1 ? row : rowCount(parent);
 
     QString encodedData = QString::fromUtf8(data->data(mimeType)); // FIXME
     QStringList list = encodedData.split(u'|', Qt::SkipEmptyParts);
@@ -199,7 +200,7 @@ bool ToolModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
         if(copyItem) {
             if(!parentItem)
                 parentItem = rootItem;
-            insertRows(beginRow, list.size(), parent);
+            insertRows(beginRow, 1, parent); // за проход вставляется ровно одна строка
             if(parentItem->childCount() > beginRow)
                 parentItem->setChild(beginRow, new ToolItem{*copyItem});
             else
@@ -251,6 +252,7 @@ void ToolModel::saveTools() {
             } else {
                 treeNode[u"name"_s] = item->name();
                 treeNode[u"note"_s] = item->note();
+                treeNode[u"expanded"_s] = item->isExpanded();
             }
             treeNode[u"tool"_s] = item->isTool();
             treeNode[u"tab"_s] = row.size() - 1;
@@ -317,6 +319,7 @@ void ToolModel::loadTools() {
             item = new ToolItem{};
             item->setName(json[u"name"_s].toString());
             item->setNote(json[u"note"_s].toString());
+            item->setExpanded(json.value(u"expanded"_s).toBool(true)); // нет ключа -- раскрыта
         }
         parent->insertChild(parent->childCount(), item);
     }

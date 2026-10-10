@@ -50,6 +50,10 @@ public:
     QString note() const;
     void setNote(const QString& value);
 
+    // Раскрыта ли группа в ToolTreeView -- хранится в tools.json.
+    bool isExpanded() const { return expanded_; }
+    void setExpanded(bool expanded) { expanded_ = expanded; }
+
     static void setDeleteEnable(bool deleteEnable);
 
     ToolItem& operator=(const ToolItem&) = delete;
@@ -61,4 +65,5 @@ private:
     QString name_;
     QString note_;
     mutable Tool::ID id{};
+    bool expanded_{true}; // старый tools.json ключа не знает -- группа раскрыта
 };

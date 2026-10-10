@@ -12,9 +12,11 @@
 
 #include "ggcore_export.h"
 
+#include "tool.h"
 #include "tool_model.h"
 #include <QTreeView>
 
+class QDropEvent;
 class QPushButton;
 
 class GGCORE_EXPORT ToolTreeView : public QTreeView {
@@ -24,9 +26,14 @@ public:
     ~ToolTreeView() override = default;
     void updateItem();
     void setButtons(const std::vector<QPushButton*>& buttons);
+    // Выделить инструмент по id, раскрыв только его группы (предвыбор при открытии базы).
+    bool selectTool(Tool::ID id);
 
 signals:
     void itemSelected(ToolItem* item);
+
+protected:
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void newGroup();
@@ -35,6 +42,9 @@ private:
     void copyTool();
 
     void updateActions();
+    void selectAndReveal(const QModelIndex& index);
+    QModelIndex findTool(const QModelIndex& parent, Tool::ID id) const;
+    void restoreExpanded(const QModelIndex& index);
     ToolModel* model_;
     enum {
         Copy,

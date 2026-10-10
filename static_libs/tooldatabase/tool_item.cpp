@@ -18,7 +18,9 @@
 #include <QModelIndex>
 #include <QVariant>
 
-ToolItem::ToolItem(const ToolItem& item) {
+// Через копию drag&drop переносит узел -- раскрытие группы должно уехать вместе с ней.
+ToolItem::ToolItem(const ToolItem& item)
+    : expanded_{item.expanded_} {
     if(item.id > Tool::ID{}) {
         id = item.id;
         item.id = Tool::ID::Folder;
