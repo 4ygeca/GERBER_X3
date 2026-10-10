@@ -21,7 +21,7 @@
 ToolDatabase::ToolDatabase(QWidget* parent, std::span<const Tool::Type> types)
     : QDialog{parent}
     , ui(new Ui::ToolDatabase)
-    , types_(types) {
+    , types_(types.begin(), types.end()) {
 
     ui->setupUi(this);
     ui->treeView->setButtons({ui->pbCopy, ui->pbDelete, ui->pbNew, ui->pbNewGroup});
