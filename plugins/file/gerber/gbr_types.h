@@ -15,6 +15,7 @@
 
 #include <QDebug>
 #include <QObject>
+#include <map>
 
 #define DEPRECATED
 
@@ -239,6 +240,45 @@ struct GrObject : GraphicObject {
         GraphicObject::path = std::move(path);
         GraphicObject::type = type;
     }
+};
+
+// Компенсация подтрава -- как «коррекция ширины дорожек» PostScript в KiCad, но
+// преобразованием самого файла Gerber: каждая кромка МЕДИ уходит наружу на
+// offset (дорожки и площадки шире на 2*offset, зазоры уже на столько же), а
+// графика на меди (текст, логотипы) остаётся как есть. Действует на слитый
+// слой, а с ним -- на экран, УП и вывод на печать (File::mergeCompensated).
+struct EtchComp {
+    // Вырез (%LPC) без X2-функции: метка сверловки KiCad точного размера или
+    // пустота в меди (зазор заливки старого образца), что сужается вместе с ней.
+    enum ClearMode : int32_t {
+        AutoClear = -1, // есть X2 -- точно, нет -- сужать
+        ExactClear,
+        ShrinkClear,
+    };
+
+    double offset{};          // мм на кромку, >= 0; 0 -- компенсации нет
+    bool plainIsCopper{true}; // тёмное без X2-функции и вне цепи -- медь
+    ClearMode clearMode{AutoClear};
+    bool keepPadHoles{true};           // отверстия апертур (%ADD10C,1.6X0.8) не сужать
+    std::map<int32_t, bool> overrides; // ручной выбор по ключу класса (keyOf)
+
+    bool active() const { return offset > 0.0; }
+
+    // Ключ класса для ручного выбора: штрих и вспышка -- D-код апертуры
+    // (неотрицателен), область -- своя X2-функция (D-код у области случаен):
+    // -1 без атрибута, -2 - f для функции f.
+    static constexpr int32_t regionKey(int32_t function) { return -2 - function; }
+    static int32_t keyOf(const GrObject& go) {
+        return go.state.type() == Region ? regionKey(go.state.aperFunction()) : go.state.aperture();
+    }
+
+    // Медь ли объект: ручной выбор, иначе X2-функция, иначе для выреза
+    // clearMode, иначе цепь (%TO.N), иначе plainIsCopper. Для выреза «медь» --
+    // это пустота в меди, сужаемая раздуванием, а не медь -- точный вырез.
+    // x2 -- есть ли у файла X2-атрибуты вообще (File::hasX2).
+    bool copper(const GrObject& go, bool x2) const;
+
+    bool operator==(const EtchComp&) const = default;
 };
 
 struct StepRepeatStr {

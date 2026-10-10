@@ -57,21 +57,36 @@ public:
     std::vector<const ::GraphicObject*> graphicObjects() const override;
     const auto& graphicObjects2() const { return graphicObjects_; };
 
+    // Компенсация подтрава (см. EtchComp). Смена пересобирает слой и элементы
+    // сцены -- это полное слияние с раздуванием меди, поэтому только по
+    // требованию, а не на каждый шаг счётчика.
+    const EtchComp& etchComp() const { return etch_; }
+    void setEtchComp(const EtchComp& etchComp);
+    // Есть ли у файла X2-атрибуты объектов: функции апертур или цепи.
+    bool hasX2() const;
     // X2-функция файла (%TF.FileFunction, Attr::File::Function), -1 -- нет.
     int32_t fileFunction() const { return fileFunction_; }
+    // Слитых полигонов меди, на которых больше одной цепи, -- по последнему createGi.
+    int32_t shorts() const { return shorts_; }
+    // Слить слой заново и пересоздать элементы сцены (GUI-поток).
+    void rebuild();
 
 protected:
     Geo::Polygons merge() const override;
 
 private:
+    // Слияние с компенсацией подтрава: медь раздута, графика как есть.
+    Geo::Polygons mergeCompensated() const;
     // На каждый слитый полигон меди -- номера цепей объектов, что в нём оказались.
     std::vector<std::vector<int32_t>> copperNets(const Geo::Polygons& copper) const;
     QString netsToolTip(std::span<const int32_t> nets) const;
 
 private:
     QList<Comp::Component> components_;
-    QStringList nets_;         // имена X2-цепей (%TO.N), индекс -- State::net()
-    int32_t fileFunction_{-1}; // X2 %TF.FileFunction, -1 -- нет
+    QStringList nets_;                    // имена X2-цепей (%TO.N), индекс -- State::net()
+    EtchComp etch_;                       // компенсация подтрава; в старых проектах ключа нет -- выкл.
+    int32_t fileFunction_{-1};            // X2 %TF.FileFunction, -1 -- нет
+    [[= Serial::skip]] int32_t shorts_{}; // считает createGi
     // Элементы сцены каждой цепи (обе группы, Normal и ApPaths), индекс -- номер
     // цепи. Собирается в createGi вместе с элементами, в проект не пишется.
     [[= Serial::skip]] std::vector<std::vector<Gi::Item*>> netItems_;

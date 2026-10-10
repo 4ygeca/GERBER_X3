@@ -11,9 +11,12 @@
  * http://www.boost.org/LICENSE_1_0.txt                                         *
  *******************************************************************************/
 #include "gbr_file.h"
+#include "gbr_attributes.h"
 #include "gbr_node.h"
 #include "gbrcomp_item.h"
 #include "gbrcomp_onent.h"
+#include "geo/boolean.h"
+#include "geo/util.h"
 #include "gi_datapath.h"
 #include "gi_datasolid.h"
 #include "graphicsview.h"
@@ -22,6 +25,7 @@
 #include <cassert>
 #include <forward_list>
 #include <gi_dbg.h>
+#include <optional>
 #include <qglobal.h>
 #include <utility>
 
@@ -62,6 +66,57 @@ QDebug operator<<(QDebug debug, const State& state) {
     return debug;
 }
 
+namespace {
+
+// X2-функции меди (Gerber X2, 5.6.10): площадки, проводники, заливки. Прочее
+// -- графика на меди (NonConductor: текст и рисунки KiCad), сверловка,
+// контуры компонентов и платы -- компенсации не подлежит.
+bool copperFunction(int32_t function) {
+    using A = Attr::Aperture;
+    switch(function) {
+    case A::ComponentPad:
+    case A::SMDPad:
+    case A::BGAPad:
+    case A::ConnectorPad:
+    case A::HeatsinkPad:
+    case A::ViaPad:
+    case A::TestPad:
+    case A::CastellatedPad:
+    case A::FiducialPad:
+    case A::ReliefPad:
+    case A::WasherPad:
+    case A::AntiPad:
+    case A::OtherPad:
+    case A::Conductor:
+    case A::EtchedComponent:
+    case A::CopperBalancing:
+    case A::Border:
+    case A::OtherCopper    : return true;
+    default                : return false;
+    }
+}
+
+} // namespace
+
+bool EtchComp::copper(const GrObject& go, bool x2) const {
+    if(auto it = overrides.find(keyOf(go)); it != overrides.end())
+        return it->second;
+    if(go.state.aperFunction() >= 0)
+        return copperFunction(go.state.aperFunction());
+    // Цепь у выреза не в счёт: метки сверловки KiCad -- %LPC без функции, и
+    // %TO.N у них остаётся от предыдущей площадки.
+    if(go.state.imgPolarity() == Negative) {
+        switch(clearMode) {
+        case ExactClear : return false;
+        case ShrinkClear: return true;
+        default         : return !x2;
+        }
+    }
+    if(go.state.net() >= 0)
+        return true;
+    return plainIsCopper;
+}
+
 File::File()
     : AbstractFile() {
     itemGroups_.append_range(std::array{new Gi::Group, new Gi::Group});
@@ -79,6 +134,11 @@ const ApertureMap* File::apertures() const { return &apertures_; }
 std::vector<GraphicObject> File::getDataForGC(std::span<Criteria> criterias, GCType gcType, bool test) const {
     std::vector<GraphicObject> retData;
     auto t = transform_.toQTransform(); // cached  QTransform
+    // Компенсация подтрава и здесь, пообъектно: термобарьеры берут тела
+    // площадок отсюда, а не из слитого слоя. Отбор (площадь) -- по исходному
+    // размеру; сверловке раздувать нечего, она смотрит на размер апертуры.
+    const bool etch = etch_.active() && gcType != GCType::Drill;
+    const bool x2 = etch && hasX2();
     for(auto&& criterion: criterias) {
         for(const GrObject& go: graphicObjects_) {
             auto transformedGo = go * t; // return copy
@@ -86,6 +146,9 @@ std::vector<GraphicObject> File::getDataForGC(std::span<Criteria> criterias, GCT
                 auto& g = retData.emplace_back(transformedGo);
                 if(test)
                     return retData;
+
+                if(etch && go.state.imgPolarity() == Positive && etch_.copper(go, x2))
+                    g.fill = Geo::transformed(Geo::Inflate(go.fill, 2.0 * etch_.offset), t);
 
                 switch(gcType) {
                 case GCType::Drill: {
@@ -111,6 +174,11 @@ std::vector<GraphicObject> File::getDataForGC(std::span<Criteria> criterias, GCT
 }
 
 Geo::Polygons File::merge() const {
+    // Компенсация подтрава -- своё слияние. Без неё путь прежний, и загрузка
+    // стоит столько же, сколько стоила.
+    if(etch_.active())
+        return mergedCurves_ = mergeCompensated();
+
     Timer t;
 
     // Слой -- последовательность вспышек: положительные добавляют медь,
@@ -236,6 +304,147 @@ Geo::Polygons File::merge() const {
     return mergedCurves_;
 }
 
+// Компенсация -- на ГОТОВОМ изображении слоя, а не пообъектно: раздувание
+// дистрибутивно над объединением, но не над разностью -- площадка, целиком
+// накрытая поздним %LPC и раздутая порознь, вылезла бы из-под него обратно.
+// Поэтому медь копится как есть и раздувается разом -- перед ТОЧНЫМ вырезом
+// (метки сверловки KiCad) и в конце. Вырез меди (пустота -- зазор заливки
+// старого образца) вычитается из неё ДО раздувания и сужается вместе с ней;
+// уже раздутое (до точного выреза) он режет без сужения -- редкость, и это
+// приближение. Графика на меди не раздувается вовсе.
+Geo::Polygons File::mergeCompensated() const {
+    Timer t;
+
+    const bool x2 = hasX2();
+    const double delta = 2.0 * etch_.offset; // у Geo::Inflate delta -- ПОЛНАЯ ширина
+    const size_t count = graphicObjects_.size();
+
+    std::vector<uint8_t> copper(count);
+    for(size_t i{}; i < count; ++i)
+        copper[i] = etch_.copper(graphicObjects_[i], x2);
+
+    enum Kind {
+        Dark,   // тёмное: медь раздувается, графика как есть
+        Shrink, // вырез меди -- сужается вместе с ней
+        Exact,  // точный вырез -- своего размера
+    };
+    auto kind = [&](size_t i) {
+        if(graphicObjects_[i].state.imgPolarity() == Positive) return Dark;
+        return copper[i] ? Shrink : Exact;
+    };
+
+    // Отверстия апертур (%ADD10C,1.6X0.8) -- метки под сверло, и раздувание
+    // их сужает. С keepPadHoles они остаются своего размера, но лишь там, где
+    // в исходном слое пусто: трасса, заходящая в центр площадки, дырку
+    // накрывает, и резать её нельзя.
+    Geo::Polylines holes;
+    if(etch_.keepPadHoles) {
+        for(size_t i{}; i < count; ++i) {
+            const GrObject& go = graphicObjects_[i];
+            if(go.state.type() != Aperture || kind(i) != Dark || !copper[i]) continue;
+            if(auto it = apertures_.find(go.state.aperture()); it != apertures_.end() && it->second && it->second->withHole())
+                holes.push_back(it->second->drawDrill(go.state));
+        }
+    }
+    const bool keepHoles = !holes.empty();
+
+    Geo::Polygons done;  // раздутая медь, уже обрезанная точными вырезами
+    Geo::Polygons raw;   // то же без раздувания -- только для keepPadHoles
+    Geo::Polygons cu;    // медь с последнего раздувания, ещё как есть
+    Geo::Polygons other; // графика
+    auto flush = [&] {
+        if(cu.empty()) return;
+        done |= Geo::Inflate(cu, delta);
+        if(keepHoles) raw |= cu;
+        cu = {};
+    };
+
+    // Пачки подряд идущих объектов одного рода -- по булевой операции на
+    // пачку, тела собираются готовыми полигонами (см. merge).
+    for(size_t i{}; i < count;) {
+        const Kind k = kind(i);
+        std::vector<Geo::Polygon> parts, otherParts;
+        for(; i < count && kind(i) == k; ++i)
+            (k == Dark && !copper[i] ? otherParts : parts).append_range(graphicObjects_[i].fill.all());
+        const Geo::Polygons part{std::span<const Geo::Polygon>{parts}};
+
+        switch(k) {
+        case Dark:
+            if(!part.empty()) cu |= part;
+            if(!otherParts.empty()) other |= Geo::Polygons{std::span<const Geo::Polygon>{otherParts}};
+            break;
+        case Shrink:
+            cu -= part;
+            other -= part;
+            done -= part;
+            if(keepHoles) raw -= part;
+            break;
+        case Exact:
+            flush();
+            done -= part;
+            other -= part;
+            if(keepHoles) raw -= part;
+            break;
+        }
+    }
+    flush();
+
+    if(keepHoles) {
+        raw |= other;
+        done -= Geo::Polygons{holes} - raw;
+    }
+    if(!other.empty()) done |= other;
+    return done;
+}
+
+bool File::hasX2() const {
+    return !nets_.empty() || r::any_of(graphicObjects_, [](const GrObject& go) { return go.state.aperFunction() >= 0; });
+}
+
+void File::setEtchComp(const EtchComp& etchComp) {
+    if(etchComp == etch_) return;
+    etch_ = etchComp;
+    rebuild();
+}
+
+void File::rebuild() {
+    // Слияние -- до сноса элементов: бросит -- на сцене останется прежний
+    // слой, а недостроенный кэш не задержится и соберётся при обращении.
+    try {
+        mergedCurves_ = {};
+        merge();
+    } catch(...) {
+        mergedCurves_ = {};
+        throw;
+    }
+    groupedCurves_ = {};
+
+    const bool visible = isVisible();
+    // Высота над прочими файлами -- как была: выделенный в дереве файл поднят
+    // (Node::setData), а addToScene опустил бы его на место.
+    std::optional<double> z;
+    for(const Gi::Group* group: itemGroups_)
+        if(!z && !group->empty()) z = group->front()->zValue();
+    for(Gi::Group* group: itemGroups_) {
+        group->clear();
+        // Цвет и перо группа раздаёт элементам лишь при СМЕНЕ (см.
+        // Gi::Group::setBrushColor), а новые элементы о них не знают -- осевые
+        // родятся белыми: без сброса setColor в createGi их бы не раскрасил.
+        group->setBrushColor({});
+        group->setPen({});
+    }
+    // Список дублей осевых: не очистить -- при skipDuplicates все осевые
+    // сочтутся дублями прежних и пропадут.
+    checkList.clear();
+
+    createGi();
+    addToScene();
+    if(z)
+        for(Gi::Group* group: itemGroups_) group->setZValue(*z);
+    setTransform(transform_);
+    setVisible(visible);
+}
+
 const QList<Comp::Component>& File::components() const { return components_; }
 
 // Разбор вложенности вручную больше не нужен: Geo::Polygons и ЕСТЬ разобранный
@@ -288,6 +497,20 @@ std::vector<const ::GraphicObject*> File::graphicObjects() const {
 void File::initFrom(AbstractFile* file_) {
     AbstractFile::initFrom(file_);
     static_cast<Node*>(node_)->file = this;
+    // Перезагрузка с диска: компенсация подтрава -- настройка файла, как цвет
+    // и трансформация, и переживает её. Разбор собрал слой без неё.
+    if(auto* old = dynamic_cast<File*>(file_)) {
+        etch_ = old->etch_;
+        if(etch_.active()) {
+            try {
+                rebuild();
+            } catch(...) {
+                // Остаётся слой разбора -- без компенсации, и настройка с ним в лад.
+                qWarning() << shortName() << u"-- etch compensation failed, reset to 0"_s;
+                etch_.offset = 0.0;
+            }
+        }
+    }
 }
 
 FileTree::Node* File::node() {
@@ -398,6 +621,7 @@ QString File::netsToolTip(std::span<const int32_t> nets) const {
 
 void File::createGi() {
     netItems_.assign(nets_.size(), {});
+    shorts_ = 0;
 
     if constexpr(1) { // fill copper
         const Geo::Polygons& copper = groupedPaths();
@@ -406,6 +630,7 @@ void File::createGi() {
             // Gi::Debug(paths);
             Gi::Item* item = new Gi::DataFill{Geo::Polygons{paths}, this};
             item->setToolTip(netsToolTip(nets[k]));
+            if(nets[k].size() > 1) ++shorts_; // см. netsToolTip
             for(int32_t net: nets[k]) netItems_[net].push_back(item);
             ++k;
             itemGroups_[Normal]->push_back(item);
