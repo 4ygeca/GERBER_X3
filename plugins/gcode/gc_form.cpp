@@ -411,23 +411,28 @@ void Form::setEditMode(bool on) {
     if(!computing_) pbCreate->setText(on ? tr("Update") : tr("Create"));
 }
 
-void Form::restoreContext(File* file) {
-    // Видимость -- по снимку. Файлы, которых на момент расчёта не было (включая
-    // саму эту УП), в снимке отсутствуют и не трогаются.
-    for(auto&& [id, visible]: file->visibility())
-        if(auto* f = App::project().file(id); f && f->isVisible() != visible) {
-            f->setVisible(visible);
-            App::fileModel().updateNode(f->node()); // галочка в дереве
-        }
-
+// Видимость меняется ТОЛЬКО у исходных файлов этой УП (ключи GrItems), и
+// только на «видим»: скрытый элемент Qt не выделит (QGraphicsItem::setSelected
+// у невидимого -- холостой). Снимок file->visibility() целиком больше не
+// применяется: в нём весь проект на момент расчёта, и правка включала обратно
+// прочие УП, видимые тогда, сколько бы их с тех пор ни гасили (и гасила то,
+// что с тех пор включили). К тому же id в снимке не вечны: Project::addFile
+// выдаёт наибольший + 1, так что id удалённого последним файла получает
+// следующий, и снимок задевал файл, которого при расчёте не было вовсе.
+void Form::restoreContext(File* /*file*/) {
     App::grView().scene()->clearSelection();
 
     auto it = gcp.params.find(Params::GrItems);
     if(it == gcp.params.end()) return;
     for(auto&& [key, ids]: it->second.value<UsedItems>()) {
         if(key.size() < 2) continue; // ключ -- пара {id файла, тип элементов}
-        if(auto* f = App::project().file(key[0]); f)
-            f->itemGroup(key[1])->setSelected(ids);
+        auto* f = App::project().file(key[0]);
+        if(!f) continue;
+        if(!f->isVisible()) {
+            f->setVisible(true);
+            App::fileModel().updateNode(f->node()); // галочка в дереве
+        }
+        f->itemGroup(key[1])->setSelected(ids);
     }
 }
 
@@ -556,9 +561,9 @@ const Params& Form::getNewGcpWithGi() {
         return gcp;
     }
 
-    // Видимость снимается со ВСЕГО проекта, а не только с использованных файлов:
-    // вернуть надо ту картину, что была перед нажатием Create, вместе с тем, что
-    // пользователь намеренно погасил.
+    // Снимок видимости всего проекта на момент Create уезжает в УП и хранится в
+    // проекте. При открытии на правку он целиком НЕ применяется -- видимость там
+    // меняют только исходные файлы (см. restoreContext).
     visibility_.clear();
     for(auto* file: App::project().files())
         visibility_.emplace(file->id(), file->isVisible());
