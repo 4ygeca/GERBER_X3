@@ -142,38 +142,38 @@
         <translation>Изменить инструмент только для этой УП (база инструментов не меняется)</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="427"/>
+        <location filename="drill_form.cpp" line="431"/>
         <source>&amp;Select Tool</source>
         <translation>&amp;Выбрать инструмент</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="448"/>
-        <location filename="drill_form.cpp" line="520"/>
+        <location filename="drill_form.cpp" line="452"/>
+        <location filename="drill_form.cpp" line="528"/>
         <source>&quot; not suitable for Tu</source>
         <translation>» не подходит для Tu</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="470"/>
+        <location filename="drill_form.cpp" line="474"/>
         <source>&amp;Edit tool for this toolpath…</source>
         <translation>&amp;Изменить инструмент для этой УП…</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="476"/>
+        <location filename="drill_form.cpp" line="484"/>
         <source>Reset to &amp;database tool</source>
         <translation>Вернуть инструмент из &amp;базы</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="487"/>
+        <location filename="drill_form.cpp" line="495"/>
         <source>&amp;Remove Tool</source>
         <translation>&amp;Убрать инструмент</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="500"/>
+        <location filename="drill_form.cpp" line="508"/>
         <source>&amp;Choose a Tool for everyone</source>
         <translation>&amp;Выбрать инструмент для всех</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="529"/>
+        <location filename="drill_form.cpp" line="537"/>
         <source>&amp;Remove Tool for everyone</source>
         <translation>&amp;Удалить инструмент для всех</translation>
     </message>
@@ -181,23 +181,23 @@
 <context>
     <name>Drilling::Model</name>
     <message>
-        <location filename="drill_model.cpp" line="121"/>
+        <location filename="drill_model.cpp" line="125"/>
         <source>Select Tool</source>
         <translation>Выбрать инструмент</translation>
     </message>
     <message>
-        <location filename="drill_model.cpp" line="143"/>
+        <location filename="drill_model.cpp" line="147"/>
         <source>Edited for this toolpath only (the tool database is not changed)</source>
         <translation>Изменён только для этой УП (база инструментов не меняется)</translation>
     </message>
     <message>
-        <location filename="drill_model.cpp" line="163"/>
+        <location filename="drill_model.cpp" line="167"/>
         <source>Aperture</source>
         <translation>Апертура</translation>
     </message>
     <message>
-        <location filename="drill_model.cpp" line="163"/>
-        <location filename="drill_model.cpp" line="165"/>
+        <location filename="drill_model.cpp" line="167"/>
+        <location filename="drill_model.cpp" line="169"/>
         <source>Tool</source>
         <translation>Инструмент</translation>
     </message>

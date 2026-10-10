@@ -52,6 +52,7 @@ private:
         ColNegative,
         ColCount
     };
+    static constexpr int ShapesId = -1; // строка фигур проекта: id файла -- не меньше нуля
 
     QTreeWidget* files_;
     QComboBox* format_;

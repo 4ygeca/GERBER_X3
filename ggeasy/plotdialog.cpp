@@ -256,6 +256,19 @@ void PlotDialog::fillFiles(const QString& drillFileName) {
         if(Plot::hasDrills(file))
             drillFile_->addItem(file->icon(), file->shortName(), file->id());
     }
+    // Фигуры проекта (текст, окружности, полилинии) -- одним слоем, id -1.
+    if(!App::project().shapes().empty()) {
+        auto* item = new QTreeWidgetItem(files_);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+        item->setData(ColExport, Qt::UserRole, ShapesId);
+        item->setCheckState(ColExport, Qt::Checked);
+        item->setIcon(ColFile, QIcon::fromTheme(u"draw-text"_s));
+        item->setText(ColFile, tr("Shapes"));
+        item->setText(ColSide, tr("Top"));
+        item->setData(ColSide, Qt::UserRole, false);
+        item->setCheckState(ColMirror, Qt::Unchecked);
+        item->setCheckState(ColNegative, Qt::Unchecked);
+    }
     if(const int index = drillFile_->findText(drillFileName); index >= 0)
         drillFile_->setCurrentIndex(index);
 }
@@ -309,14 +322,17 @@ std::vector<Plot::Job> PlotDialog::checkedJobs() const {
     for(int i{}; i < files_->topLevelItemCount(); ++i) {
         const QTreeWidgetItem* item = files_->topLevelItem(i);
         if(item->checkState(ColExport) != Qt::Checked) continue;
+        const bool mirror = item->checkState(ColMirror) == Qt::Checked;
+        const bool negative = item->checkState(ColNegative) == Qt::Checked;
+        const int id = item->data(ColExport, Qt::UserRole).toInt();
+        if(id == ShapesId) {
+            result.push_back(Plot::Job{nullptr, mirror, negative, true});
+            continue;
+        }
         // По id, а не указателем: файл могли перезагрузить, пока окно открыто.
-        AbstractFile* file = App::project().file(item->data(ColExport, Qt::UserRole).toInt());
+        AbstractFile* file = App::project().file(id);
         if(!file) continue;
-        result.push_back(Plot::Job{
-            file,
-            item->checkState(ColMirror) == Qt::Checked,
-            item->checkState(ColNegative) == Qt::Checked,
-        });
+        result.push_back(Plot::Job{file, mirror, negative, false});
     }
     return result;
 }

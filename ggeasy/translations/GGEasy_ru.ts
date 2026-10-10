@@ -2553,23 +2553,28 @@ Do you want to save your changes?</source>
 <context>
     <name>Plot</name>
     <message>
-        <location filename="../plot.cpp" line="550"/>
+        <location filename="../plot.cpp" line="587"/>
         <source>Cannot set the page size %1 x %2 mm.</source>
         <translation>Не удалось задать размер страницы %1 x %2 мм.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="555"/>
-        <location filename="../plot.cpp" line="560"/>
+        <location filename="../plot.cpp" line="592"/>
+        <location filename="../plot.cpp" line="597"/>
         <source>Cannot write file %1.</source>
         <translation>Не удалось записать файл %1.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="740"/>
+        <location filename="../plot.cpp" line="668"/>
+        <source>Shapes</source>
+        <translation>Фигуры</translation>
+    </message>
+    <message>
+        <location filename="../plot.cpp" line="780"/>
         <source>Cannot start printing.</source>
         <translation>Не удалось начать печать.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="763"/>
+        <location filename="../plot.cpp" line="803"/>
         <source>The plot (%1 x %2 mm) does not fit the printable area (%3 x %4 mm) and is cut off. Choose a larger paper size or another orientation.</source>
         <translation>Вывод (%1 x %2 мм) не помещается в область печати (%3 x %4 мм) и будет обрезан. Выберите бумагу большего размера или другую ориентацию.</translation>
     </message>
@@ -2810,46 +2815,52 @@ Do you want to save your changes?</source>
     </message>
     <message>
         <location filename="../plotdialog.cpp" line="252"/>
+        <location filename="../plotdialog.cpp" line="267"/>
         <source>Top</source>
         <translation>Верх</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="286"/>
+        <location filename="../plotdialog.cpp" line="266"/>
+        <source>Shapes</source>
+        <translation>Фигуры</translation>
+    </message>
+    <message>
+        <location filename="../plotdialog.cpp" line="299"/>
         <source>Output folder</source>
         <translation>Папка вывода</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="332"/>
+        <location filename="../plotdialog.cpp" line="348"/>
         <source>Check at least one layer to plot.</source>
         <translation>Отметьте хотя бы один слой для вывода.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="345"/>
+        <location filename="../plotdialog.cpp" line="361"/>
         <source>Cannot build the plot geometry:
 %1</source>
         <translation>Не удалось построить геометрию вывода:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="349"/>
-        <location filename="../plotdialog.cpp" line="413"/>
+        <location filename="../plotdialog.cpp" line="365"/>
+        <location filename="../plotdialog.cpp" line="429"/>
         <source>Nothing to plot in: %1</source>
         <translation>Нечего выводить в: %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="352"/>
+        <location filename="../plotdialog.cpp" line="368"/>
         <source>The checked layers have nothing to plot: no visible copper, holes or paths.</source>
         <translation>В отмеченных слоях нечего выводить: нет видимой меди, отверстий или путей.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="363"/>
+        <location filename="../plotdialog.cpp" line="379"/>
         <source>The output folder does not exist:
 %1</source>
         <translation>Папка вывода не существует:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="387"/>
+        <location filename="../plotdialog.cpp" line="403"/>
         <source>These files already exist and will be overwritten:
 %1
 
@@ -2860,19 +2871,19 @@ Continue?</source>
 Продолжить?</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="410"/>
+        <location filename="../plotdialog.cpp" line="426"/>
         <source>Written %1 file(s) to %2</source>
         <translation>Записано файлов: %1, папка %2</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="417"/>
+        <location filename="../plotdialog.cpp" line="433"/>
         <source>Some files were not written:
 %1</source>
         <translation>Некоторые файлы не записаны:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="447"/>
+        <location filename="../plotdialog.cpp" line="463"/>
         <source>Plot -- print preview</source>
         <translation>Вывод -- предпросмотр печати</translation>
     </message>

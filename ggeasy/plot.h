@@ -83,6 +83,7 @@ struct Job {
     AbstractFile* file{};
     bool mirror{};
     bool negative{};
+    bool shapes{}; // file == nullptr: видимые фигуры проекта (Shapes)
 };
 
 // Слой, готовый к выводу: контуры в мм СВОЕЙ страницы (Y вверх, начало --

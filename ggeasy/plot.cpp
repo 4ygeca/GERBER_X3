@@ -27,6 +27,8 @@
 #include "plot.h"
 
 #include "abstract_file.h"
+#include "app.h"
+#include "project.h"
 #include "geo/boolean.h"
 #include "geo/polygon.h"
 #include "geo/util.h"
@@ -87,6 +89,12 @@ void forVisibleItems(const AbstractFile* file, Fn&& fn) {
 // учитывается: на экране он есть.
 Geo::Polylines sceneCurves(const Gi::Item& item) {
     Geo::Polylines curves = item.curves();
+    // Зеркало (det < 0): Geo::transform лишь меняет знак прогибов, обход не
+    // разворачивает -- тело против часовой выходит по часовой, и
+    // Polygons{Polylines} прочёл бы его пустотой (зеркальная сверловка
+    // пропала бы целиком). Канон восстанавливается, как в transformed(Polygon).
+    if(item.transform().determinant() < 0.0)
+        for(Geo::Polyline& contour: curves) contour.reverse();
     if(const QPointF pos = item.pos(); !pos.isNull()) Geo::translate(curves, pos);
     return curves;
 }
@@ -116,16 +124,32 @@ Source collect(AbstractFile* file, double lineWidth) {
     std::vector<Geo::Polygon> bodies;
     Geo::Polylines holes;
     Geo::Polylines paths;
-    forVisibleItems(file, [&](const Gi::Item& item) {
-        const int type = item.type();
-        if(type == Gi::Type::DataSolid)
-            bodies.append_range(sceneRegion(item).all());
-        else if(type == Gi::Type::Drill)
-            holes.append_range(sceneCurves(item));
-        else if(type == Gi::Type::DataPath)
-            paths.append_range(sceneCurves(item));
-        // Прочее (компоненты, превью, ошибки) -- не данные слоя.
-    });
+    // Замкнутый путь -- граница заливки ТОГО ЖЕ слоя, только если видна
+    // заливка этого слоя (DXF/TopoR в режиме "заливка и контуры"): её обводка
+    // лишь раздула бы медь на полширины штриха. Слои DXF/TopoR кладут группы
+    // парами -- заливка, затем пути, -- так что смотрим на группу перед
+    // путями. Слой в режиме путей и контур платы TopoR (у него заливки нет
+    // вовсе) выводятся кольцами. У гербера заливка и пути вместе не видны.
+    bool prevFilled = false;
+    for(Gi::Group* group: file->itemGroups()) {
+        bool filled = false;
+        if(group)
+            for(const auto& item: *group) {
+                if(!item || !item->isVisible()) continue;
+                const int type = item->type();
+                if(type == Gi::Type::DataSolid) {
+                    bodies.append_range(sceneRegion(*item).all());
+                    filled = true;
+                } else if(type == Gi::Type::Drill) {
+                    holes.append_range(sceneCurves(*item));
+                } else if(type == Gi::Type::DataPath) {
+                    for(Geo::Polyline& path: sceneCurves(*item))
+                        if(!(path.closed && prevFilled)) paths.push_back(std::move(path));
+                }
+                // Прочее (компоненты, превью, ошибки) -- не данные слоя.
+            }
+        prevFilled = filled;
+    }
 
     Source src;
     if(!bodies.empty()) src.region = Geo::Polygons{std::span<const Geo::Polygon>{bodies}};
@@ -133,11 +157,6 @@ Source collect(AbstractFile* file, double lineWidth) {
     src.drill = bodies.empty() && !holes.empty();
 
     if(lineWidth > 0.0 && !paths.empty()) {
-        // У файла со своей заливкой замкнутые пути -- это границы той же
-        // заливки (DXF/TopoR в режиме "заливка и контуры"): их обводка лишь
-        // раздула бы медь на полширины штриха. Открытые пути заливки не имеют
-        // и выводятся всегда.
-        const bool filled = !src.region.empty();
         Geo::Polylines strokes;
         Geo::Polylines dots;
         for(Geo::Polyline& path: paths) {
@@ -147,7 +166,6 @@ Source collect(AbstractFile* file, double lineWidth) {
                 continue;
             }
             if(path.closed) {
-                if(filled) continue;
                 // Замкнутый путь -- кольцом, а не телом: размыкаем его в
                 // стартовой вершине, прогиб замыкающего сегмента остаётся на
                 // последней вершине.
@@ -160,6 +178,25 @@ Source collect(AbstractFile* file, double lineWidth) {
         if(!strokes.empty()) src.region |= Geo::Inflate(strokes, lineWidth);
         if(!dots.empty()) src.region |= Geo::Polygons{dots};
     }
+    return src;
+}
+
+// Фигуры проекта (Shapes::AbstractShape) -- Gi-элементы вне файлов: замкнутые
+// контуры заливаются even-odd пофигурно (у текста буквы с дырками), открытые
+// обводятся штрихом lineWidth, как DataPath.
+Source collectShapes(double lineWidth) {
+    Source src;
+    Geo::Polylines open;
+    for(Shapes::AbstractShape* shape: App::project().shapes()) {
+        if(!shape || !shape->isVisible()) continue;
+        Geo::Polylines closed;
+        for(Geo::Polyline& contour: sceneCurves(*shape)) {
+            if(contour.empty()) continue;
+            (contour.closed ? closed : open).push_back(std::move(contour));
+        }
+        if(!closed.empty()) src.region |= Geo::evenOdd(closed);
+    }
+    if(lineWidth > 0.0 && !open.empty()) src.region |= Geo::Inflate(open, lineWidth);
     return src;
 }
 
@@ -620,23 +657,25 @@ Sheet build(std::span<const Job> jobs, AbstractFile* drillFile, const Options& o
 
     struct Layer {
         const Job* job;
+        QString name;
         Geo::Polygons region;
     };
     std::vector<Layer> layers;
     QRectF extent;
     for(const Job& job: jobs) {
-        if(!job.file) continue;
-        Source src = collect(job.file, opt.lineWidth);
+        if(!job.file && !job.shapes) continue;
+        Source src = job.file ? collect(job.file, opt.lineWidth) : collectShapes(opt.lineWidth);
+        const QString name = job.file ? job.file->shortName() : QCoreApplication::translate("Plot", "Shapes");
         // Метки сверловки -- просвет в меди (точная разность). Самой
         // сверловки они не касаются: напечатанная отдельно, она и есть
         // отверстия -- краской.
         if(!src.drill && !holes.empty() && !src.region.empty()) src.region -= holes;
         if(src.region.empty()) {
-            sheet.empty.push_back(job.file->shortName());
+            sheet.empty.push_back(name);
             continue;
         }
         extent |= src.region.boundingRect();
-        layers.push_back(Layer{&job, std::move(src.region)});
+        layers.push_back(Layer{&job, name, std::move(src.region)});
     }
     if(layers.empty()) return sheet;
 
@@ -660,12 +699,13 @@ Sheet build(std::span<const Job> jobs, AbstractFile* drillFile, const Options& o
     for(const Layer& layer: layers) {
         const Job& job = *layer.job;
         Plate plate;
-        plate.name = job.file->shortName();
+        plate.name = layer.name;
         const QString base = plate.name
             + (job.mirror ? u"_mirror"_s : QString{})
             + (job.negative ? u"_neg"_s : QString{});
         plate.fileBase = base;
-        for(int n = 2; !names.insert(plate.fileBase).second; ++n)
+        // Без учёта регистра: на Windows TOP.GBR и top.gbr -- один файл.
+        for(int n = 2; !names.insert(plate.fileBase.toCaseFolded()).second; ++n)
             plate.fileBase = base + u"_"_s + QString::number(n);
 
         Geo::Polylines contours = layer.region.contours();
