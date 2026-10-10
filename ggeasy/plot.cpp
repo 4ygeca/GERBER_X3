@@ -16,8 +16,10 @@
 #include <QMarginsF>
 #include <QPageLayout>
 #include <QPageSize>
+#include <QPaintEngine>
 #include <QPainter>
 #include <QPdfWriter>
+#include <QPicture>
 #include <QPrinter>
 #include <QRectF>
 #include <QSaveFile>
@@ -326,6 +328,26 @@ void paintPage(QPainter& painter, const Page& page) {
         painter.fillPath(placed.plate->path, QBrush{Qt::black});
         painter.restore();
     }
+}
+
+// Поправка преобразования для предпросмотра печати. QPrintPreviewDialog
+// пишет страницы в QPicture, а QPicture::play при показе растягивает запись
+// от угла области печати на отношение логического DPI виджета к DPI самой
+// QPicture (qt_defaultDpi). Обычно оно 1, но main() ставит Qt::AA_Use96Dpi
+// (DPI QPicture -- ровно 96) и выключает масштабирование high-DPI
+// (логический DPI экрана при 125 % -- 120): лист в предпросмотре выходил
+// крупнее в 1.25 раза и сползал вправо-вниз, за край бумаги. Обратный
+// масштаб снимает растяжение; на настоящей печати QPicture нет -- поправки
+// тоже.
+QTransform previewReplayFix(const QPainter& painter, const QPaintDevice* surface) {
+    const QPaintEngine* engine = painter.paintEngine();
+    if(!surface || !engine || engine->type() != QPaintEngine::Picture) return {};
+    const int dpiX = surface->logicalDpiX();
+    const int dpiY = surface->logicalDpiY();
+    if(dpiX <= 0 || dpiY <= 0) return {};
+    const QPicture picture; // её DPI и есть qt_defaultDpi, на который делит play
+    return QTransform::fromScale(static_cast<double>(picture.logicalDpiX()) / dpiX,
+        static_cast<double>(picture.logicalDpiY()) / dpiY);
 }
 
 std::vector<Page> printPages(const Sheet& sheet, const Options& opt, QSizeF area) {
@@ -774,10 +796,11 @@ double fitRatio(const Sheet& sheet, const Options& opt, QSizeF area) {
     return ratio;
 }
 
-QString print(QPrinter* printer, const Sheet& sheet, const Options& opt) {
+QString print(QPrinter* printer, const Sheet& sheet, const Options& opt, const QPaintDevice* previewSurface) {
     if(!printer || sheet.plates.empty()) return {};
     QPainter painter;
     if(!painter.begin(printer)) return QCoreApplication::translate("Plot", "Cannot start printing.");
+    const QTransform replayFix = previewReplayFix(painter, previewSurface);
 
     // Точек устройства на мм -- у самого устройства, на каждый вызов: после
     // выбора другого принтера разрешение другое. Калибровка -- поправка
@@ -807,7 +830,7 @@ QString print(QPrinter* printer, const Sheet& sheet, const Options& opt) {
                           .arg(page.size.height() * scaleY, 0, 'f', 1)
                           .arg(area.width() * scaleX, 0, 'f', 1)
                           .arg(area.height() * scaleY, 0, 'f', 1);
-        painter.setTransform(QTransform{kx, 0.0, 0.0, ky, dx, dy});
+        painter.setTransform(QTransform{kx, 0.0, 0.0, ky, dx, dy} * replayFix);
         paintPage(painter, page);
     }
     painter.end();

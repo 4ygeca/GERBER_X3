@@ -25,6 +25,7 @@
 #include "geo/polyline.h"
 
 class AbstractFile;
+class QPaintDevice;
 class QPrinter;
 
 // Вывод слоёв платы в ТОЧНОМ масштабе: печать, PDF, SVG и DXF из одной и той
@@ -140,6 +141,9 @@ double fitRatio(const Sheet& sheet, const Options& opt, QSizeF area);
 // калибровку, по центру области печати. Страницу, поля и разрешение принтера
 // НЕ трогает -- годится для QPrintPreviewDialog::paintRequested, который
 // зовётся многократно. Пустая строка -- всё влезло, иначе предупреждение.
-QString print(QPrinter* printer, const Sheet& sheet, const Options& opt);
+// previewSurface -- виджет, на котором предпросмотр покажет страницы: его
+// логический DPI нужен, чтобы снять растяжение записи при показе (см.
+// previewReplayFix в plot.cpp). На настоящую печать он не влияет.
+QString print(QPrinter* printer, const Sheet& sheet, const Options& opt, const QPaintDevice* previewSurface = nullptr);
 
 } // namespace Plot
