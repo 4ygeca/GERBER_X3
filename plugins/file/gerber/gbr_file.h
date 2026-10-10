@@ -57,6 +57,9 @@ public:
     std::vector<const ::GraphicObject*> graphicObjects() const override;
     const auto& graphicObjects2() const { return graphicObjects_; };
 
+    // X2-функция файла (%TF.FileFunction, Attr::File::Function), -1 -- нет.
+    int32_t fileFunction() const { return fileFunction_; }
+
 protected:
     Geo::Polygons merge() const override;
 
@@ -67,7 +70,8 @@ private:
 
 private:
     QList<Comp::Component> components_;
-    QStringList nets_; // имена X2-цепей (%TO.N), индекс -- State::net()
+    QStringList nets_;         // имена X2-цепей (%TO.N), индекс -- State::net()
+    int32_t fileFunction_{-1}; // X2 %TF.FileFunction, -1 -- нет
     // Элементы сцены каждой цепи (обе группы, Normal и ApPaths), индекс -- номер
     // цепи. Собирается в createGi вместе с элементами, в проект не пишется.
     [[= Serial::skip]] std::vector<std::vector<Gi::Item*>> netItems_;

@@ -169,6 +169,10 @@ class State {
     double scaling_ = 1.0;
     double rotating_{};
     int32_t net_{-1}; // номер X2-цепи (%TO.N) в File::nets_, -1 -- вне цепи
+    // X2-функция (%TA.AperFunction, Attr::Aperture::Function), -1 -- атрибута
+    // нет. Вспышка и штрих -- снимок словаря на %AD своей апертуры, область --
+    // словарь на G37. Нужна компенсации подтрава: медь от графики на меди.
+    int32_t aperFunction_{-1};
 
 public:
     State(File* const file = nullptr)
@@ -202,6 +206,9 @@ public:
 
     inline auto net() const { return net_; }
     inline void setNet(int32_t net) { net_ = net; }
+
+    inline auto aperFunction() const { return aperFunction_; }
+    inline void setAperFunction(int32_t aperFunction) { aperFunction_ = aperFunction; }
 
     inline auto& curPos() { return curPos_; }
     inline auto curPos() const { return curPos_; }
