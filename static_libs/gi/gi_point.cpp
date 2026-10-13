@@ -442,7 +442,13 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     action->setChecked(!(App::pin0().flags() & QGraphicsItem::ItemIsMovable));
 
     action = menu.addAction(tr("Used"), [this](bool fl) {
-        App::project().setPinUsed(fl, index_); update(); });
+        const double axis = flipAxisX();
+        App::project().setPinUsed(fl, index_);
+        update();
+        // Ось переворота считается по используемым булавкам -- а по ней
+        // зеркалится нижняя сторона в УП.
+        if(flipAxisX() != axis) GCode::regenerateGCodeFiles();
+    });
     action->setCheckable(true);
     action->setChecked(App::project().pinUsed(index_));
 

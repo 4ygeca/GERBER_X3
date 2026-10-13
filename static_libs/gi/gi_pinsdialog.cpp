@@ -359,8 +359,11 @@ void PinsDialog::accept() {
             pins[i]->update();
         }
     Pin::setPos(pos_.data());
-    App::project().setPinsPos(pos_.data());
-    if(pos_ != orig_ || used_ != origUsed_)
+    // Без изменений проект не помечается изменённым.
+    const bool moved = pos_ != orig_;
+    if(moved)
+        App::project().setPinsPos(pos_.data());
+    if(moved || used_ != origUsed_)
         GCode::regenerateGCodeFiles();
     QDialog::accept();
 }
