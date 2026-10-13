@@ -15,19 +15,25 @@
 #include "gbr_file.h"
 
 #include "doublespinbox.h"
+#include "gi.h"
+#include "graphicsview.h"
 #include "project.h"
 
 #include <QApplication>
+#include <QBrush>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFont>
 #include <QFormLayout>
+#include <QGraphicsPathItem>
+#include <QGraphicsScene>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMessageBox>
 #include <QMetaEnum>
+#include <QPen>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QTreeWidget>
@@ -35,6 +41,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <limits>
 #include <map>
 #include <span>
 
@@ -95,6 +102,24 @@ QString errorText(const std::exception_ptr& error) {
     }
 }
 
+// То, что выбрали бы правила сами: без ручного выбора классов и объектов.
+EtchComp withoutManual(EtchComp etchComp) {
+    etchComp.overrides.clear();
+    etchComp.excluded.clear();
+    return etchComp;
+}
+
+// Тела объектов одним путём -- для подсветки, без объединения: под
+// WindingFill тела (канонически против часовой, см. Polygons::toPath)
+// складываются, а дырка (навстречу телу) гасит лишь своё тело.
+QPainterPath outlineOf(std::span<const GrObject* const> objects) {
+    QPainterPath path;
+    path.setFillRule(Qt::WindingFill);
+    for(const GrObject* go: objects)
+        path.addPath(go->fill.toPath());
+    return path;
+}
+
 } // namespace
 
 EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
@@ -105,6 +130,8 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
     , keepPadHoles_{new QCheckBox{this}}
     , info_{new QLabel{this}}
     , tree_{new QTreeWidget{this}}
+    , exclude_{new QPushButton{this}}
+    , clearExcluded_{new QPushButton{this}}
     , status_{new QLabel{this}} {
     setObjectName(u"EtchDialog"_s);
     setWindowTitle(tr("Etch Compensation"));
@@ -114,6 +141,7 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
         entry.file = file;
         entry.backup = entry.edited = file->etchComp();
         entry.x2 = file->hasX2();
+        entry.functions = r::any_of(file->graphicObjects2(), [](const GrObject& go) { return go.state.aperFunction() >= 0; });
         entry.shorts = file->shorts();
         if(!file->nets().empty()) nets_ = true;
         // Классы -- в порядке ключей: сначала области, потом D-коды.
@@ -170,14 +198,12 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
         QStringList lines;
         for(const Entry& entry: entries_) {
             const File* file = entry.file;
-            const bool functions = std::ranges::any_of(file->graphicObjects2(),
-                [](const GrObject& go) { return go.state.aperFunction() >= 0; });
             QString function = fileFunctionName(file->fileFunction());
             if(file->fileFunction() >= 0 && file->fileFunction() != Attr::File::Copper)
                 function += tr(" (not a copper layer)");
             lines.push_back(tr("<b>%1</b>: X2 aperture functions: %2; nets: %3; file function: %4")
                                 .arg(file->shortName().toHtmlEscaped(),
-                                    functions ? tr("yes") : tr("no"),
+                                    entry.functions ? tr("yes") : tr("no"),
                                     QString::number(file->nets().size()),
                                     function.toHtmlEscaped()));
         }
@@ -191,16 +217,19 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
     tree_->setColumnCount(4);
     tree_->setHeaderLabels({tr("Class"), tr("Function"), tr("Objects"), tr("By rules")});
     tree_->setUniformRowHeights(true);
-    tree_->setSelectionMode(QAbstractItemView::NoSelection);
+    tree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     tree_->header()->setSectionResizeMode(ColName, QHeaderView::Stretch);
     tree_->header()->setSectionResizeMode(ColFunction, QHeaderView::ResizeToContents);
     tree_->header()->setSectionResizeMode(ColObjects, QHeaderView::ResizeToContents);
     tree_->header()->setSectionResizeMode(ColRule, QHeaderView::ResizeToContents);
     tree_->header()->setStretchLastSection(false);
     tree_->setToolTip(tr("Checked classes are compensated as copper; for clear objects the void shrinks with the copper.\n"
-                         "Bold: chosen manually; the \"By rules\" column shows the automatic choice."));
+                         "Bold: chosen manually; the \"By rules\" column shows the automatic choice.")
+        + u'\n' + tr("Selected rows are highlighted on the scene, double click zooms to them."));
     fillTree();
     connect(tree_, &QTreeWidget::itemChanged, this, &EtchDialog::onItemChanged);
+    connect(tree_, &QTreeWidget::itemSelectionChanged, this, &EtchDialog::updateHighlight);
+    connect(tree_, &QTreeWidget::itemDoubleClicked, this, &EtchDialog::zoomToHighlight);
 
     // Правила меняют разметку таблицы, но не слой: пересчёт -- по Apply/OK.
     connect(plainIsCopper_, &QCheckBox::toggled, this, &EtchDialog::updateRows);
@@ -209,6 +238,19 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
     auto* resetButton = new QPushButton{tr("Reset to rules"), this};
     resetButton->setObjectName(u"pbReset"_s);
     connect(resetButton, &QPushButton::clicked, this, &EtchDialog::resetOverrides);
+
+    exclude_->setObjectName(u"pbExclude"_s);
+    exclude_->setText(tr("Exclude selected"));
+    exclude_->setToolTip(tr("Objects lying in the copper bodies (Normal view) or on the aperture paths\n"
+                            "selected on the scene are never compensated, whatever their class says.\n"
+                            "Select them on the scene before opening this dialog."));
+    connect(exclude_, &QPushButton::clicked, this, &EtchDialog::excludeSelected);
+
+    clearExcluded_->setObjectName(u"pbClearExcluded"_s);
+    clearExcluded_->setText(tr("Clear exclusions"));
+    clearExcluded_->setToolTip(tr("Excluded objects follow their classes again."));
+    connect(clearExcluded_, &QPushButton::clicked, this, &EtchDialog::clearExclusions);
+    updateButtons();
 
     auto* hint = new QLabel{tr("Toolpaths created earlier are not recalculated."), this};
     hint->setObjectName(u"lblHint"_s);
@@ -237,6 +279,8 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
 
     auto* resetRow = new QHBoxLayout;
     resetRow->addWidget(resetButton);
+    resetRow->addWidget(exclude_);
+    resetRow->addWidget(clearExcluded_);
     resetRow->addWidget(hint, 1);
 
     auto* layout = new QVBoxLayout{this};
@@ -251,7 +295,15 @@ EtchDialog::EtchDialog(std::vector<File*> files, QWidget* parent)
     resize(640, 520);
 }
 
-EtchDialog::~EtchDialog() = default;
+EtchDialog::~EtchDialog() {
+    // Таблицу рушит уже ~QWidget, после полей диалога, -- её сигналам сюда
+    // больше хода нет.
+    tree_->disconnect(this);
+    // Подсветка -- только на время диалога. Сцену Qt рушит вместе с её
+    // элементами, и тогда удалять уже нечего.
+    if(auto* view = App::grView.ptr(); view && view->scene())
+        for(const Entry& entry: entries_) delete entry.overlay;
+}
 
 EtchComp EtchDialog::settings(const Entry& entry) const {
     EtchComp etchComp = entry.edited;
@@ -283,6 +335,13 @@ void EtchDialog::fillTree() {
             auto* row = cls.row = new QTreeWidgetItem{fileRow};
             if(cls.key < 0) {
                 row->setText(ColName, tr("Regions"));
+                // KiCad пишет %TA.AperFunction только для областей через
+                // PlotGerberRegion (заливки, площадки); текст шрифтом TrueType и
+                // инверсный (knockout) идут голыми G36/G37 -- без функции.
+                if(cls.key == EtchComp::regionKey(-1) && entry.functions)
+                    row->setToolTip(ColName, tr("Regions without an aperture function in a file with X2 attributes:\n"
+                                                "usually KiCad text in a TrueType font or knockout text,\n"
+                                                "which KiCad plots without an aperture function."));
             } else {
                 QString name = u"D%1"_s.arg(cls.key);
                 if(const auto it = apertures->find(cls.key); it != apertures->end() && it->second)
@@ -293,10 +352,20 @@ void EtchDialog::fillTree() {
             const QString count = QString::number(cls.objects.size());
             row->setText(ColObjects, cls.clear ? tr("%1 (%2 clear)").arg(count).arg(cls.clear) : count);
             row->setTextAlignment(ColObjects, Qt::AlignRight | Qt::AlignVCenter);
-            row->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable | Qt::ItemNeverHasChildren);
+            row->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemNeverHasChildren);
             row->setData(ColName, EntryRole, static_cast<int>(e));
             row->setData(ColName, ClassRole, static_cast<int>(c));
         }
+
+        // Исключённые поштучно -- не класс: отметки нет, выбрать можно (подсветка).
+        auto* excludedRow = entry.excludedRow = new QTreeWidgetItem{fileRow};
+        excludedRow->setText(ColName, tr("Excluded on scene"));
+        excludedRow->setToolTip(ColName, tr("Objects excluded with \"Exclude selected\": never compensated."));
+        excludedRow->setText(ColRule, tr("not copper"));
+        excludedRow->setTextAlignment(ColObjects, Qt::AlignRight | Qt::AlignVCenter);
+        excludedRow->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemNeverHasChildren);
+        excludedRow->setData(ColName, EntryRole, static_cast<int>(e));
+        excludedRow->setData(ColName, ClassRole, -1);
     }
     tree_->expandAll();
     updateRows();
@@ -306,10 +375,10 @@ void EtchDialog::updateRows() {
     const QSignalBlocker blocker{tree_};
     for(const Entry& entry: entries_) {
         const EtchComp etchComp = settings(entry);
-        EtchComp rules = etchComp;
-        rules.overrides.clear();
+        const EtchComp rules = withoutManual(etchComp);
         for(const ObjClass& cls: entry.classes)
             updateRow(entry, cls, etchComp, rules);
+        updateExcludedRow(entry);
     }
 }
 
@@ -328,6 +397,17 @@ void EtchDialog::updateRow(const Entry& entry, const ObjClass& cls, const EtchCo
     cls.row->setFont(ColName, font);
 }
 
+void EtchDialog::updateExcludedRow(const Entry& entry) {
+    // Объектов, а не ключей: у совпавших дублей ключ один.
+    const auto count = entry.edited.excluded.empty()
+        ? 0
+        : r::count_if(entry.file->graphicObjects2(), [&entry](const GrObject& go) { return entry.edited.isExcluded(go); });
+    const QSignalBlocker blocker{tree_};
+    entry.excludedRow->setText(ColObjects, QString::number(count));
+    if(count == 0) entry.excludedRow->setSelected(false);
+    entry.excludedRow->setHidden(count == 0);
+}
+
 void EtchDialog::onItemChanged(QTreeWidgetItem* item, int column) {
     if(column != ColName || !item || !item->parent()) return;
     const int e = item->data(ColName, EntryRole).toInt();
@@ -341,9 +421,9 @@ void EtchDialog::onItemChanged(QTreeWidgetItem* item, int column) {
     const Qt::CheckState state = item->checkState(ColName);
     if(state == Qt::PartiallyChecked) return;
 
-    EtchComp rules = settings(entry);
-    rules.overrides.clear();
+    const EtchComp rules = withoutManual(settings(entry));
     // Совпало с правилами -- ручной выбор не нужен, иначе он запоминается.
+    // Исключённые поштучно остаются исключёнными: отметка класса их не касается.
     if(tally(rules, cls.objects, entry.x2) == state)
         entry.edited.overrides.erase(cls.key);
     else
@@ -391,6 +471,9 @@ bool EtchDialog::apply() {
         applied_ = true;
         App::project().setChanged();
     }
+    // Пересобранные элементы сцены родятся невыделенными -- исключать по
+    // прежнему выделению больше нечего.
+    updateButtons();
 
     if(error) {
         QMessageBox::critical(this, windowTitle(), tr("Etch compensation failed:\n%1").arg(errorText(error)));
@@ -448,6 +531,119 @@ void EtchDialog::accept() {
 void EtchDialog::reject() {
     if(applied_) restore();
     QDialog::reject();
+}
+
+void EtchDialog::updateHighlight() {
+    auto* view = App::grView.ptr();
+    QGraphicsScene* scene = view ? view->scene() : nullptr;
+    if(!scene) return;
+
+    std::optional<WaitCursor> wait; // только если есть что строить
+    for(Entry& entry: entries_) {
+        QPainterPath path;
+        path.setFillRule(Qt::WindingFill);
+        for(ObjClass& cls: entry.classes) {
+            if(!cls.row->isSelected()) continue;
+            if(!cls.outline) {
+                if(!wait) wait.emplace();
+                cls.outline = outlineOf(cls.objects);
+            }
+            path.addPath(*cls.outline);
+        }
+        if(!entry.excludedRow->isHidden() && entry.excludedRow->isSelected()) {
+            std::vector<const GrObject*> excluded;
+            for(const GrObject& go: entry.file->graphicObjects2())
+                if(entry.edited.isExcluded(go)) excluded.push_back(&go);
+            path.addPath(outlineOf(excluded));
+        }
+
+        if(path.isEmpty()) {
+            if(entry.overlay) entry.overlay->hide();
+            continue;
+        }
+        if(!entry.overlay) {
+            // Пурпур -- его нет в палитре слоёв (Node::repaint раздаёт оттенки
+            // 0..200), обводка -- косметическая, в пиксель при любом масштабе.
+            // Выше всех слоёв, но ниже маркеров и превью форм.
+            auto* overlay = entry.overlay = new QGraphicsPathItem;
+            overlay->setBrush(QColor{255, 0, 255, 120});
+            QPen pen{Qt::white};
+            pen.setCosmetic(true);
+            overlay->setPen(pen);
+            overlay->setZValue(std::numeric_limits<double>::max() - 100);
+            overlay->setAcceptedMouseButtons(Qt::NoButton);
+            overlay->setAcceptHoverEvents(false);
+            scene->addItem(overlay);
+        }
+        entry.overlay->setTransform(entry.file->transform().toQTransform());
+        entry.overlay->setPath(path);
+        entry.overlay->show();
+    }
+}
+
+void EtchDialog::zoomToHighlight() {
+    QRectF rect;
+    for(const Entry& entry: entries_)
+        if(entry.overlay && entry.overlay->isVisible()) rect |= entry.overlay->sceneBoundingRect();
+    if(auto* view = App::grView.ptr(); view && !rect.isEmpty()) view->fitInView(rect);
+}
+
+std::vector<Gi::Item*> EtchDialog::sceneSelection() const {
+    std::vector<Gi::Item*> items;
+    auto* view = App::grView.ptr();
+    if(!view || !view->scene()) return items;
+    for(QGraphicsItem* item: view->selectedItems(Gi::Type::DataSolid, Gi::Type::DataPath)) {
+        auto* gi = static_cast<Gi::Item*>(item);
+        if(r::any_of(entries_, [gi](const Entry& entry) { return gi->file() == entry.file; }))
+            items.push_back(gi);
+    }
+    return items;
+}
+
+void EtchDialog::excludeSelected() {
+    const std::vector<Gi::Item*> items = sceneSelection();
+    bool added{};
+    {
+        WaitCursor wait;
+        for(Entry& entry: entries_) {
+            std::vector<int64_t>& excluded = entry.edited.excluded;
+            const size_t before = excluded.size();
+            excluded.append_range(entry.file->objectKeys(items));
+            r::sort(excluded);
+            excluded.erase(std::unique(excluded.begin(), excluded.end()), excluded.end());
+            if(excluded.size() != before) added = true;
+        }
+    }
+    if(!added) {
+        QMessageBox::information(this, windowTitle(),
+            tr("Nothing to exclude: no objects of these files lie in the bodies or on the aperture paths selected on the scene.\n"
+               "Select them on the scene before opening this dialog."));
+        return;
+    }
+
+    updateRows();
+    // Показать, что исключено: выбрать строки исключённых.
+    {
+        const QSignalBlocker blocker{tree_};
+        tree_->clearSelection();
+        for(const Entry& entry: entries_)
+            if(!entry.excludedRow->isHidden()) entry.excludedRow->setSelected(true);
+    }
+    updateHighlight();
+    updateButtons();
+}
+
+void EtchDialog::clearExclusions() {
+    for(Entry& entry: entries_)
+        entry.edited.excluded.clear();
+    updateRows();
+    updateHighlight();
+    updateButtons();
+}
+
+void EtchDialog::updateButtons() {
+    exclude_->setEnabled(!sceneSelection().empty());
+    clearExcluded_->setEnabled(r::any_of(entries_, [](const Entry& entry) { return !entry.edited.excluded.empty(); }));
 }
 
 } // namespace Gerber

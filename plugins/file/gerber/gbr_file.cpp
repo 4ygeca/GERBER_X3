@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <forward_list>
 #include <gi_dbg.h>
 #include <optional>
@@ -96,9 +97,90 @@ bool copperFunction(int32_t function) {
     }
 }
 
+// Точка заведомо внутри тела объекта, а не на его контуре: центр вспышки,
+// точки осевой трассы и середины её звеньев; иначе (регион, кольцо) -- сетка
+// по габариту тела. Нужна там, где связь «объект -> слитый полигон» потеряна
+// слиянием и восстанавливается по месту (File::copperNets, File::objectKeys).
+std::optional<QPointF> interiorPoint(const GrObject& go) {
+    std::vector<QPointF> pts;
+    if(!std::isnan(go.pos.x())) pts.push_back(go.pos);
+    if(!go.path.isClosed())
+        for(size_t i{}; i < go.path.size(); ++i) {
+            pts.push_back(go.path[i]);
+            if(i + 1 < go.path.size()) pts.push_back((go.path[i] + go.path[i + 1]) / 2);
+        }
+    // Polygons::contains локализует точку во всём точном множестве и на
+    // тысячах объектов стоит минуты -- спрашиваем тела по одному.
+    const auto& bodies = go.fill.all();
+    const auto inBody = [&](QPointF pt) { return r::any_of(bodies, [pt](const Geo::Polygon& p) { return p.contains(pt); }); };
+    for(const QPointF& pt: pts)
+        if(inBody(pt)) return pt;
+    for(const Geo::Polygon& body: bodies) {
+        const QRectF box = body.boundingRect();
+        constexpr int grid = 7;
+        for(int y = 1; y < grid; ++y)
+            for(int x = 1; x < grid; ++x)
+                if(const QPointF pt{box.left() + box.width() * x / grid, box.top() + box.height() * y / grid}; body.contains(pt))
+                    return pt;
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
+int64_t EtchComp::objectKey(const GrObject& go) {
+    // FNV-1a по 64-битным словам. Микроны -- от шума double: координаты из
+    // файла от разбора к разбору и так одни и те же, а вот вывод их через
+    // проект туда и обратно может разойтись в последнем знаке.
+    uint64_t hash = 14695981039346656037ull;
+    const auto mix = [&hash](uint64_t value) {
+        for(int i{}; i < 8; ++i, value >>= 8) {
+            hash ^= value & 0xFF;
+            hash *= 1099511628211ull;
+        }
+    };
+    const auto um = [](double value) { return static_cast<uint64_t>(std::llround(value * 1000.0)); };
+
+    mix(go.state.type());
+    mix(go.state.imgPolarity());
+    // D-код у области случаен (см. keyOf), её геометрию целиком задаёт контур.
+    if(go.state.type() != Region) {
+        // Имя апертуры -- с размерами (C(Ø0.25), R(1 x 2)); у макроса только
+        // имя макроса, и два макроса одного имени в одной точке совпадут --
+        // такого CAD не выгружает. minSize не годится: его считает ленивая
+        // отрисовка апертуры, у штриховой до неё дело может и не дойти.
+        if(const File* file = go.gFile) {
+            const ApertureMap& apertures = *file->apertures();
+            if(const auto it = apertures.find(go.state.aperture()); it != apertures.end() && it->second) {
+                for(const QChar c: it->second->name()) mix(c.unicode());
+                mix(um(it->second->drillDiameter()));
+            }
+        }
+        mix(go.state.mirroring());
+        mix(um(go.state.scaling()));
+        mix(um(go.state.rotating()));
+    }
+    if(!std::isnan(go.pos.x())) {
+        mix(um(go.pos.x()));
+        mix(um(go.pos.y()));
+    }
+    for(const Geo::Vertex& vertex: go.path) {
+        mix(um(vertex.x()));
+        mix(um(vertex.y()));
+        mix(um(vertex.bulge));
+    }
+    return static_cast<int64_t>(hash);
+}
+
+bool EtchComp::isExcluded(const GrObject& go) const {
+    return !excluded.empty() && r::binary_search(excluded, objectKey(go));
+}
+
 bool EtchComp::copper(const GrObject& go, bool x2) const {
+    // Исключённый объект -- сильнее выбора класса: ради текста на общих с
+    // трассами апертурах исключение и заведено.
+    if(isExcluded(go))
+        return false;
     if(auto it = overrides.find(keyOf(go)); it != overrides.end())
         return it->second;
     if(go.state.aperFunction() >= 0)
@@ -513,6 +595,13 @@ void File::initFrom(AbstractFile* file_) {
             return was == old->apertures_.end() || now == apertures_.end()
                 || !was->second || !now->second || was->second->name() != now->second->name();
         });
+        // Исключение -- по геометрии объекта: переживает перенумерацию, а с
+        // объекта, который в CAD сдвинули или убрали, снимается само.
+        if(!etch_.excluded.empty()) {
+            std::vector<int64_t> keys{std::from_range, graphicObjects_ | v::transform(&EtchComp::objectKey)};
+            r::sort(keys);
+            std::erase_if(etch_.excluded, [&keys](int64_t key) { return !r::binary_search(keys, key); });
+        }
         if(etch_.active()) {
             try {
                 rebuild();
@@ -523,6 +612,33 @@ void File::initFrom(AbstractFile* file_) {
             }
         }
     }
+}
+
+void File::postLoad() {
+    for(GrObject& go: graphicObjects_) {
+        go.gFile = this;
+        go.state.file_ = this;
+    }
+    // Слой с компенсацией подтрава -- не из проекта, а слиянием заново.
+    // Проект хранит слитый слой контурами в double, и при чтении каждый
+    // контур заново проходит проверку точного домена (toGPoly). У раздутой
+    // меди при малых зазорах дырки (зазоры между цепями) сходятся в точку
+    // и касаются себя и соседей; после округления такой контур невалиден,
+    // Polygon(outer, holes) молча его пропускает -- и дырка заливается
+    // медью вместе со всеми островами в ней: после открытия проекта слой
+    // сплошной. Сбой слияния -- остаётся прочитанное.
+    if(etch_.active()) {
+        Geo::Polygons merged = std::move(mergedCurves_);
+        try {
+            mergedCurves_ = {};
+            merge();
+            groupedCurves_ = {};
+        } catch(...) {
+            qWarning() << shortName() << u"-- etch compensation re-merge failed, the saved layer is used"_s;
+            mergedCurves_ = std::move(merged);
+        }
+    }
+    AbstractFile::postLoad();
 }
 
 FileTree::Node* File::node() {
@@ -582,33 +698,6 @@ std::vector<std::vector<int32_t>> File::copperNets(const Geo::Polygons& copper) 
     };
     std::vector<std::vector<int32_t>> nets(paths.size());
 
-    auto interiorPoint = [](const GrObject& go) -> std::optional<QPointF> {
-        // Центр вспышки, точки осевой трассы и середины её звеньев; иначе
-        // (регион, кольцо) -- сетка по габариту тела.
-        std::vector<QPointF> pts;
-        if(!std::isnan(go.pos.x())) pts.push_back(go.pos);
-        if(!go.path.isClosed())
-            for(size_t i{}; i < go.path.size(); ++i) {
-                pts.push_back(go.path[i]);
-                if(i + 1 < go.path.size()) pts.push_back((go.path[i] + go.path[i + 1]) / 2);
-            }
-        // Polygons::contains локализует точку во всём точном множестве и на
-        // тысячах объектов стоит минуты -- спрашиваем тела по одному.
-        const auto& bodies = go.fill.all();
-        const auto inBody = [&](QPointF pt) { return r::any_of(bodies, [pt](const Geo::Polygon& p) { return p.contains(pt); }); };
-        for(const QPointF& pt: pts)
-            if(inBody(pt)) return pt;
-        for(const Geo::Polygon& body: bodies) {
-            const QRectF box = body.boundingRect();
-            constexpr int grid = 7;
-            for(int y = 1; y < grid; ++y)
-                for(int x = 1; x < grid; ++x)
-                    if(const QPointF pt{box.left() + box.width() * x / grid, box.top() + box.height() * y / grid}; body.contains(pt))
-                        return pt;
-        }
-        return std::nullopt;
-    };
-
     for(const GrObject& go: graphicObjects_) {
         if(go.state.net() < 0 || go.state.imgPolarity() != Positive) continue;
         const auto pt = interiorPoint(go);
@@ -621,6 +710,54 @@ std::vector<std::vector<int32_t>> File::copperNets(const Geo::Polygons& copper) 
     }
 
     return nets;
+}
+
+// Тот же приём, что и в copperNets: объект лежит в теле целиком (или съеден
+// вырезом), так что хватает одной его внутренней точки. Тела элементов
+// сцены -- в координатах сцены (DataFill::region), туда же и точка. Осевая
+// же -- это путь ровно одного объекта (createGi), и сравнивается с ним как есть.
+std::vector<int64_t> File::objectKeys(std::span<Gi::Item* const> items) const {
+    std::vector<Geo::Polygon> bodies;
+    std::vector<QRectF> boxes;
+    Geo::Polylines paths;
+    for(const Gi::Item* item: items) {
+        if(item->file() != this) continue;
+        switch(item->type()) {
+        case Gi::Type::DataSolid:
+            for(const Geo::Polygon& body: item->region()) {
+                boxes.push_back(body.boundingRect());
+                bodies.push_back(body);
+            }
+            break;
+        case Gi::Type::DataPath: paths.append_range(item->curves(1)); break; // в своих координатах -- координатах файла
+        default                : break;
+        }
+    }
+    if(bodies.empty() && paths.empty()) return {};
+
+    const QTransform t = transform_.toQTransform();
+    const auto samePath = [](const Geo::Polyline& lhs, const Geo::Polyline& rhs) {
+        constexpr double eps = 1e-9;
+        return lhs.size() == rhs.size() && r::equal(lhs, rhs, [](const Geo::Vertex& a, const Geo::Vertex& b) {
+            return std::abs(a.x() - b.x()) < eps && std::abs(a.y() - b.y()) < eps;
+        });
+    };
+
+    std::vector<int64_t> keys;
+    for(const GrObject& go: graphicObjects_) {
+        if(go.state.imgPolarity() != Positive) continue;
+        bool inside = !go.path.empty() && r::any_of(paths, [&](const Geo::Polyline& path) { return samePath(path, go.path); });
+        if(!inside && !bodies.empty())
+            if(const auto pt = interiorPoint(go)) {
+                const QPointF scenePt = t.map(*pt);
+                for(size_t k{}; k < bodies.size() && !inside; ++k)
+                    inside = boxes[k].contains(scenePt) && bodies[k].contains(scenePt);
+            }
+        if(inside) keys.push_back(EtchComp::objectKey(go));
+    }
+    r::sort(keys);
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+    return keys;
 }
 
 QString File::netsToolTip(std::span<const int32_t> nets) const {
