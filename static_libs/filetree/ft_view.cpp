@@ -44,6 +44,18 @@ View::View(QWidget* parent)
     setAnimated(true);
     setUniformRowHeights(true);
 
+    // Раскрыл или свернул пользователь (или reveal) -- запомнить в узле.
+    // NOTE: expandAll() сигнала expanded по узлам не шлёт -- флаги разошлись бы с
+    // видом, поэтому здесь раскрывают только через expand()/setExpanded().
+    connect(this, &QTreeView::expanded, this, [this](const QModelIndex& index) {
+        if(auto* node = static_cast<Node*>(index.internalPointer()); node && syncExpanded_)
+            node->setExpanded(true);
+    });
+    connect(this, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
+        if(auto* node = static_cast<Node*>(index.internalPointer()); node && syncExpanded_)
+            node->setExpanded(false);
+    });
+
     App::fileTreeView.set(this);
 }
 
@@ -51,8 +63,47 @@ View::~View() {
     App::fileTreeView.set(nullptr);
 }
 
-void View::updateTree() {
-    expandAll();
+void View::reset() {
+    QTreeView::reset();
+    // Раскрытие вида пропало, а MainWindow::showEvent следом зовёт ещё и
+    // expandAll(). Флаги узлов пережили и то и другое -- вернём их, когда
+    // вызвавший отработает, а до тех пор вид их не трогает.
+    syncExpanded_ = false;
+    QTimer::singleShot(0, this, [this] {
+        syncExpanded_ = true;
+        if(model_) restoreExpanded({});
+    });
+}
+
+void View::applyExpanded(const QModelIndex& index) {
+    auto* node = static_cast<Node*>(index.internalPointer());
+    if(!index.isValid() || !node) return;
+    // Пустую папку -- тоже: группа заводится пустой и наполняется переносом
+    // узлов, и раскрыть её потом было бы некому.
+    if(node->childCount() || node->type_ == Type::Folder)
+        setExpanded(index, node->isExpanded());
+}
+
+void View::restoreExpanded(const QModelIndex& index) {
+    applyExpanded(index);
+    for(int row{}, count = model_->rowCount(index); row < count; ++row)
+        restoreExpanded(model_->index(row, 0, index));
+}
+
+void View::reveal(const QModelIndex& index) {
+    if(!index.isValid()) return;
+    // Раскрываем только цепочку предков -- свёрнутые пользователем соседние
+    // группы не трогаем. Сам scrollTo() раскрывает предков лишь при
+    // state() == NoState, поэтому явно.
+    for(QModelIndex parent = index.parent(); parent.isValid(); parent = parent.parent())
+        expand(parent);
+    scrollTo(index);
+}
+
+void View::selectAndReveal(const QModelIndex& index) {
+    if(!index.isValid()) return;
+    reveal(index);
+    selectionModel()->select(index, QItemSelectionModel::Rows | QItemSelectionModel::ClearAndSelect);
 }
 
 void View::updateIcons() {
@@ -72,19 +123,31 @@ void View::onSelectionChanged(const QItemSelection& selected, const QItemSelecti
 }
 
 void View::hideOther() {
-    const int rowCount = static_cast<Node*>(menuIndex_.parent().internalPointer())->childCount();
-    for(int row{}; row < rowCount; ++row) {
-        QModelIndex index2 = menuIndex_.sibling(row, 0);
-        auto* item = static_cast<Node*>(index2.internalPointer());
-        if(row == menuIndex_.row())
-            item->setData(index2, Qt::Checked, Qt::CheckStateRole);
-        else
-            item->setData(index2, Qt::Unchecked, Qt::CheckStateRole);
+    // Видимой остаётся строка меню, соседние гаснут. Из вложенной папки (группа
+    // УП, подпапка программы) -- и этажом выше: гаснут соседние группы и УП вне
+    // групп, иначе «Hide other» у УП в группе прятал бы лишь соседей по группе.
+    // Выше папки типа (строки корня) не поднимаемся -- там другие типы файлов.
+    const QModelIndex target = menuIndex_.siblingAtColumn(0);
+    for(QModelIndex keep = target; keep.isValid() && keep.parent().isValid(); keep = keep.parent()) {
+        const QPersistentModelIndex parent = keep.parent();
+        const int rowCount = model_->rowCount(parent);
+        for(int row{}; row < rowCount; ++row) {
+            const QModelIndex index = model_->index(row, 0, parent);
+            auto* item = static_cast<Node*>(index.internalPointer());
+            // Включается только сама строка меню: флажок папки -- видимость
+            // всех её УП разом, и этажом выше он вернул бы погашенных соседей.
+            if(row != keep.row())
+                item->setData(index, Qt::Unchecked, Qt::CheckStateRole);
+            else if(keep == target)
+                item->setData(index, Qt::Checked, Qt::CheckStateRole);
+        }
+        QTimer::singleShot(100, this, [this, parent] {
+            // Строки могли смениться, а папка -- исчезнуть: счёт -- заново.
+            if(const int count = model_->rowCount(parent); parent.isValid() && count)
+                emit model_->dataChanged(model_->index(0, 0, parent), model_->index(count - 1, 0, parent), {Qt::CheckStateRole});
+        });
+        if(static_cast<Node*>(parent.internalPointer())->type_ != Type::Folder) break; // строка внутри файла
     }
-    QTimer::singleShot(100, [this, rowCount] { emit model_->dataChanged(
-                                                   menuIndex_.sibling(0, 0),
-                                                   menuIndex_.sibling(rowCount - 1, 0),
-                                                   {Qt::CheckStateRole}); });
 }
 
 void View::closeFile() {
@@ -105,15 +168,27 @@ void View::closeAllFiles(uint32_t /*type*/) {
 void View::setModel(QAbstractItemModel* model) {
     QTreeView::setModel(model_ = static_cast<Model*>(model));
 
-    connect(model_, &Model::rowsInserted, this, &View::updateTree);
-    connect(model_, &Model::rowsRemoved, this, &View::updateTree);
-    connect(model_, &Model::updateActions, this, &View::updateTree);
-    connect(model_, &Model::select, [this](const QModelIndex& index) {
-        selectionModel()->select(index, QItemSelectionModel::Rows | QItemSelectionModel::ClearAndSelect);
+    // Раскрытие строк -- как оставил пользователь (флаг узла, см. конструктор).
+    // Прежде на каждую вставку, удаление и даже смену выделения звался
+    // expandAll(), и выбор строки раскрывал все свёрнутые группы.
+    //
+    // Новые строки -- по их флагам (новый узел раскрыт), родитель -- по своему:
+    // папка, заведённая пустой, при вставке в неё раскрывается, если не свёрнута.
+    connect(model_, &Model::rowsInserted, this, [this](const QModelIndex& parent, int first, int last) {
+        applyExpanded(parent);
+        for(int row = first; row <= last; ++row)
+            restoreExpanded(model_->index(row, 0, parent));
     });
+    // Перенесённые строки вид помнит сам (раскрытие -- по QPersistentModelIndex),
+    // а папке-приёмнику, заведённой пустой, нужен её флаг.
+    connect(model_, &Model::rowsMoved, this,
+        [this](const QModelIndex& /*source*/, int /*first*/, int /*last*/, const QModelIndex& destination, int /*row*/) {
+            applyExpanded(destination);
+        });
+    connect(model_, &Model::updateActions, this, [this] { restoreExpanded({}); });
+    connect(model_, &Model::select, this, &View::selectAndReveal);
 
     connect(selectionModel(), &QItemSelectionModel::selectionChanged, this, &View::onSelectionChanged);
-    connect(selectionModel(), &QItemSelectionModel::selectionChanged, this, &View::updateTree);
     // Только F2. Умолчания (DoubleClicked, SelectedClicked) дрались бы с
     // mouseDoubleClickEvent: двойной клик по имени открывает форму плагина, а не
     // редактор, а одиночный по выделенной строке не должен делать ничего.
@@ -140,7 +215,10 @@ void View::contextMenuEvent(QContextMenuEvent* event) {
         return;
     QMenu menu{this};
     childCount_ = static_cast<Node*>(menuIndex_.internalPointer())->childCount();
-    if(menuIndex_.data(Role::NodeType).toInt() == Type::Folder) {
+    if(menuIndex_.data(Role::NodeType).toInt() == Type::Folder && menuIndex_.parent().isValid()) {
+        // Вложенная папка -- группа УП или подпапка программы: меню у неё своё.
+        static_cast<Node*>(menuIndex_.internalPointer())->menu(menu, this);
+    } else if(menuIndex_.data(Role::NodeType).toInt() == Type::Folder) {
         const uint32_t type = menuIndex_.data(Role::Id).value<uint32_t>(); // File Type
         const int nodeType = menuIndex_.data(Role::ContentType).toInt();
         if(App::filePlugins().contains(type))
@@ -195,6 +273,12 @@ void View::mousePressEvent(QMouseEvent* event) { QTreeView::mousePressEvent(even
 void View::mouseDoubleClickEvent(QMouseEvent* event) {
     menuIndex_ = indexAt(event->pos());
     if(!menuIndex_.isValid()) return QTreeView::mouseDoubleClickEvent(event);
+
+    // Папка (группа УП, подпапка программы) сворачивается и раскрывается, как
+    // в любом дереве. Прежде вложенная папка уходила ниже в hideOther() и гасила
+    // соседние УП.
+    if(static_cast<Node*>(menuIndex_.internalPointer())->type_ == Type::Folder)
+        return QTreeView::mouseDoubleClickEvent(event);
 
     if(menuIndex_.column() != Column::NameColorVisible)
         return edit(menuIndex_), void(); // «Сторона» и «Тип» -- выпадающие списки

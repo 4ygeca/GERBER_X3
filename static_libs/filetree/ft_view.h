@@ -32,6 +32,11 @@ public:
     void closeAllFiles(uint32_t type);
 
     void setModel(QAbstractItemModel* model) override;
+    // reset() забывает раскрытые строки; флаги узлов (Node::isExpanded) -- нет,
+    // они и возвращаются.
+    void reset() override;
+    // Показать строку, не трогая выделения: раскрыть ровно её предков.
+    void reveal(const QModelIndex& index);
 
 signals:
     void saveGCodeFile(int32_t id);
@@ -40,9 +45,16 @@ signals:
     void editGCodeFile(int32_t id);
 
 private:
-    void updateTree();
+    // Раскрыть или свернуть строку по флагу её узла; restoreExpanded -- с поддеревом.
+    void applyExpanded(const QModelIndex& index);
+    void restoreExpanded(const QModelIndex& index);
+    // Выделить строку и показать её (reveal).
+    void selectAndReveal(const QModelIndex& index);
     void updateIcons();
-    Model* model_;
+    Model* model_{};
+    // Вид правит флаги узлов по своим expanded/collapsed. Между reset() и
+    // возвратом флагов -- нет: expandAll() вслед за reset() их бы затёр.
+    bool syncExpanded_{true};
 
     void onSelectionChanged(const QItemSelection& selected, const QItemSelection& deselected);
     int childCount_{};

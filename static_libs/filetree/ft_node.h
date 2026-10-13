@@ -91,6 +91,13 @@ public:
     virtual int32_t id() const { return id__; }
     virtual void setId(int32_t id) { id__ = id; }
 
+    // Раскрыта ли строка в дереве. Флаг живёт в узле, а не только в виде: так
+    // раскрытие переживает перенос узла в другую папку и reset() вида, а
+    // раскрытие групп УП уходит в проект. Правит его вид -- по своим сигналам
+    // expanded/collapsed; новый узел раскрыт.
+    bool isExpanded() const { return expanded_; }
+    void setExpanded(bool expanded) { expanded_ = expanded; }
+
     QModelIndex index(int column = 0) const;
 
     const QStringList sideStrList{QObject::tr("Top|Bottom").split(u'|')};
@@ -98,6 +105,7 @@ public:
 
 protected:
     int32_t id__{-1};
+    bool expanded_{true};
     Node* parent_{nullptr};
     std::vector<std::unique_ptr<Node, Deleter>> childs;
 };
