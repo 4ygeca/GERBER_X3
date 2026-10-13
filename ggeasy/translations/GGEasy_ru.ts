@@ -1962,12 +1962,12 @@ Would you like to continue?</source>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../mainwindow.cpp" line="1166"/>
+        <location filename="../mainwindow.cpp" line="1156"/>
         <source>Files</source>
         <translation>Файлы</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="491"/>
+        <location filename="../mainwindow.cpp" line="486"/>
         <source>Ready</source>
         <translation>Готов</translation>
     </message>
@@ -1982,68 +1982,68 @@ Would you like to continue?</source>
         <translation>Сохранить проект как</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="495"/>
+        <location filename="../mainwindow.cpp" line="490"/>
         <source>&amp;File</source>
         <translation>&amp;Файл</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="498"/>
-        <location filename="../mainwindow.cpp" line="500"/>
+        <location filename="../mainwindow.cpp" line="493"/>
+        <location filename="../mainwindow.cpp" line="495"/>
         <source>File</source>
         <translation>Файл</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="506"/>
-        <location filename="../mainwindow.cpp" line="509"/>
+        <location filename="../mainwindow.cpp" line="501"/>
+        <location filename="../mainwindow.cpp" line="504"/>
         <source>&amp;New project</source>
         <translation>&amp;Новый проект</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="508"/>
+        <location filename="../mainwindow.cpp" line="503"/>
         <source>Create a new file</source>
         <translation>Создать новый файл</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="512"/>
-        <location filename="../mainwindow.cpp" line="515"/>
+        <location filename="../mainwindow.cpp" line="507"/>
+        <location filename="../mainwindow.cpp" line="510"/>
         <source>&amp;Open...</source>
         <translation>&amp;Открыть...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="514"/>
+        <location filename="../mainwindow.cpp" line="509"/>
         <source>Open an existing file</source>
         <translation>Открыть существующий файл</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="518"/>
-        <location filename="../mainwindow.cpp" line="521"/>
+        <location filename="../mainwindow.cpp" line="513"/>
+        <location filename="../mainwindow.cpp" line="516"/>
         <source>&amp;Save project</source>
         <translation>&amp;Сохранить проект</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="520"/>
+        <location filename="../mainwindow.cpp" line="515"/>
         <source>Save the document to disk</source>
         <translation>Сохранить проект на диск</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="524"/>
-        <location filename="../mainwindow.cpp" line="527"/>
+        <location filename="../mainwindow.cpp" line="519"/>
+        <location filename="../mainwindow.cpp" line="522"/>
         <source>Save project &amp;As...</source>
         <translation>Сохранить проект и &amp;как ...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="526"/>
+        <location filename="../mainwindow.cpp" line="521"/>
         <source>Save the document under a new name</source>
         <translation>Сохранить проект под новым именем</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="540"/>
-        <location filename="../mainwindow.cpp" line="542"/>
+        <location filename="../mainwindow.cpp" line="535"/>
+        <location filename="../mainwindow.cpp" line="537"/>
         <source>&amp;Save Selected Tool Paths...</source>
         <translation>Сохранить выбранные &amp;УП...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="541"/>
+        <location filename="../mainwindow.cpp" line="536"/>
         <source>Save selected toolpaths</source>
         <translation>Сохранить выбранные УП</translation>
     </message>
@@ -2064,71 +2064,66 @@ Would you like to continue?</source>
         <translation type="vanished">Очистить список</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="530"/>
-        <location filename="../mainwindow.cpp" line="534"/>
-        <location filename="../mainwindow.cpp" line="1039"/>
+        <location filename="../mainwindow.cpp" line="525"/>
+        <location filename="../mainwindow.cpp" line="529"/>
+        <location filename="../mainwindow.cpp" line="1029"/>
         <source>&amp;Close project &quot;%1&quot;</source>
         <translation>&amp;Закрыть проект &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="532"/>
+        <location filename="../mainwindow.cpp" line="527"/>
         <source>Close project</source>
         <translation>Закрыть проект</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="545"/>
-        <location filename="../mainwindow.cpp" line="547"/>
         <source>&amp;Plot / Export...</source>
-        <translation>&amp;Вывод / Экспорт...</translation>
+        <translation type="vanished">&amp;Вывод / Экспорт...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="546"/>
         <source>Export layers at exact scale to SVG, DXF or PDF, with mirror and negative</source>
-        <translation>Экспорт слоёв в точном масштабе в SVG, DXF или PDF, с зеркалом и негативом</translation>
+        <translation type="vanished">Экспорт слоёв в точном масштабе в SVG, DXF или PDF, с зеркалом и негативом</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="557"/>
         <source>P&amp;rint</source>
-        <translation>&amp;Печатать</translation>
+        <translation type="vanished">&amp;Печатать</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="559"/>
         <source>Print</source>
-        <translation>Печатать</translation>
+        <translation type="vanished">Печатать</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="563"/>
+        <location filename="../mainwindow.cpp" line="553"/>
         <source>E&amp;xit</source>
         <translation>В&amp;ыход</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="565"/>
+        <location filename="../mainwindow.cpp" line="555"/>
         <source>Exit the application</source>
         <translation>Выйти из приложения</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="569"/>
+        <location filename="../mainwindow.cpp" line="559"/>
         <source>&amp;Edit</source>
         <translation>Правка</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="593"/>
+        <location filename="../mainwindow.cpp" line="583"/>
         <source>&amp;Service</source>
         <translation>&amp;Инструменты</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="605"/>
+        <location filename="../mainwindow.cpp" line="595"/>
         <source>&amp;Settings</source>
         <translation>&amp;Параметры</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="606"/>
+        <location filename="../mainwindow.cpp" line="596"/>
         <source>Show the application&apos;s settings box</source>
         <translation>Показать окно настроек приложения</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="595"/>
-        <location filename="../mainwindow.cpp" line="597"/>
+        <location filename="../mainwindow.cpp" line="585"/>
+        <location filename="../mainwindow.cpp" line="587"/>
         <source>Service</source>
         <translation>&amp;Инструменты</translation>
     </message>
@@ -2146,93 +2141,93 @@ Would you like to continue?</source>
         <translation type="vanished">Файл (*.PDF)</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="643"/>
+        <location filename="../mainwindow.cpp" line="633"/>
         <source>Ruller</source>
         <translation>Линейка</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="649"/>
+        <location filename="../mainwindow.cpp" line="639"/>
         <source>Resize</source>
         <translation>Изменить размер</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="656"/>
+        <location filename="../mainwindow.cpp" line="646"/>
         <source>&amp;Help</source>
         <translation>&amp;Помощь</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="659"/>
+        <location filename="../mainwindow.cpp" line="649"/>
         <source>&amp;About</source>
         <translation>&amp;О G2G</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="660"/>
+        <location filename="../mainwindow.cpp" line="650"/>
         <source>Show the application&apos;s About box</source>
         <translation>Показать окно приложения O G2G</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="662"/>
+        <location filename="../mainwindow.cpp" line="652"/>
         <source>About &amp;Qt</source>
         <translation>О &amp;Qt</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="663"/>
+        <location filename="../mainwindow.cpp" line="653"/>
         <source>Show the Qt library&apos;s About box</source>
         <translation>Показать окно о библиотеки Qt</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="667"/>
+        <location filename="../mainwindow.cpp" line="657"/>
         <source>About &amp;Plugins…</source>
         <translation>О &amp;плагинах…</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="668"/>
+        <location filename="../mainwindow.cpp" line="658"/>
         <source>Show loaded plugins…</source>
         <translation>Показать загруженные плагины…</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="672"/>
+        <location filename="../mainwindow.cpp" line="662"/>
         <source>&amp;Viev</source>
         <translation>&amp;Вид</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="675"/>
-        <location filename="../mainwindow.cpp" line="677"/>
+        <location filename="../mainwindow.cpp" line="665"/>
+        <location filename="../mainwindow.cpp" line="667"/>
         <source>Zoom ToolBar</source>
         <translation>Панель Увеличение</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="684"/>
-        <location filename="../mainwindow.cpp" line="685"/>
+        <location filename="../mainwindow.cpp" line="674"/>
+        <location filename="../mainwindow.cpp" line="675"/>
         <source>Fit best</source>
         <translation>Вписать</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="690"/>
-        <location filename="../mainwindow.cpp" line="691"/>
+        <location filename="../mainwindow.cpp" line="680"/>
+        <location filename="../mainwindow.cpp" line="681"/>
         <source>100%</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="692"/>
+        <location filename="../mainwindow.cpp" line="682"/>
         <source>Ctrl+0</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="696"/>
-        <location filename="../mainwindow.cpp" line="697"/>
+        <location filename="../mainwindow.cpp" line="686"/>
+        <location filename="../mainwindow.cpp" line="687"/>
         <source>Zoom in</source>
         <translation>Увеличить</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="702"/>
-        <location filename="../mainwindow.cpp" line="703"/>
+        <location filename="../mainwindow.cpp" line="692"/>
+        <location filename="../mainwindow.cpp" line="693"/>
         <source>Zoom out</source>
         <translation>Уменьшить</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="712"/>
-        <location filename="../mainwindow.cpp" line="713"/>
+        <location filename="../mainwindow.cpp" line="702"/>
+        <location filename="../mainwindow.cpp" line="703"/>
         <source>Zoom to selected</source>
         <translation>Увеличить выбранное</translation>
     </message>
@@ -2241,8 +2236,8 @@ Would you like to continue?</source>
         <translation type="vanished">Новый_проект</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="1129"/>
-        <location filename="../mainwindow.cpp" line="1167"/>
+        <location filename="../mainwindow.cpp" line="1119"/>
+        <location filename="../mainwindow.cpp" line="1157"/>
         <source>Logging</source>
         <translation>Журналирование</translation>
     </message>
@@ -2263,18 +2258,18 @@ Would you like to continue?</source>
         <translation type="vanished">Выбор</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="572"/>
+        <location filename="../mainwindow.cpp" line="562"/>
         <source>Select all</source>
         <translation>Выбрать все</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="728"/>
+        <location filename="../mainwindow.cpp" line="718"/>
         <source>&amp;Paths</source>
         <translation>&amp;УП</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="730"/>
-        <location filename="../mainwindow.cpp" line="732"/>
+        <location filename="../mainwindow.cpp" line="720"/>
+        <location filename="../mainwindow.cpp" line="722"/>
         <source>Toolpath</source>
         <translation>Путь инструмента</translation>
     </message>
@@ -2299,27 +2294,38 @@ Would you like to continue?</source>
         <translation type="vanished">&amp;Сверловка</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="611"/>
+        <location filename="../mainwindow.cpp" line="601"/>
         <source>&amp;G-Code Properties</source>
         <translation>П&amp;араметры G-кода</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="552"/>
+        <location filename="../mainwindow.cpp" line="548"/>
         <source>Recent Files...</source>
         <translation>Последние файлы...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="553"/>
+        <location filename="../mainwindow.cpp" line="540"/>
+        <location filename="../mainwindow.cpp" line="543"/>
+        <source>&amp;Export / Print...</source>
+        <translation>&amp;Экспорт / Печать...</translation>
+    </message>
+    <message>
+        <location filename="../mainwindow.cpp" line="542"/>
+        <source>Export layers at exact scale to SVG, DXF or PDF, or print them, with mirror and negative</source>
+        <translation>Экспорт слоёв в точном масштабе в SVG, DXF или PDF либо печать, с зеркалом и негативом</translation>
+    </message>
+    <message>
+        <location filename="../mainwindow.cpp" line="549"/>
         <source>Recent Projects...</source>
         <translation>Последние проекты...</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="624"/>
+        <location filename="../mainwindow.cpp" line="614"/>
         <source>Tool Base</source>
         <translation>База инструментов</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="628"/>
+        <location filename="../mainwindow.cpp" line="618"/>
         <source>Autoplace All Refpoints</source>
         <translation>Авторазмещение всех опорных точек</translation>
     </message>
@@ -2332,8 +2338,8 @@ Would you like to continue?</source>
         <translation type="vanished">&amp;Штриховка</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="749"/>
-        <location filename="../mainwindow.cpp" line="751"/>
+        <location filename="../mainwindow.cpp" line="739"/>
+        <location filename="../mainwindow.cpp" line="741"/>
         <source>Graphics Items</source>
         <translation>Графические элементы</translation>
     </message>
@@ -2350,37 +2356,37 @@ Would you like to continue?</source>
         <translation type="vanished">Линия</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="842"/>
+        <location filename="../mainwindow.cpp" line="832"/>
         <source>Union</source>
         <translation>Объединение</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="844"/>
+        <location filename="../mainwindow.cpp" line="834"/>
         <source>Difference</source>
         <translation>Разница</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="846"/>
+        <location filename="../mainwindow.cpp" line="836"/>
         <source>Exclusion</source>
         <translation>Исключение</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="848"/>
+        <location filename="../mainwindow.cpp" line="838"/>
         <source>Intersection</source>
         <translation>Пересечение</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="581"/>
+        <location filename="../mainwindow.cpp" line="571"/>
         <source>Undo</source>
         <translation>Отменить</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="586"/>
+        <location filename="../mainwindow.cpp" line="576"/>
         <source>Redo</source>
         <translation>Повторить</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="639"/>
+        <location filename="../mainwindow.cpp" line="629"/>
         <source>Snap to grid</source>
         <translation>Привязка к сетке</translation>
     </message>
@@ -2423,22 +2429,22 @@ Would you like to continue?</source>
         <translation>Проект (*.g2g)</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="941"/>
+        <location filename="../mainwindow.cpp" line="931"/>
         <source>	Contains files:</source>
         <translation>	Содержит файлы:</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="981"/>
+        <location filename="../mainwindow.cpp" line="971"/>
         <source>Do you want to close this project?</source>
         <translation>Закрыть этот проект?</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="881"/>
+        <location filename="../mainwindow.cpp" line="871"/>
         <source>Save GCode file</source>
         <translation>Сохранить файл УП</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="883"/>
+        <location filename="../mainwindow.cpp" line="873"/>
         <source>GCode (*.%1)</source>
         <translation>УП (*.%1)</translation>
     </message>
@@ -2452,14 +2458,14 @@ Would you like to continue?</source>
     </message>
     <message>
         <location filename="../mainwindow.cpp" line="228"/>
-        <location filename="../mainwindow.cpp" line="981"/>
-        <location filename="../mainwindow.cpp" line="986"/>
-        <location filename="../mainwindow.cpp" line="1021"/>
+        <location filename="../mainwindow.cpp" line="971"/>
+        <location filename="../mainwindow.cpp" line="976"/>
+        <location filename="../mainwindow.cpp" line="1011"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="986"/>
+        <location filename="../mainwindow.cpp" line="976"/>
         <source>The document has been modified.
 Do you want to save your changes?</source>
         <translation>Документ был изменен.
@@ -2477,12 +2483,12 @@ Do you want to save your changes?</source>
 %2.</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="1018"/>
+        <location filename="../mainwindow.cpp" line="1008"/>
         <source>File saved</source>
         <translation>Файл сохранен</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="1022"/>
+        <location filename="../mainwindow.cpp" line="1012"/>
         <source>Cannot write file %1:
 %2.</source>
         <translation>Невозможно записать файл%1:
@@ -2553,28 +2559,28 @@ Do you want to save your changes?</source>
 <context>
     <name>Plot</name>
     <message>
-        <location filename="../plot.cpp" line="587"/>
+        <location filename="../plot.cpp" line="609"/>
         <source>Cannot set the page size %1 x %2 mm.</source>
         <translation>Не удалось задать размер страницы %1 x %2 мм.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="592"/>
-        <location filename="../plot.cpp" line="597"/>
+        <location filename="../plot.cpp" line="614"/>
+        <location filename="../plot.cpp" line="619"/>
         <source>Cannot write file %1.</source>
         <translation>Не удалось записать файл %1.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="668"/>
+        <location filename="../plot.cpp" line="690"/>
         <source>Shapes</source>
         <translation>Фигуры</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="780"/>
+        <location filename="../plot.cpp" line="802"/>
         <source>Cannot start printing.</source>
         <translation>Не удалось начать печать.</translation>
     </message>
     <message>
-        <location filename="../plot.cpp" line="803"/>
+        <location filename="../plot.cpp" line="826"/>
         <source>The plot (%1 x %2 mm) does not fit the printable area (%3 x %4 mm) and is cut off. Choose a larger paper size or another orientation.</source>
         <translation>Вывод (%1 x %2 мм) не помещается в область печати (%3 x %4 мм) и будет обрезан. Выберите бумагу большего размера или другую ориентацию.</translation>
     </message>
@@ -2582,285 +2588,285 @@ Do you want to save your changes?</source>
 <context>
     <name>PlotDialog</name>
     <message>
-        <location filename="../plotdialog.cpp" line="53"/>
+        <location filename="../plotdialog.cpp" line="55"/>
         <source>Plot / Export</source>
         <translation>Вывод / Экспорт</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="62"/>
+        <location filename="../plotdialog.cpp" line="64"/>
         <source>Plot</source>
         <translation>Вывод</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="62"/>
+        <location filename="../plotdialog.cpp" line="64"/>
         <source>File</source>
         <translation>Файл</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="62"/>
+        <location filename="../plotdialog.cpp" line="64"/>
         <source>Side</source>
         <translation>Сторона</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="62"/>
+        <location filename="../plotdialog.cpp" line="64"/>
         <source>Mirror</source>
         <translation>Зеркало</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="62"/>
+        <location filename="../plotdialog.cpp" line="64"/>
         <source>Negative</source>
         <translation>Негатив</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="63"/>
+        <location filename="../plotdialog.cpp" line="65"/>
         <source>Mirror about the centre of the common page</source>
         <translation>Зеркально относительно центра общей страницы</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="64"/>
+        <location filename="../plotdialog.cpp" line="66"/>
         <source>Ink everywhere on the page except the copper</source>
         <translation>Краска по всей странице, кроме меди</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="71"/>
+        <location filename="../plotdialog.cpp" line="73"/>
         <source>All</source>
         <translation>Все</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="72"/>
+        <location filename="../plotdialog.cpp" line="74"/>
         <source>None</source>
         <comment>select no layers</comment>
         <translation>Ни одного</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="73"/>
+        <location filename="../plotdialog.cpp" line="75"/>
         <source>Mirror top layers</source>
         <translation>Зеркалить верхние слои</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="74"/>
+        <location filename="../plotdialog.cpp" line="76"/>
         <source>Mirror the top-side layers and clear the mirror of the bottom ones -- as needed for toner transfer and films laid face down</source>
         <translation>Зеркалить слои верхней стороны и снять зеркало с нижних -- как нужно для ЛУТ и фотошаблонов, кладущихся лицом вниз</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="86"/>
+        <location filename="../plotdialog.cpp" line="88"/>
         <source>Layers</source>
         <translation>Слои</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="101"/>
+        <location filename="../plotdialog.cpp" line="103"/>
         <source> mm</source>
         <translation> мм</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="105"/>
+        <location filename="../plotdialog.cpp" line="107"/>
         <source>DXF R12 (outlines only)</source>
         <translation>DXF R12 (только контуры)</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="108"/>
+        <location filename="../plotdialog.cpp" line="110"/>
         <source>Filled layers, 1 unit = 1 mm. Recommended for CorelDRAW and Inkscape.</source>
         <translation>Залитые слои, 1 единица = 1 мм. Рекомендуется для CorelDRAW и Inkscape.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="110"/>
+        <location filename="../plotdialog.cpp" line="112"/>
         <source>R12 has no fills: only the outlines are written, in millimetres. Fill them in the drawing program (e.g. Combine in CorelDRAW).</source>
         <translation>В R12 нет заливок: пишутся только контуры, в миллиметрах. Залейте их в графической программе (например, «Объединить» в CorelDRAW).</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="114"/>
+        <location filename="../plotdialog.cpp" line="116"/>
         <source>Page of exactly the plot size. Print it at 100 % (no fit to page).</source>
         <translation>Страница ровно по размеру вывода. Печатать в масштабе 100 % (без подгонки под страницу).</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="116"/>
+        <location filename="../plotdialog.cpp" line="118"/>
         <source>File format for Export. Print preview does not depend on it.</source>
         <translation>Формат файлов для экспорта. На предпросмотр печати не влияет.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="119"/>
+        <location filename="../plotdialog.cpp" line="121"/>
         <source>One file (page) per layer</source>
         <translation>Слой -- отдельный файл (страница)</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="120"/>
+        <location filename="../plotdialog.cpp" line="122"/>
         <source>All layers on one sheet</source>
         <translation>Все слои на одном листе</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="122"/>
+        <location filename="../plotdialog.cpp" line="124"/>
         <source>On one sheet the layers lie side by side; for printing they are arranged to fit the paper best.</source>
         <translation>На одном листе слои лежат рядом; при печати они раскладываются так, чтобы лучше уместиться на бумаге.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="127"/>
+        <location filename="../plotdialog.cpp" line="129"/>
         <source>Border around the common extent of all checked layers. The page is the same for every layer, so separate files line up.</source>
         <translation>Поле вокруг общего габарита всех отмеченных слоёв. Страница у всех слоёв одна и та же, поэтому отдельные файлы совмещаются.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="130"/>
+        <location filename="../plotdialog.cpp" line="132"/>
         <source>Registration marks</source>
         <translation>Метки совмещения</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="132"/>
+        <location filename="../plotdialog.cpp" line="134"/>
         <source>Identical crosses in the corners of the margin of every output, for aligning the layers. Need a margin of at least 1.25 mm.</source>
         <translation>Одинаковые кресты в углах поля каждого вывода -- для совмещения слоёв. Нужно поле не меньше 1.25 мм.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="136"/>
+        <location filename="../plotdialog.cpp" line="138"/>
         <source>None</source>
         <comment>drill marks</comment>
         <translation>Ни одного</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="137"/>
+        <location filename="../plotdialog.cpp" line="139"/>
         <source>Actual size</source>
         <translation>В натуральную величину</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="138"/>
+        <location filename="../plotdialog.cpp" line="140"/>
         <source>Small</source>
         <translation>Малые</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="140"/>
+        <location filename="../plotdialog.cpp" line="142"/>
         <source>Holes of the chosen drill file are cut out of every other layer: at actual size or as small centring marks.</source>
         <translation>Отверстия выбранного файла сверловки вырезаются из остальных слоёв: в натуральную величину или малыми метками для центровки сверла.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="143"/>
+        <location filename="../plotdialog.cpp" line="145"/>
         <source>Drill file whose holes are marked</source>
         <translation>Файл сверловки, отверстия которого отмечаются</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="150"/>
+        <location filename="../plotdialog.cpp" line="152"/>
         <source>Stroke width for paths without fill: outlines, zero-width traces, layers shown as paths</source>
         <translation>Ширина штриха для путей без заливки: контуры, дорожки нулевой ширины, слои, показанные путями</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="155"/>
+        <location filename="../plotdialog.cpp" line="157"/>
         <source>Print only: scale correction of the printer. Print a known length, measure it and enter required / measured x 100 %.</source>
         <translation>Только для печати: поправка масштаба принтера. Напечатайте известную длину, измерьте её и введите требуемая / измеренная x 100 %.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="165"/>
+        <location filename="../plotdialog.cpp" line="167"/>
         <source>Options</source>
         <translation>Параметры</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="167"/>
+        <location filename="../plotdialog.cpp" line="169"/>
         <source>Format:</source>
         <translation>Формат:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="168"/>
+        <location filename="../plotdialog.cpp" line="170"/>
         <source>Layout:</source>
         <translation>Раскладка:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="169"/>
+        <location filename="../plotdialog.cpp" line="171"/>
         <source>Gap between layers:</source>
         <translation>Зазор между слоями:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="170"/>
+        <location filename="../plotdialog.cpp" line="172"/>
         <source>Margin:</source>
         <translation>Поле:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="172"/>
+        <location filename="../plotdialog.cpp" line="174"/>
         <source>Drill marks:</source>
         <translation>Метки сверловки:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="173"/>
+        <location filename="../plotdialog.cpp" line="175"/>
         <source>Small mark diameter:</source>
         <translation>Диаметр малой метки:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="174"/>
+        <location filename="../plotdialog.cpp" line="176"/>
         <source>Line width of paths:</source>
         <translation>Ширина линии путей:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="175"/>
+        <location filename="../plotdialog.cpp" line="177"/>
         <source>Printer calibration:</source>
         <translation>Калибровка принтера:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="181"/>
+        <location filename="../plotdialog.cpp" line="183"/>
         <source>Choose the output folder</source>
         <translation>Выбрать папку вывода</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="184"/>
+        <location filename="../plotdialog.cpp" line="186"/>
         <source>Output folder:</source>
         <translation>Папка вывода:</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="193"/>
+        <location filename="../plotdialog.cpp" line="195"/>
         <source>Print preview...</source>
         <translation>Предпросмотр печати...</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="195"/>
+        <location filename="../plotdialog.cpp" line="197"/>
         <source>Export</source>
         <translation>Экспорт</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="252"/>
+        <location filename="../plotdialog.cpp" line="254"/>
         <source>Bottom</source>
         <translation>Низ</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="252"/>
-        <location filename="../plotdialog.cpp" line="267"/>
+        <location filename="../plotdialog.cpp" line="254"/>
+        <location filename="../plotdialog.cpp" line="269"/>
         <source>Top</source>
         <translation>Верх</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="266"/>
+        <location filename="../plotdialog.cpp" line="268"/>
         <source>Shapes</source>
         <translation>Фигуры</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="299"/>
+        <location filename="../plotdialog.cpp" line="301"/>
         <source>Output folder</source>
         <translation>Папка вывода</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="348"/>
+        <location filename="../plotdialog.cpp" line="350"/>
         <source>Check at least one layer to plot.</source>
         <translation>Отметьте хотя бы один слой для вывода.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="361"/>
+        <location filename="../plotdialog.cpp" line="363"/>
         <source>Cannot build the plot geometry:
 %1</source>
         <translation>Не удалось построить геометрию вывода:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="365"/>
-        <location filename="../plotdialog.cpp" line="429"/>
+        <location filename="../plotdialog.cpp" line="367"/>
+        <location filename="../plotdialog.cpp" line="431"/>
         <source>Nothing to plot in: %1</source>
         <translation>Нечего выводить в: %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="368"/>
+        <location filename="../plotdialog.cpp" line="370"/>
         <source>The checked layers have nothing to plot: no visible copper, holes or paths.</source>
         <translation>В отмеченных слоях нечего выводить: нет видимой меди, отверстий или путей.</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="379"/>
+        <location filename="../plotdialog.cpp" line="381"/>
         <source>The output folder does not exist:
 %1</source>
         <translation>Папка вывода не существует:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="403"/>
+        <location filename="../plotdialog.cpp" line="405"/>
         <source>These files already exist and will be overwritten:
 %1
 
@@ -2871,19 +2877,19 @@ Continue?</source>
 Продолжить?</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="426"/>
+        <location filename="../plotdialog.cpp" line="428"/>
         <source>Written %1 file(s) to %2</source>
         <translation>Записано файлов: %1, папка %2</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="433"/>
+        <location filename="../plotdialog.cpp" line="435"/>
         <source>Some files were not written:
 %1</source>
         <translation>Некоторые файлы не записаны:
 %1</translation>
     </message>
     <message>
-        <location filename="../plotdialog.cpp" line="463"/>
+        <location filename="../plotdialog.cpp" line="465"/>
         <source>Plot -- print preview</source>
         <translation>Вывод -- предпросмотр печати</translation>
     </message>
@@ -3658,19 +3664,19 @@ X %2:Y %3</translation>
 </translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="918"/>
-        <location filename="../mainwindow.cpp" line="933"/>
+        <location filename="../mainwindow.cpp" line="908"/>
+        <location filename="../mainwindow.cpp" line="923"/>
         <source>Save GCode file</source>
         <translation>Сохранить файл УП</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="920"/>
-        <location filename="../mainwindow.cpp" line="935"/>
+        <location filename="../mainwindow.cpp" line="910"/>
+        <location filename="../mainwindow.cpp" line="925"/>
         <source>GCode (*.%1)</source>
         <translation>УП (*.%1)</translation>
     </message>
     <message>
-        <location filename="../mainwindow.cpp" line="965"/>
+        <location filename="../mainwindow.cpp" line="955"/>
         <source>No selected toolpath files.</source>
         <translation>Нет выбранных файлов УП.</translation>
     </message>
