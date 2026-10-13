@@ -17,6 +17,7 @@
 #include "gc_propertiesform.h"
 #include "gc_types.h"
 #include "gi.h"
+#include "gi_pinsdialog.h"
 #include "project.h"
 #include "settingsdialog.h"
 #include "tool_database.h"
@@ -425,6 +426,15 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
             App::project().addFile(drillls);
         }
     });
+
+    menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates…"), [] {
+        PinsDialog{App::grView.ptr(), PinsDialog::Coordinates}.exec();
+    });
+    action = menu.addAction(QIcon::fromTheme(u"drill"_s), tr("Snap pins to &drill holes…"), [] {
+        PinsDialog{App::grView.ptr(), PinsDialog::SnapToHoles}.exec();
+    });
+    action->setEnabled(PinsDialog::hasHoles());
+    menu.addSeparator();
 
     action = menu.addAction(tr("Fixed"), [](bool fl) {
         for (Pin* pin : {&App::pin0(), &App::pin1(), &App::pin2(), &App::pin3()}) pin->setFlag(QGraphicsItem::ItemIsMovable, !fl); });
