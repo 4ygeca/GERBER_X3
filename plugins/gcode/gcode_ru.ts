@@ -22,12 +22,12 @@
 <context>
     <name>GCode</name>
     <message>
-        <location filename="gc_creator.cpp" line="207"/>
+        <location filename="gc_creator.cpp" line="185"/>
         <source>createGc</source>
         <translation>Создание УП</translation>
     </message>
     <message>
-        <location filename="gc_creator.cpp" line="347"/>
+        <location filename="gc_creator.cpp" line="342"/>
         <source>Check milling for errors</source>
         <translation>Проверка фрезерования на ошибки</translation>
     </message>
@@ -50,7 +50,7 @@
 <context>
     <name>GCode::Dialog</name>
     <message>
-        <location filename="gc_programdialog.cpp" line="208"/>
+        <location filename="gc_programdialog.cpp" line="210"/>
         <source>3D preview is unavailable.
 
 %1</source>
@@ -59,37 +59,37 @@
 %1</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="226"/>
+        <location filename="gc_programdialog.cpp" line="228"/>
         <source>Fit</source>
         <translation>Вписать</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="230"/>
+        <location filename="gc_programdialog.cpp" line="232"/>
         <source>Iso</source>
         <translation>Изо</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="231"/>
+        <location filename="gc_programdialog.cpp" line="233"/>
         <source>Top</source>
         <translation>Сверху</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="232"/>
+        <location filename="gc_programdialog.cpp" line="234"/>
         <source>Front</source>
         <translation>Спереди</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="233"/>
+        <location filename="gc_programdialog.cpp" line="235"/>
         <source>Left</source>
         <translation>Слева</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="235"/>
+        <location filename="gc_programdialog.cpp" line="237"/>
         <source>Rapids</source>
         <translation>Холостые ходы</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="241"/>
+        <location filename="gc_programdialog.cpp" line="243"/>
         <source>Perspective</source>
         <translation>Перспектива</translation>
     </message>
@@ -97,106 +97,106 @@
 <context>
     <name>GCode::Form</name>
     <message>
-        <location filename="gc_form.cpp" line="177"/>
+        <location filename="gc_form.cpp" line="181"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="181"/>
-        <location filename="gc_form.cpp" line="397"/>
-        <location filename="gc_form.cpp" line="761"/>
+        <location filename="gc_form.cpp" line="185"/>
+        <location filename="gc_form.cpp" line="436"/>
+        <location filename="gc_form.cpp" line="816"/>
         <source>Create</source>
         <translation>Создать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="222"/>
+        <location filename="gc_form.cpp" line="241"/>
         <source>Name:</source>
         <translation>Имя:</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="239"/>
+        <location filename="gc_form.cpp" line="258"/>
         <source>Continue</source>
         <translation>Продолжить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="240"/>
+        <location filename="gc_form.cpp" line="259"/>
         <source>Break</source>
         <translation>Прервать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="320"/>
+        <location filename="gc_form.cpp" line="339"/>
         <source>The tool doesn`t fit in the Working items!</source>
         <translation>Инструмент не вмещается в рабочую область!</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="324"/>
-        <location filename="gc_form.cpp" line="531"/>
+        <location filename="gc_form.cpp" line="343"/>
+        <location filename="gc_form.cpp" line="585"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="397"/>
-        <location filename="gc_form.cpp" line="761"/>
+        <location filename="gc_form.cpp" line="436"/>
+        <location filename="gc_form.cpp" line="816"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="531"/>
+        <location filename="gc_form.cpp" line="585"/>
         <source>No data for working...</source>
         <translation>Нет данных для работы...</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="582"/>
+        <location filename="gc_form.cpp" line="636"/>
         <source>Toolpath name</source>
         <translation>Имя УП</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="604"/>
+        <location filename="gc_form.cpp" line="658"/>
         <source>Toolpath &quot;%1&quot; is open for editing, but the name has been changed to &quot;%2&quot;.</source>
         <translation>УП «%1» открыта для правки, но имя изменено на «%2».</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="606"/>
+        <location filename="gc_form.cpp" line="660"/>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="606"/>
+        <location filename="gc_form.cpp" line="660"/>
         <source>Save as New</source>
         <translation>Сохранить как новую</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="621"/>
+        <location filename="gc_form.cpp" line="675"/>
         <source>Toolpath &quot;%1&quot; already exists in the project.</source>
         <translation>УП «%1» уже есть в проекте.</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="622"/>
+        <location filename="gc_form.cpp" line="676"/>
         <source>Replace</source>
         <translation>Заменить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="622"/>
+        <location filename="gc_form.cpp" line="676"/>
         <source>Add Number</source>
         <translation>Добавить номер</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="759"/>
+        <location filename="gc_form.cpp" line="814"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="97"/>
+        <location filename="gc_form.h" line="105"/>
         <source>Outside</source>
         <translation>Снаружи</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="98"/>
+        <location filename="gc_form.h" line="106"/>
         <source>Depth:</source>
         <translation>Глубина:</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="99"/>
+        <location filename="gc_form.h" line="107"/>
         <source>Tool:</source>
         <translation>Инструмент:</translation>
     </message>
@@ -239,23 +239,23 @@
 <context>
     <name>GCode::Plugin</name>
     <message>
-        <location filename="gc_plugin.h" line="47"/>
+        <location filename="gc_plugin.h" line="49"/>
         <source>Tool Paths</source>
         <oldsource>Tool PathsD</oldsource>
         <translation>Траектории инструмента</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="54"/>
+        <location filename="gc_plugin.cpp" line="56"/>
         <source>&amp;Delete All Toolpaths</source>
         <translation>&amp;Удалить все траектории</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="55"/>
+        <location filename="gc_plugin.cpp" line="57"/>
         <source>Really?</source>
         <translation>Точно?</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="58"/>
+        <location filename="gc_plugin.cpp" line="60"/>
         <source>&amp;Save Selected Tool Paths...</source>
         <oldsource>&amp;Save Selected Tool PathsD...</oldsource>
         <translation>&amp;Сохранить выбранные траектории...</translation>
@@ -389,107 +389,114 @@
 <context>
     <name>GCodeSettings</name>
     <message>
-        <location filename="gc_settings.cpp" line="33"/>
+        <location filename="gc_settings.cpp" line="45"/>
+        <source>G-code generation script:</source>
+        <translation>Скрипт генерации G-кода:</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="64"/>
+        <source>Default</source>
+        <translation>По умолчанию</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="111"/>
         <source>Common Settings</source>
         <translation>Общие настройки</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="40"/>
+        <location filename="gc_settings.cpp" line="117"/>
+        <source>Postprocessor (CNC controller dialect):</source>
+        <translation>Постпроцессор (диалект контроллера ЧПУ):</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="123"/>
+        <source>Open scripts folder</source>
+        <translation>Открыть папку скриптов</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="139"/>
         <source>Save the G-Code to the project folder.</source>
         <translation>Сохранять G-код в папку проекта.</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="46"/>
+        <location filename="gc_settings.cpp" line="145"/>
         <source>Add a comment with the parameters G-Code</source>
         <translation>Добавлять комментарий с параметрами УП</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="50"/>
-        <source>File Extension:</source>
-        <translation>Расширение файла:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="63"/>
-        <location filename="gc_settings.cpp" line="88"/>
-        <source>Start with:</source>
-        <translation>Начинать с:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="69"/>
-        <location filename="gc_settings.cpp" line="94"/>
-        <source>Finish with:</source>
-        <translation>Заканчивать на:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="75"/>
-        <location filename="gc_settings.cpp" line="100"/>
-        <source>The format of the line with the coordinates:</source>
-        <translation>Формат строки с координатами:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="79"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Default &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?I+J+Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; - only if the value has changed.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; - always.&lt;/p&gt;&lt;p&gt;If one of the commands &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; and&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; is missing, it will not be inserted into the G-code.&lt;/p&gt;&lt;p&gt;If there is a space between the teams, then it will also be inserted into the G-code.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;По умолчанию &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?I+J+Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; — только если значение изменилось.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; — всегда.&lt;/p&gt;&lt;p&gt;Если одной из команд &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; или&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; нет, она не попадёт в G-код.&lt;/p&gt;&lt;p&gt;Если между командами стоит пробел, он тоже попадёт в G-код.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="81"/>
-        <source>Milling</source>
-        <translation>Фрезерование</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="104"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Default &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; - only if the value has changed.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; - always.&lt;/p&gt;&lt;p&gt;If one of the commands &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; and&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; is missing, it will not be inserted into the G-code.&lt;/p&gt;&lt;p&gt;If there is a space between the teams, then it will also be inserted into the G-code.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;По умолчанию &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; — только если значение изменилось.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; — всегда.&lt;/p&gt;&lt;p&gt;Если одна из команд &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; и&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; отсутствует, она не будет вставлена в G-код.&lt;/p&gt;&lt;p&gt;Если между командами есть пробел, он также будет вставлен в G-код.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="107"/>
-        <source>Laser</source>
-        <translation>Лазер</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="135"/>
-        <source>Spindle / Laser Control Code</source>
-        <translation>Код управления шпинделем/лазером</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="140"/>
-        <source>Spindle On:</source>
-        <translation>Включение шпинделя:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="145"/>
-        <source>Constant Laser Power Mode On:</source>
-        <translation>Режим постоянной мощности лазера:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="150"/>
-        <source>Dynamic Laser Power Mode On:</source>
-        <translation>Режим динамической мощности лазера:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="155"/>
-        <source>Spindle/Laser Off:</source>
-        <translation>Шпиндель/Лазер выкл.:</translation>
-    </message>
-    <message>
-        <location filename="gc_settings.cpp" line="166"/>
-        <source>JavaScript file to use for G-code generation (leave blank to use built-in C++ logic):</source>
-        <translation>JavaScript-файл для генерации G-кода (пусто — встроенная логика на C++):</translation>
-    </message>
-    <message>
+        <location filename="gc_settings.cpp" line="175"/>
         <location filename="gc_settings.cpp" line="176"/>
-        <source>built-in</source>
-        <translation>встроенный</translation>
+        <source>File extension: .%1</source>
+        <translation>Расширение файла: .%1</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="178"/>
+        <source>File Extension:</source>
+        <translation type="vanished">Расширение файла:</translation>
+    </message>
+    <message>
+        <source>Start with:</source>
+        <translation type="vanished">Начинать с:</translation>
+    </message>
+    <message>
+        <source>Finish with:</source>
+        <translation type="vanished">Заканчивать на:</translation>
+    </message>
+    <message>
+        <source>The format of the line with the coordinates:</source>
+        <translation type="vanished">Формат строки с координатами:</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Default &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?I+J+Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; - only if the value has changed.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; - always.&lt;/p&gt;&lt;p&gt;If one of the commands &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; and&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; is missing, it will not be inserted into the G-code.&lt;/p&gt;&lt;p&gt;If there is a space between the teams, then it will also be inserted into the G-code.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="vanished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;По умолчанию &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?I+J+Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; — только если значение изменилось.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; — всегда.&lt;/p&gt;&lt;p&gt;Если одной из команд &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; или&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; нет, она не попадёт в G-код.&lt;/p&gt;&lt;p&gt;Если между командами стоит пробел, он тоже попадёт в G-код.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Milling</source>
+        <translation type="vanished">Фрезерование</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Default &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; - only if the value has changed.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; - always.&lt;/p&gt;&lt;p&gt;If one of the commands &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; and&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; is missing, it will not be inserted into the G-code.&lt;/p&gt;&lt;p&gt;If there is a space between the teams, then it will also be inserted into the G-code.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation type="vanished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;По умолчанию &lt;span style=&quot; font-weight:600;&quot;&gt;G?X?Y?Z?F?S?&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;?&lt;/span&gt; — только если значение изменилось.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;+&lt;/span&gt; — всегда.&lt;/p&gt;&lt;p&gt;Если одна из команд &lt;span style=&quot; font-weight:600;&quot;&gt;G, X, Y, Z, F&lt;/span&gt; и&lt;span style=&quot; font-weight:600;&quot;&gt; S&lt;/span&gt; отсутствует, она не будет вставлена в G-код.&lt;/p&gt;&lt;p&gt;Если между командами есть пробел, он также будет вставлен в G-код.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Laser</source>
+        <translation type="vanished">Лазер</translation>
+    </message>
+    <message>
+        <source>Spindle / Laser Control Code</source>
+        <translation type="vanished">Код управления шпинделем/лазером</translation>
+    </message>
+    <message>
+        <source>Spindle On:</source>
+        <translation type="vanished">Включение шпинделя:</translation>
+    </message>
+    <message>
+        <source>Constant Laser Power Mode On:</source>
+        <translation type="vanished">Режим постоянной мощности лазера:</translation>
+    </message>
+    <message>
+        <source>Dynamic Laser Power Mode On:</source>
+        <translation type="vanished">Режим динамической мощности лазера:</translation>
+    </message>
+    <message>
+        <source>Spindle/Laser Off:</source>
+        <translation type="vanished">Шпиндель/Лазер выкл.:</translation>
+    </message>
+    <message>
+        <source>JavaScript file to use for G-code generation (leave blank to use built-in C++ logic):</source>
+        <translation type="vanished">JavaScript-файл для генерации G-кода (пусто — встроенная логика на C++):</translation>
+    </message>
+    <message>
+        <source>built-in</source>
+        <translation type="vanished">встроенный</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="53"/>
         <source>Browse...</source>
         <translation>Обзор...</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="192"/>
         <source>Scripts</source>
-        <translation>Скрипты</translation>
+        <translation type="vanished">Скрипты</translation>
     </message>
 </context>
 <context>
@@ -538,97 +545,184 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="gc_node.cpp" line="145"/>
+        <location filename="gc_node.cpp" line="150"/>
+        <source>Group %1</source>
+        <translation>Группа %1</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="196"/>
+        <source>New Group</source>
+        <translation>Новая группа</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="196"/>
+        <location filename="gc_node.cpp" line="433"/>
+        <source>Group name:</source>
+        <translation>Имя группы:</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="203"/>
+        <source>&amp;Group Selected...</source>
+        <translation>&amp;Сгруппировать выделенные...</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="204"/>
+        <source>&amp;Move to Group</source>
+        <translation>&amp;Переместить в группу</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="215"/>
+        <source>&amp;New Group...</source>
+        <translation>&amp;Новая группа...</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="217"/>
+        <source>&amp;Remove from Group</source>
+        <translation>&amp;Убрать из группы</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="343"/>
         <source>&amp;Save Toolpath</source>
         <translation>&amp;Сохранить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="149"/>
+        <location filename="gc_node.cpp" line="347"/>
         <source>&amp;Hide other</source>
         <translation>&amp;Скрыть остальные</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="153"/>
+        <location filename="gc_node.cpp" line="351"/>
         <source>&amp;Show source</source>
         <translation>&amp;Показать источник</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="157"/>
+        <location filename="gc_node.cpp" line="356"/>
         <source>&amp;Delete Toolpath</source>
         <translation>&amp;Удалить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="182"/>
+        <location filename="gc_node.cpp" line="431"/>
+        <source>&amp;Rename Group...</source>
+        <translation>П&amp;ереименовать группу...</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="433"/>
+        <source>Rename Group</source>
+        <translation>Переименование группы</translation>
+    </message>
+    <message>
+        <location filename="gc_node.cpp" line="439"/>
+        <source>&amp;Ungroup</source>
+        <translation>&amp;Разгруппировать</translation>
+    </message>
+    <message>
+        <location filename="gc_settings.cpp" line="57"/>
         <source>Select Script</source>
         <translation>Выбрать скрипт</translation>
     </message>
     <message>
-        <location filename="gc_settings.cpp" line="184"/>
+        <location filename="gc_settings.cpp" line="59"/>
         <source>JavaScript (*.js);;All files (*)</source>
         <translation>JavaScript (*.js);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="259"/>
         <source>;	         Source: %1 [%2]</source>
-        <translation>;        Источник: %1 [%2]</translation>
+        <translation type="vanished">;        Источник: %1 [%2]</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="260"/>
+        <location filename="gc_file.cpp" line="310"/>
+        <source>	         Source: %1 [%2]</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="311"/>
         <source>#%1 (deleted)</source>
         <translation>#%1 (удалён)</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="266"/>
+        <location filename="gc_file.cpp" line="317"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="268"/>
+        <location filename="gc_file.cpp" line="319"/>
+        <source>	           Name: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="321"/>
+        <source>	        Program: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="323"/>
+        <source>	           Tool: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="324"/>
+        <source>	  Tool Stepover: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="325"/>
+        <source>	 Feed Rate mm/s: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="326"/>
+        <source>	Tool Pass Depth: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="327"/>
+        <source>	          Depth: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="gc_file.cpp" line="328"/>
+        <source>	           Side: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>;	           Name: %1</source>
-        <translation>;        Название: %1</translation>
+        <translation type="vanished">;        Название: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="270"/>
         <source>;	        Program: %1</source>
-        <translation>;       Программа: %1</translation>
+        <translation type="vanished">;       Программа: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="272"/>
         <source>;	           Tool: %1</source>
-        <translation>;      Инструмент: %1</translation>
+        <translation type="vanished">;      Инструмент: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="273"/>
         <source>;	  Tool Stepover: %1</source>
-        <translation>; Шаг инструмента: %1</translation>
+        <translation type="vanished">; Шаг инструмента: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="274"/>
         <source>;	 Feed Rate mm/s: %1</source>
-        <translation>;     Подача мм/с: %1</translation>
+        <translation type="vanished">;     Подача мм/с: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="275"/>
         <source>;	Tool Pass Depth: %1</source>
-        <translation>; Глубина прохода: %1</translation>
+        <translation type="vanished">; Глубина прохода: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="276"/>
         <source>;	          Depth: %1</source>
-        <translation>;         Глубина: %1</translation>
+        <translation type="vanished">;         Глубина: %1</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="277"/>
         <source>;	           Side: %1</source>
-        <translation>;         Сторона: %1</translation>
+        <translation type="vanished">;         Сторона: %1</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="109"/>
+        <location filename="gc_form.cpp" line="113"/>
         <source>Position</source>
         <translation>Позиция</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="111"/>
+        <location filename="gc_form.cpp" line="115"/>
         <source>Area mm²</source>
         <translation>Площадь мм²</translation>
     </message>

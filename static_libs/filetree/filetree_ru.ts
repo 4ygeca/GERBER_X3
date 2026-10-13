@@ -4,22 +4,22 @@
 <context>
     <name>FileTree::Model</name>
     <message>
-        <location filename="ft_model.cpp" line="79"/>
+        <location filename="ft_model.cpp" line="81"/>
         <source>GCode</source>
         <translation>G-код</translation>
     </message>
     <message>
-        <location filename="ft_model.cpp" line="232"/>
+        <location filename="ft_model.cpp" line="227"/>
         <source>Name</source>
         <translation>Название</translation>
     </message>
     <message>
-        <location filename="ft_model.cpp" line="232"/>
+        <location filename="ft_model.cpp" line="227"/>
         <source>Side</source>
         <translation>Сторона</translation>
     </message>
     <message>
-        <location filename="ft_model.cpp" line="232"/>
+        <location filename="ft_model.cpp" line="227"/>
         <source>Type</source>
         <translation>Тип</translation>
     </message>
@@ -27,7 +27,7 @@
 <context>
     <name>FileTree::SideDelegate</name>
     <message>
-        <location filename="ft_sidedelegate.cpp" line="23"/>
+        <location filename="ft_sidedelegate.cpp" line="25"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>
@@ -35,12 +35,12 @@
 <context>
     <name>FileTree::View</name>
     <message>
-        <location filename="ft_view.cpp" line="157"/>
+        <location filename="ft_view.cpp" line="237"/>
         <source>Delete Selected</source>
         <translation>Удалить (закрыть) выбраннное</translation>
     </message>
     <message>
-        <location filename="ft_view.cpp" line="170"/>
+        <location filename="ft_view.cpp" line="250"/>
         <source>Transform</source>
         <translation>Преобразование</translation>
     </message>
@@ -80,7 +80,7 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="ft_node.h" line="96"/>
+        <location filename="ft_node.h" line="103"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>

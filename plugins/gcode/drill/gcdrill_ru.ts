@@ -132,48 +132,48 @@
 <context>
     <name>Drilling::Form</name>
     <message>
-        <location filename="drill_form.cpp" line="113"/>
+        <location filename="drill_form.cpp" line="127"/>
         <source>GCType::Drill Toolpath</source>
         <translation>УП сверловки</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="347"/>
+        <location filename="drill_form.cpp" line="361"/>
         <source>Edit tool for this toolpath only (the tool database is not changed)</source>
         <translation>Изменить инструмент только для этой УП (база инструментов не меняется)</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="431"/>
+        <location filename="drill_form.cpp" line="445"/>
         <source>&amp;Select Tool</source>
         <translation>&amp;Выбрать инструмент</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="452"/>
-        <location filename="drill_form.cpp" line="528"/>
+        <location filename="drill_form.cpp" line="466"/>
+        <location filename="drill_form.cpp" line="542"/>
         <source>&quot; not suitable for Tu</source>
         <translation>» не подходит для Tu</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="474"/>
+        <location filename="drill_form.cpp" line="488"/>
         <source>&amp;Edit tool for this toolpath…</source>
         <translation>&amp;Изменить инструмент для этой УП…</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="484"/>
+        <location filename="drill_form.cpp" line="498"/>
         <source>Reset to &amp;database tool</source>
         <translation>Вернуть инструмент из &amp;базы</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="495"/>
+        <location filename="drill_form.cpp" line="509"/>
         <source>&amp;Remove Tool</source>
         <translation>&amp;Убрать инструмент</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="508"/>
+        <location filename="drill_form.cpp" line="522"/>
         <source>&amp;Choose a Tool for everyone</source>
         <translation>&amp;Выбрать инструмент для всех</translation>
     </message>
     <message>
-        <location filename="drill_form.cpp" line="537"/>
+        <location filename="drill_form.cpp" line="551"/>
         <source>&amp;Remove Tool for everyone</source>
         <translation>&amp;Удалить инструмент для всех</translation>
     </message>
