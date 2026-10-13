@@ -70,11 +70,17 @@ struct WaitCursor {
 
 // Медь ли объекты класса по настройке: ни один, часть или все.
 Qt::CheckState tally(const EtchComp& etchComp, std::span<const GrObject* const> objects, bool x2) {
-    size_t copper{};
-    for(const GrObject* go: objects)
+    // Исключённые поштучно не в счёт -- они в строке "Excluded on scene";
+    // иначе класс с исключённым объектом навсегда "частичный", и щелчок по
+    // нему (Qt даёт Partial -> Checked) снять отметку не может.
+    size_t copper{}, counted{};
+    for(const GrObject* go: objects) {
+        if(etchComp.isExcluded(*go)) continue;
+        ++counted;
         if(etchComp.copper(*go, x2)) ++copper;
+    }
     if(copper == 0) return Qt::Unchecked;
-    return copper == objects.size() ? Qt::Checked : Qt::PartiallyChecked;
+    return copper == counted ? Qt::Checked : Qt::PartiallyChecked;
 }
 
 QString apertureFunctionName(int32_t function) {

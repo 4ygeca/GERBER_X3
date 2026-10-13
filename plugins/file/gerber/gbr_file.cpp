@@ -160,9 +160,15 @@ int64_t EtchComp::objectKey(const GrObject& go) {
         mix(um(go.state.scaling()));
         mix(um(go.state.rotating()));
     }
-    if(!std::isnan(go.pos.x())) {
-        mix(um(go.pos.x()));
-        mix(um(go.pos.y()));
+    // Вспышка из %SR своего pos не получает (Parser::closeStepRepeat) -- её
+    // точку несёт только сдвинутый state.curPos, он же и сериализуется. Без
+    // него все копии одной апертуры в панели получали один ключ.
+    const QPointF at = !std::isnan(go.pos.x())                         ? go.pos
+                     : go.path.empty() && go.state.type() != Region ? go.state.curPos()
+                                                                     : QPointF{std::nan(""), std::nan("")};
+    if(!std::isnan(at.x())) {
+        mix(um(at.x()));
+        mix(um(at.y()));
     }
     for(const Geo::Vertex& vertex: go.path) {
         mix(um(vertex.x()));
