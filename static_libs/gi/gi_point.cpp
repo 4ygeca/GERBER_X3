@@ -367,7 +367,7 @@ void Pin::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
 void Pin::mousePressEvent(QGraphicsSceneMouseEvent* event) {
     for(Pin* pin: App::pins())
         pin->lastPos_ = pin->pos();
-    pressAxis_ = flipAxisX();
+    pressAxis_ = mirrorAxisX(positions(), usedFlags(), index());
     QGraphicsItem::mousePressEvent(event);
 }
 void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
@@ -427,13 +427,17 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         }
     });
 
-    menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates…"), [] {
+    // Зафиксированные (после "Создать УП для булавок" -- программа сверловки
+    // уже стоит на их местах) не двигаются и отсюда, как и перетаскиванием.
+    const bool movable = flags() & QGraphicsItem::ItemIsMovable;
+    action = menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates…"), [] {
         PinsDialog{App::grView.ptr(), PinsDialog::Coordinates}.exec();
     });
+    action->setEnabled(movable);
     action = menu.addAction(QIcon::fromTheme(u"drill"_s), tr("Snap pins to &drill holes…"), [] {
         PinsDialog{App::grView.ptr(), PinsDialog::SnapToHoles}.exec();
     });
-    action->setEnabled(PinsDialog::hasHoles());
+    action->setEnabled(movable && PinsDialog::hasHoles());
     menu.addSeparator();
 
     action = menu.addAction(tr("Fixed"), [](bool fl) {
@@ -548,6 +552,13 @@ double Pin::flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> 
     for(int tier = 2; tier > 0; --tier)
         if(count[tier]) return sum[tier] / count[tier];
     return sum[0] / count[0]; // ни одна не используется -- обе пары
+}
+
+double Pin::mirrorAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, int idx) {
+    const auto tier = [&](int i) { return int(used[i]) + int(used[partner(i)]); };
+    const auto mid = [&](int i) { return (pos[i].x() + pos[partner(i)].x()) * 0.5; };
+    const int other = idx ^ 2; // булавка другой пары
+    return tier(other) >= tier(idx) ? mid(other) : mid(idx);
 }
 
 Pin::Symmetry Pin::symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used) {

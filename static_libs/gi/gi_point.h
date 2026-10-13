@@ -113,6 +113,12 @@ public:
     // пар совпадают -- ось та же, что прежняя (minX + maxX) / 2.
     static double flipAxisX();
     static double flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
+    // Ось, относительно которой зеркалится правка пары булавки idx: середина
+    // ДРУГОЙ пары, если та весит в flipAxisX не меньше (тот же или старший
+    // разряд "Используется"), иначе середина своей пары. Тогда flipAxisX после
+    // правки не сдвигается, а пара встаёт симметрично остальной расстановке --
+    // среднее двух несовпадающих середин уезжало бы с каждой правкой.
+    static double mirrorAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, int idx);
     static Symmetry symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
 
     // Пунктир оси переворота. Виден, пока булавку тащат или открыт диалог

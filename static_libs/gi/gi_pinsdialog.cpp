@@ -25,6 +25,7 @@
 #include <QGraphicsScene>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
@@ -219,8 +220,9 @@ void PinsDialog::pinEdited(int idx, bool isX) {
     else
         pt.setY(dsbxY_[idx]->value() + org.y());
     if(chbxKeepSymmetric_->isChecked()) {
-        // Ось -- до правки: она стоит, партнёр отражается относительно неё.
-        const double axis = Pin::flipAxisX(pos_, used_);
+        // Ось -- до правки и без правленой пары: она стоит, партнёр
+        // отражается относительно неё (см. Pin::mirrorAxisX).
+        const double axis = Pin::mirrorAxisX(pos_, used_, idx);
         pos_[Pin::partner(idx)] = {2.0 * axis - pt.x(), pt.y()};
     }
     pos_[idx] = pt;
@@ -270,12 +272,16 @@ void PinsDialog::snapToHoles() {
         lblSnap_->setText(tr("No pins are used: nothing to snap."));
         return;
     }
-    // Неиспользуемый партнёр привязанной булавки -- зеркально ей относительно
-    // прежней оси, как при перетаскивании пары.
-    if(chbxKeepSymmetric_->isChecked())
+    // Неиспользуемый партнёр привязанной булавки -- зеркально ей. Ось задают
+    // уже привязанные отверстия, если есть пара с обеими используемыми
+    // булавками; иначе ось ничем не задана -- остаётся прежняя.
+    if(chbxKeepSymmetric_->isChecked()) {
+        const bool fullPair = (used_[0] && used_[1]) || (used_[2] && used_[3]);
+        const double mirror = fullPair ? Pin::flipAxisX(pos_, used_) : axis;
         for(int i{}; i < 4; ++i)
             if(snapped[i] && !used_[Pin::partner(i)])
-                pos_[Pin::partner(i)] = {2.0 * axis - pos_[i].x(), pos_[i].y()};
+                pos_[Pin::partner(i)] = {2.0 * mirror - pos_[i].x(), pos_[i].y()};
+    }
 
     lblSnap_->setText(info.join(u'\n'));
     updateFields();
@@ -366,6 +372,17 @@ void PinsDialog::accept() {
     if(moved || used_ != origUsed_)
         GCode::regenerateGCodeFiles();
     QDialog::accept();
+}
+
+void PinsDialog::keyPressEvent(QKeyEvent* event) {
+    // Поле со значением Enter уже приняло (keyboardTracking выключен) и
+    // пропустило дальше -- QDialog нажал бы кнопку по умолчанию, OK.
+    if((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        && qobject_cast<QAbstractSpinBox*>(focusWidget())) {
+        event->accept();
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 void PinsDialog::reject() {

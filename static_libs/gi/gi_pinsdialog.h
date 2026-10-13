@@ -18,6 +18,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QKeyEvent;
 class QLabel;
 class QPushButton;
 
@@ -48,6 +49,10 @@ public:
 
     void accept() override;
     void reject() override;
+
+protected:
+    // Enter в поле координат -- лишь ввод значения (правка живая), а не OK.
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     struct Hole {
