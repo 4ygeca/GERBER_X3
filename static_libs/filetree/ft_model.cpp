@@ -118,47 +118,40 @@ void Model::updateNode(Node* node) {
     emit dataChanged(node->index(0), node->index(Column::Count - 1));
 }
 
-namespace {
-
-// Подпапка с таким именем среди детей folder.
-FolderNode* findSubFolder(Node* folder, const QString& name) {
-    for(int i{}; i < folder->childCount(); ++i)
-        if(auto* sub = dynamic_cast<FolderNode*>(folder->child(i)); sub && sub->folderName() == name)
-            return sub;
-    return nullptr;
+Node* Model::folder(uint32_t type) const {
+    auto it = fileFolders.find(static_cast<int>(type));
+    return it != fileFolders.end() ? it->second : nullptr;
 }
 
-} // namespace
-
 void Model::moveNode(Node* node, Node* newParent) {
+    if(!node || !newParent) return;
     Node* oldParent = node->parent();
-    if(!node || !newParent || !oldParent || oldParent == newParent) return;
+    if(!oldParent || oldParent == newParent) return;
     const int from = node->row();
     const int to = newParent->childCount();
-    beginMoveRows(nodeIndex(oldParent), from, from, nodeIndex(newParent), to);
+    // Перенос в собственного потомка модель отвергает -- узел остаётся на месте.
+    if(!beginMoveRows(nodeIndex(oldParent), from, from, nodeIndex(newParent), to)) return;
     newParent->adoptChild(oldParent->takeChild(from));
     endMoveRows();
 }
 
-void Model::groupProgram(const QString& programName, const std::vector<Node*>& nodes) {
-    auto it = fileFolders.find(static_cast<int>(G_CODE));
-    if(it == fileFolders.end() || !it->second || nodes.empty()) return;
-    Node* root = it->second;
+void Model::pruneEmptyFolders() {
+    for(int row{}; row < rootItem->childCount(); ++row)
+        pruneFolders(rootItem->child(row));
+}
 
-    FolderNode* sub = findSubFolder(root, programName);
-
-    if(nodes.size() > 1) {
-        if(!sub) {
-            sub = new FolderNode{programName};
-            appendChild(root, sub);
-        }
-        for(Node* node: nodes)
-            if(node && node->parent() != sub) moveNode(node, sub);
-    } else {
-        if(nodes.front() && nodes.front()->parent() != root) moveNode(nodes.front(), root);
-        // Подпапка на один файл не нужна: инструментов стало меньше.
-        if(sub && !sub->childCount()) removeNode(sub);
+void Model::pruneFolders(Node* folder) {
+    for(int row = folder->childCount(); row-- > 0;) {
+        Node* child = folder->child(row);
+        if(child->type_ != Folder) continue;
+        pruneFolders(child);
+        if(!child->childCount()) removeNode(child);
     }
+}
+
+void Model::revealNode(Node* node) {
+    if(!node || !node->parent()) return;
+    emit select(nodeIndex(node));
 }
 
 void Model::removeNode(Node* node) {
@@ -257,6 +250,10 @@ bool Model::removeRows(int row, int count, const QModelIndex& parent) {
         item->remove(row);
     endRemoveRows();
     resetInternalData();
+    // Опустевшую группу УП убираем следом, а не здесь же: «Delete Selected»
+    // удаляет циклом по заранее снятым индексам, и исчезнувшая посреди цикла
+    // строка папки сдвинула бы строки ещё не удалённых.
+    QTimer::singleShot(0, this, &Model::pruneEmptyFolders);
     return true;
 }
 

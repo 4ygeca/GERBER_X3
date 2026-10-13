@@ -16,6 +16,7 @@
 #include "abstract_fileplugin.h"
 #include "ft_model.h"
 #include "gc_file.h"
+#include "gc_node.h"
 #include "gc_plugin.h"
 #include "gi.h"
 #include "graphicsview.h"
@@ -176,6 +177,10 @@ bool Project::save(const QString& fileName) {
             sb.end_object();
         }
         sb.append_raw("]");
+        // Из дерева УП -- только сами группы: их порядок и раскрытие. В какой
+        // группе лежит УП, хранит она сама (GCode::File::group).
+        sb.append_raw(",\"groups\":");
+        Serial::write(sb, GCode::groupStates());
         sb.end_object();
 
         std::string_view view;
@@ -304,21 +309,23 @@ bool Project::open(const QString& fileName) {
                 }
         }
 
+        // Группы УП: порядок и раскрытие. В старых проектах ключа нет -- группы
+        // (если у УП они есть) раскрыты и идут в порядке своих УП.
+        std::vector<GCode::GroupState> groups;
+        {
+            simdjson::ondemand::value value;
+            if(!root["groups"].get(value) && Serial::read(value, groups))
+                groups.clear(); // разобрано не до конца -- лучше никак, чем наполовину
+        }
+
         for(const auto& [id, filePtr]: files_)
             App::fileModel().addFile(filePtr.get());
 
-        // Иерархия УП не пишется в файл отдельно: она однозначно выводится из
-        // имён программ. Многофайловая (несколько инструментов за один запуск)
-        // складывается обратно в подпапку своего имени, одиночная остаётся
-        // рядом со всеми -- ровно то же правило, что и при расчёте.
-        {
-            std::map<QString, std::vector<FileTree::Node*>> programs;
-            for(const auto& [id, filePtr]: files_)
-                if(auto* gc = dynamic_cast<GCode::File*>(filePtr.get()); gc && !gc->programName().isEmpty())
-                    programs[gc->programName()].push_back(gc->node());
-            for(const auto& [name, nodes]: programs)
-                App::fileModel().groupProgram(name, nodes);
-        }
+        // Иерархия УП отдельно не пишется: группу и имя программы хранит каждая
+        // УП сама, и дерево складывается из них тем же правилом, что и при
+        // расчёте. Многофайловая программа -- в подпапку своего имени, всё это
+        // -- в папку своей группы.
+        GCode::layoutTree(groups);
 
         for(const auto& [id, shPtr]: shapes_)
             App::fileModel().addShape(shPtr);
