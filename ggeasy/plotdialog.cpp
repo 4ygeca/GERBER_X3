@@ -29,6 +29,7 @@
 #include <QPageLayout>
 #include <QPageSize>
 #include <QPrintPreviewDialog>
+#include <QPrintPreviewWidget>
 #include <QPrinter>
 #include <QPushButton>
 #include <QSettings>
@@ -36,6 +37,7 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include "plotdialog.h"
 
@@ -464,7 +466,9 @@ void PlotDialog::printPreview() {
     QString lastWarning;
     connect(&preview, &QPrintPreviewDialog::paintRequested, &preview,
         [&sheet, &opt, &preview, &lastWarning](QPrinter* target) {
-            const QString warning = Plot::print(target, sheet, opt);
+            // Страницы покажет виджет этого окна -- по его DPI print снимет
+            // растяжение записи при показе.
+            const QString warning = Plot::print(target, sheet, opt, &preview);
             // Предупреждение -- после отрисовки и один раз на каждую новую
             // причину: preview перерисовывается на всякое изменение.
             if(!warning.isEmpty() && warning != lastWarning)
@@ -473,6 +477,13 @@ void PlotDialog::printPreview() {
                 });
             lastWarning = warning;
         });
+    // Растяжение записи зависит от экрана окна: окно, перенесённое на экран с
+    // другим масштабом, пересобирает страницы заново. Само окно создаётся
+    // заранее -- иначе до exec не на что подписаться.
+    preview.winId();
+    if(QWindow* previewWindow = preview.windowHandle())
+        if(auto* previewWidget = preview.findChild<QPrintPreviewWidget*>())
+            connect(previewWindow, &QWindow::screenChanged, previewWidget, &QPrintPreviewWidget::updatePreview);
     preview.exec();
 
     settings.setValue(u"pageSize"_s, static_cast<int>(printer.pageLayout().pageSize().id()));
