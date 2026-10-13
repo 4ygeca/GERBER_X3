@@ -15,6 +15,7 @@
 #include "abstract_file.h"
 #include "app.h"
 #include "ft_model.h"
+#include "gc_node.h"
 #include "geo/boolean.h"
 #include "gi_error.h"
 #include "graphicsview.h"
@@ -354,8 +355,16 @@ void Form::fileHandler(File* file) {
     if(!replacedIds_.empty()) {
         App::project().replaceFile(replacedIds_.front(), file);
         replacedIds_.erase(replacedIds_.begin());
-    } else
+    } else {
+        // Добавочный файл уже существующей программы (правка добавила
+        // инструмент) -- в группу этой программы: раскладка различает
+        // программы по имени ВНУТРИ группы, и одна УП разъехалась бы на две.
+        // Заменённым файлам группу переносит File::initFrom.
+        if(file->group().isEmpty())
+            if(const File* sibling = findProgram(fileName_); sibling)
+                file->setGroup(sibling->group());
         App::project().addFile(file);
+    }
 
     // Свежий прогон (fileId ещё не назначен): запоминаем id ПЕРВОГО пришедшего
     // файла, не последнего. files_ в Project -- std::map<int,...>, id раздаются
@@ -375,13 +384,11 @@ void Form::fileHandler(File* file) {
                 App::fileModel().removeNode(stale->node());
         replacedIds_.clear();
 
-        // Многофайловая УП уезжает в подпапку своего имени, одиночная остаётся
-        // рядом со всеми. Порядок важен: лишние узлы уже убраны, так что счёт
-        // здесь -- окончательный.
-        std::vector<FileTree::Node*> nodes;
-        for(int32_t id: programIds(fileName_))
-            if(auto* f = App::project().file(id); f) nodes.push_back(f->node());
-        App::fileModel().groupProgram(fileName_, nodes);
+        // Раскладка дерева: УП -- в свою группу, многофайловая -- ещё и в
+        // подпапку своего имени, одиночная лежит сама по себе. Порядок важен:
+        // лишние узлы уже убраны, так что счёт здесь -- окончательный. Новую
+        // УП -- показать: раскрыть ровно её группу, прочие свёрнутые не трогать.
+        layoutAndReveal(file->id());
         // Форма остаётся в режиме правки: следующий клик Create в этой же
         // сессии показа формы под тем же именем тихо перепишет ту же УП (см.
         // ветку editMode_ && origName == target в resolveFileName), а не

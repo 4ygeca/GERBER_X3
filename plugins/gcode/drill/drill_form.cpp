@@ -24,6 +24,7 @@
 // #include "file.h"
 // #include "gi_point.h"
 // #include "gi_preview.h"
+#include "gc_node.h"
 #include "graphicsview.h"
 // #include "project.h"
 // #include "settings.h"
@@ -59,13 +60,26 @@ static ToolKey toolKeyOf(const Row& row) {
 
 // Имя программы по инструменту. У правленного -- хвост из хэша правки: без
 // него обычная и правленная программы одного инструмента звались бы одинаково,
-// а по имени fileHandler() находит id асинхронного прогона, и groupProgram()
-// сложил бы обе в одну папку. '*' тут нельзя -- после сохранения имя
-// становится путём на диске.
+// а по имени fileHandler() находит id асинхронного прогона, и раскладка дерева
+// (GCode::layoutTree) сложила бы обе в одну папку. '*' тут нельзя -- после
+// сохранения имя становится путём на диске.
 static QString programTag(const Tool& tool, const ToolKey& key) {
     if(!key.hash)
         return tool.nameEnc();
     return tool.nameEnc() + u"_E"_s + QString::number(key.hash % 1679616u, 36).rightJustified(4, u'0').toUpper();
+}
+
+// Группа в дереве по умолчанию: все УП одного файла сверловки (сверловка,
+// пазы, профиль и карман по отверстиям) -- в одну группу с его именем. Новые
+// УП ложатся туда же, где уже лежат сверловка и пазы этого файла: так они
+// находят группу и после переименования. Заменяемой на месте УП группу
+// оставит File::initFrom -- её мог переложить пользователь.
+static QString drillGroup(const AbstractFile* srcFile) {
+    if(!srcFile) return {}; // окружности-фигуры, а не файл -- без группы
+    for(const File* sibling: App::project().files<File>())
+        if(sibling->srcFileId() == srcFile->id() && !sibling->group().isEmpty())
+            return sibling->group();
+    return srcFile->shortName();
 }
 
 /////////////////////////////////////////////
@@ -604,6 +618,10 @@ void Form::computePaths() {
         return indexes;
     };
 
+    // Последняя УП синхронных веток (пазы, простые точки): они добавляют УП
+    // сами, мимо fileHandler(), и раскладывают дерево здесь же, в конце.
+    int32_t revealId = -1;
+
     if(worckType == GCType::Drill) { // slots only
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
@@ -648,12 +666,14 @@ void Form::computePaths() {
                     programTag(data.tool, key)
                     + u"_T"_s + indexes(data.toolsApertures));
                 if(file) gcode->setSide(file->side());
+                gcode->setGroup(drillGroup(file));
 
                 auto it = createdSlotFileIds_.find(key);
                 if(it != createdSlotFileIds_.end() && App::project().file(it->second))
                     App::project().replaceFile(it->second, gcode);
                 else
                     createdSlotFileIds_[key] = App::project().addFile(gcode);
+                if(gcode->id() > -1) revealId = gcode->id();
 
                 // УП по этим строкам реально получилась -- только теперь снимаем галки.
                 for(int row: data.toolsApertures)
@@ -740,12 +760,14 @@ void Form::computePaths() {
                 gcode->setSrcFileId(file ? file->id() : -1);
                 gcode->setFileName(programTag(val.tool, key) + /*type_ +*/ indexes(val.toolsApertures));
                 if(file) gcode->setSide(file->side());
+                gcode->setGroup(drillGroup(file));
 
                 auto it = createdDrillFileIds_.find(key);
                 if(it != createdDrillFileIds_.end() && App::project().file(it->second))
                     App::project().replaceFile(it->second, gcode);
                 else
                     createdDrillFileIds_[key] = App::project().addFile(gcode);
+                if(gcode->id() > -1) revealId = gcode->id();
 
                 // УП по этим строкам реально получилась -- только теперь снимаем галки.
                 for(int row: val.toolsApertures)
@@ -795,6 +817,8 @@ void Form::computePaths() {
         }
     }
 
+    if(revealId > -1) GCode::layoutAndReveal(revealId);
+
     QTimer::singleShot(1, Qt::CoarseTimer, [this] { header->onChecked(); });
 }
 
@@ -841,6 +865,9 @@ void Form::fileHandler(GCode::File* file_) {
         drillFile->setWorckType(static_cast<int>(worckType));
         drillFile->setSrcFileId(file ? file->id() : -1);
     }
+    // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
+    // и пазам. Разложит и покажет база, в конце прогона.
+    if(file_) file_->setGroup(drillGroup(file));
 
     GCode::Form::fileHandler(file_);
 

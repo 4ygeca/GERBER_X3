@@ -53,6 +53,12 @@ protected:
     // Опираться на name_ при поиске коллизий и при восстановлении формы нельзя.
     QString programName_;
 
+    // Группа УП в дереве проекта (папка в «GCode», см. GCode::layoutTree);
+    // пустая -- вне групп. Хранится в самой УП, а не в дереве: дерево из неё и
+    // складывается, в том числе при открытии проекта. В старых проектах ключа
+    // нет -- УП вне групп, как и было.
+    QString group_;
+
     // Видимость файлов проекта на момент расчёта: id файла -> был ли видим.
     // Только хранится: открытие на правку его целиком НЕ применяет -- в нём и
     // прочие УП, и id, которые проект раздаёт повторно (Form::restoreContext).
@@ -102,6 +108,9 @@ public:
     const QString& programName() const { return programName_; }
     void setProgramName(const QString& name) { programName_ = name; }
 
+    const QString& group() const { return group_; }
+    void setGroup(const QString& group) { group_ = group; }
+
     const std::map<int32_t, bool>& visibility() const { return visibility_; }
     void setVisibility(std::map<int32_t, bool> visibility) { visibility_ = std::move(visibility); }
 
@@ -142,6 +151,13 @@ public:
     // конструктор при загрузке. Разъехаться им нельзя: выбор в дереве иначе не
     // дожил бы до следующего открытия.
     void setSide(Side side) override;
+
+    // Базовый initFrom переносит то, что нужно при замене УП на месте (id, узел
+    // дерева, сторону, цвет, тип, трансформ); здесь к нему добавляется группа:
+    // пересчитанная УП остаётся там, куда её положил пользователь. А вот
+    // programName_ и visibility_ переносить НЕЛЬЗЯ -- у нового файла они уже
+    // свои, выставленные формой до замены.
+    void initFrom(AbstractFile* file) override;
 
 protected:
     void startPath(const QPointF& point);
@@ -280,10 +296,6 @@ protected:
     void arcLines(std::vector<QString>& lines, const Geo::Vertex& fr, const Geo::Vertex& to, const Geo::Arc& arc);
 
     // AbstractFile interfaces
-    // initFrom не переопределяется: базовая реализация переносит ровно то, что
-    // нужно при замене УП на месте (id, узел дерева, сторону, цвет, тип, трансформ),
-    // а programName_ и visibility_ переносить как раз НЕЛЬЗЯ -- у нового файла они
-    // уже свои, выставленные формой до замены.
     // FileTree::Node* node() override;
 
     /////////////////////////////////////////////////////////////

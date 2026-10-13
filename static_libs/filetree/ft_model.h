@@ -72,13 +72,18 @@ public:
     // жизни привязано к узлу (см. деструкторы узлов, зовущие deleteFile).
     void removeNode(Node* node);
 
-    // Разложить узлы одной УП. Несколько файлов (у многоинструментного плагина
-    // один запуск даёт по файлу на инструмент) уходят в подпапку с именем
-    // программы; одиночный лежит прямо в «GCode». Подпапка заводится и убирается
-    // по надобности -- когда инструментов стало меньше или больше.
-    void groupProgram(const QString& programName, const std::vector<Node*>& nodes);
-    // Перенести узел в другую папку, не разрушая его.
+    // Папка верхнего уровня для типа файлов; nullptr, пока такого файла не было.
+    Node* folder(uint32_t type) const;
+    // Добавляет node последним потомком folder, возвращает его строку.
+    int appendChild(Node* folder, Node* node);
+    // Перенести узел последним потомком в другую папку, не разрушая его.
     void moveNode(Node* node, Node* newParent);
+    // Убрать опустевшие вложенные папки (группы УП, подпапки программ). Папки
+    // типов в корне дерева остаются всегда.
+    void pruneEmptyFolders();
+    // Показать узел: раскрыть ровно его предков и выделить (сигнал select).
+    // Остальные папки остаются, как их оставил пользователь.
+    void revealNode(Node* node);
 
     // QAbstractItemModel interface
     QModelIndex index(int row, int column, const QModelIndex& parent) const override;
@@ -114,8 +119,8 @@ private:
     QModelIndex nodeIndex(Node* node) const;
     // Папка верхнего уровня для типа type. Создаётся при первом обращении.
     Node* folderNode(uint32_t type, const QString& name);
-    // Добавляет node последним потомком folder, возвращает его строку.
-    int appendChild(Node* folder, Node* node);
+    // Пустые папки под folder, вложенные -- первыми: так пустеют и их родители.
+    void pruneFolders(Node* folder);
 
     int addFile(Node* item, AbstractFile* file);
     void addFile(AbstractFile* file);

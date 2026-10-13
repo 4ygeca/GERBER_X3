@@ -182,6 +182,11 @@ void File::setSide(Side side) {
     gcp.params[Params::FileSide].setValue(side);
 }
 
+void File::initFrom(AbstractFile* file) {
+    AbstractFile::initFrom(file);
+    if(auto* prev = dynamic_cast<File*>(file)) group_ = prev->group_;
+}
+
 void File::regenerate(unsigned sections) {
     initSave();
     if(sections & Header) writeHeader();
