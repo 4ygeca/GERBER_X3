@@ -42,6 +42,7 @@ enum /*class*/ Type : int {
     MarkLayoutFrames,
     MarkPin,
     MarkZero,
+    MarkPinAxis, // пунктир оси переворота заготовки (Gi::Pin)
 
     Path_ = QGraphicsItem::UserType + 200,
     Bridge,

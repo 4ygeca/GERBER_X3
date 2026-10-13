@@ -12,6 +12,7 @@
 
 #include "graphicsview.h"
 
+#include <array>
 #include <span>
 
 bool updateRect();
@@ -63,9 +64,29 @@ protected:
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 };
 
+// Булавки (реперы) -- четыре штифта для переворота заготовки вокруг
+// вертикальной оси. Это две пары: нижняя 0-1 и верхняя 3-2 (индексы идут
+// против часовой от левой нижней -- так их ставит resetPos). Заготовку
+// переворачивают на штифтах, и отверстие каждой булавки ложится на место её
+// партнёра: пара обязана быть зеркальной относительно оси переворота. Ось же
+// ни к центру платы, ни к нулю УП не привязана -- она там, где стоят булавки
+// (flipAxisX), и по ней же зеркалится нижняя сторона в УП.
 class Pin : public QGraphicsObject {
     Q_OBJECT
 public:
+    using Positions = std::array<QPointF, 4>;
+    using UsedFlags = std::array<bool, 4>;
+
+    // Итог проверки расстановки на симметрию. Для каждой ИСПОЛЬЗУЕМОЙ
+    // булавки: на какую используемую булавку ложится её зеркальное
+    // отражение (на оси -- на саму себя) и на сколько оно промахивается.
+    struct Symmetry {
+        double axis{};
+        std::array<int, 4> target{-1, -1, -1, -1}; // -1 -- булавка не используется
+        std::array<double, 4> deviation{};         // мм
+        double maxDeviation{};
+    };
+
     Pin();
     ~Pin() override;
     QRectF boundingRect() const override;
@@ -79,6 +100,27 @@ public:
     static double maxX() { return std::max(App::pin0().x(), App::pin1().x()); }
     static double minY() { return qMin(App::pin0().y(), App::pin2().y()); }
     static double maxY() { return std::max(App::pin0().y(), App::pin2().y()); }
+
+    // Зеркальный партнёр булавки: 0-1, 2-3.
+    static constexpr int partner(int idx) { return idx ^ 1; }
+
+    static Positions positions(); // текущие, в координатах сцены
+    static UsedFlags usedFlags(); // флаги "Используется" проекта
+
+    // X оси переворота -- средняя из середин пар. Берутся пары, где
+    // используются обе булавки; нет таких -- где хотя бы одна; нет и таких --
+    // все. У старых проектов булавки всегда стояли прямоугольником, середины
+    // пар совпадают -- ось та же, что прежняя (minX + maxX) / 2.
+    static double flipAxisX();
+    static double flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
+    static Symmetry symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
+
+    // Пунктир оси переворота. Виден, пока булавку тащат или открыт диалог
+    // булавок.
+    static void showFlipAxis(bool show);
+    static void updateFlipAxis(double axisX, std::span<const QPointF, 4> pos);
+
+    int index() const { return static_cast<int>(index_); }
 
     static void resetPos(bool fl = true);
     static void setPos(const QPointF pos[4]);
@@ -95,9 +137,10 @@ private:
     QPainterPath baseShape_;
     double dotRadius_{2};
     QRectF rect_;
-    QPointF lastPos_;
+    QPointF lastPos_; // положение в момент нажатия -- от него считается перетаскивание
     const uint index_;
     static inline int ctr_;
+    static inline double pressAxis_{}; // ось переворота в момент нажатия
     bool moved{};
 
 protected:

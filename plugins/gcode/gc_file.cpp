@@ -375,7 +375,9 @@ Geo::Polylines File::mirrorAndOffsetCurves(const QPointF& offset, Geo::Polylines
     Geo::translate(curves, offset /*- App::zero().pos()*/);
 
     if(side_ == Bottom) {
-        const double k = Gi::Pin::minX() + Gi::Pin::maxX();
+        // Зеркало -- относительно оси переворота булавок: заготовку
+        // переворачивают на них, и нижняя сторона обязана лечь туда же.
+        const double k = 2.0 * Gi::Pin::flipAxisX();
         if(toolType != Tool::Laser) r::for_each(curves, &Geo::Polyline::reverse);
         for(Geo::Vertex& v: v::join(curves)) {
             v.rx() = -v.x() + k;
