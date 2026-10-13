@@ -190,19 +190,25 @@ Form::Form(Plugin* plugin, Creator* tpc)
             computing_ ? cancel() : computePaths();
         });
 
-        // Прогресс лежит ПОВЕРХ кнопки «Close»: он её ребёнок, и растянут по
-        // ней своей компоновкой -- кнопка ездит вместе с доком, а полоса за
-        // ней сама. В сетку формы полоса не входит вовсе, так что зазоры между
-        // кнопками остаются те же, что были. На время счёта она закрывает
-        // кнопку собой -- заодно и от нажатия.
-        progressBar = new QProgressBar{pbClose};
+        // Прогресс -- своей строкой ПОД кнопкой «Close». Прежде он был её
+        // ребёнком, растянутым по ней её же компоновкой, и на всё время счёта
+        // прятал «Close» целиком. Защиты от закрытия в этом не было никакой:
+        // док и так закрывается крестиком заголовка, а форма при закрытии
+        // только прячется, и расчёт досчитывает своё.
+        //
+        // Место под полосу держится и пока её не видно. Иначе на старте счёта
+        // формы с растянутым содержимым (drill, thermal, thread) поджимали бы
+        // его, кнопки уезжали бы вверх, и под курсором, только что нажавшим
+        // «Create», вместо «Cancel» оказывалась бы «Close».
+        progressBar = new QProgressBar{ctrWidget};
         progressBar->setObjectName(u"progressBar"_s);
         progressBar->setTextVisible(true);
+        {
+            auto policy = progressBar->sizePolicy();
+            policy.setRetainSizeWhenHidden(true);
+            progressBar->setSizePolicy(policy);
+        }
         progressBar->setVisible({});
-
-        auto closeLayout = new QHBoxLayout{pbClose};
-        closeLayout->setContentsMargins({});
-        closeLayout->addWidget(progressBar);
 
         auto line = [this] {
             auto line = new QFrame{ctrWidget};
@@ -215,6 +221,15 @@ Form::Form(Plugin* plugin, Creator* tpc)
         grid->setContentsMargins(6, 6, 6, 6);
         grid->setSpacing(6);
 
+        // «Close» и полоса делят одну строку сетки: номера строк -- договор с
+        // наследниками (drill, thermal, thread растягивают строку 2 и гасят 7),
+        // сдвигать их нельзя.
+        auto closeBox = new QVBoxLayout;
+        closeBox->setContentsMargins({});
+        closeBox->setSpacing(grid->verticalSpacing());
+        closeBox->addWidget(pbClose);
+        closeBox->addWidget(progressBar);
+
         int row{};
         constexpr int rowSpan{1}, columnSpan{2};
         // clang-format off
@@ -225,7 +240,7 @@ Form::Form(Plugin* plugin, Creator* tpc)
         grid->addWidget(new QLabel{tr("Name:"), this}, ++row, 0);                      // row 4
         grid->addWidget(leName,                          row, 1);                      // row 4
         grid->addWidget(pbCreate,                      ++row, 0, rowSpan, columnSpan); // row 5
-        grid->addWidget(pbClose,                       ++row, 0, rowSpan, columnSpan); // row 6
+        grid->addLayout(closeBox,                      ++row, 0, rowSpan, columnSpan); // row 6
         grid->addWidget(new QWidget{this},             ++row, 0, rowSpan, columnSpan); // row 7
         // clang-format on
         grid->setRowStretch(row, 1);
@@ -764,9 +779,10 @@ void Form::stopProgress() {
     setComputing(false);
 }
 
-// Форма на время счёта: кнопка запуска становится отменой, а прогресс занимает
-// место «Close». Закрывать форму, пока считает её же Creator, нельзя -- на
-// выходе ~Form дождётся потока, а до тех пор окно всё равно стоит.
+// Форма на время счёта: кнопка запуска становится отменой, а под «Close»
+// появляется прогресс. Сама «Close» остаётся доступной: док она только прячет
+// (форма -- поле плагина), ровно как крестик заголовка, и расчёт при этом
+// досчитывает своё.
 void Form::setComputing(bool on) {
     if(computing_ == on) return;
     computing_ = on;
