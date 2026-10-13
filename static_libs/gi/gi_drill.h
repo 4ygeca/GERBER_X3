@@ -31,6 +31,9 @@ public:
     void updateColors() override;
 
     bool isSlot();
+    // Ось прохода в системе координат элемента: у отверстия -- одна точка,
+    // его центр, у паза -- ломаная.
+    const QPolygonF& path() const { return path_; }
     double diameter() const { return diameter_; }
     void setDiameter(double diameter);
     void updatePath(const QPolygonF& path, double diameter);

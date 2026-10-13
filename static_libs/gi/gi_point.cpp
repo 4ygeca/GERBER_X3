@@ -17,6 +17,7 @@
 #include "gc_propertiesform.h"
 #include "gc_types.h"
 #include "gi.h"
+#include "gi_pinsdialog.h"
 #include "project.h"
 #include "settingsdialog.h"
 #include "tool_database.h"
@@ -294,65 +295,65 @@ QPainterPath Pin::shape() const {
     return shape_;
 }
 
+// Прежде булавка тащила за собой все четыре: противоположная по диагонали
+// уходила на столько же в обратную сторону, остальные две достраивали
+// прямоугольник, то есть расстановка раздувалась и сжималась вокруг
+// неподвижного центра (да ещё и не пускалась за центр рамки платы). Задать
+// так ось переворота в стороне от центра было нельзя вовсе.
+//
+// Теперь по умолчанию едет только пара: булавка и её зеркальный партнёр
+// относительно оси переворота, ось при этом стоит. Shift -- одна булавка,
+// без партнёра. Ctrl -- вся расстановка целиком, а с ней и ось.
 void Pin::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
-    QGraphicsItem::mouseMoveEvent(event);
-    moved = true;
-    setPos(App::settings().getSnappedPos(pos(), event->modifiers()));
+    // Базовый mouseMoveEvent не зовётся: он двигает ещё и все выделенные
+    // подвижные элементы сцены (булавка не выделяемая, и выделение при
+    // нажатии на неё не снимается), а положение здесь всё равно своё.
+    if(!(event->buttons() & Qt::LeftButton) || !(flags() & ItemIsMovable))
+        return;
+    if(!std::exchange(moved, true))
+        showFlipAxis(true);
 
-    QPointF pt[4]{
-        App::pin0().pos(), App::pin1().pos(),
-        App::pin2().pos(), App::pin3().pos()};
+    // Всё -- от положений в момент нажатия, а не от прошлого события:
+    // модификатор можно сменить посреди перетаскивания, и расстановка
+    // пересчитается заново, без накопленного сдвига.
+    QPointF pt = App::settings().getSnappedPos(
+        lastPos_ + event->scenePos() - event->buttonDownScenePos(Qt::LeftButton), event->modifiers());
 
-    const QPointF center(App::layoutFrames().boundingRect().center());
-    // const QPointF center(App::project().worckRect().center());
+    const auto pins = App::pins();
+    Positions pos;
+    for(int i{}; i < 4; ++i)
+        pos[i] = pins[i]->lastPos_;
 
-    switch(index_) {
-    case 0:
-        if(pt[0].x() > center.x()) pt[0].rx() = center.x();
-        if(pt[0].y() > center.y()) pt[0].ry() = center.y();
-        pt[2] = App::pin2().lastPos_ - (pt[0] - lastPos_);
-        pt[1].rx() = pt[2].x();
-        pt[1].ry() = pt[0].y();
-        pt[3].rx() = pt[0].x();
-        pt[3].ry() = pt[2].y();
-        break;
-    case 1:
-        if(pt[1].x() < center.x()) pt[1].rx() = center.x();
-        if(pt[1].y() > center.y()) pt[1].ry() = center.y();
-        pt[3] = App::pin3().lastPos_ - (pt[1] - lastPos_);
-        pt[0].rx() = pt[3].x();
-        pt[0].ry() = pt[1].y();
-        pt[2].rx() = pt[1].x();
-        pt[2].ry() = pt[3].y();
-        break;
-    case 2:
-        if(pt[2].x() < center.x()) pt[2].rx() = center.x();
-        if(pt[2].y() < center.y()) pt[2].ry() = center.y();
-        pt[0] = App::pin0().lastPos_ - (pt[2] - lastPos_);
-        pt[1].rx() = pt[2].x();
-        pt[1].ry() = pt[0].y();
-        pt[3].rx() = pt[0].x();
-        pt[3].ry() = pt[2].y();
-        break;
-    case 3:
-        if(pt[3].x() > center.x()) pt[3].rx() = center.x();
-        if(pt[3].y() < center.y()) pt[3].ry() = center.y();
-        pt[1] = App::pin1().lastPos_ - (pt[3] - lastPos_);
-        pt[0].rx() = pt[3].x();
-        pt[0].ry() = pt[1].y();
-        pt[2].rx() = pt[1].x();
-        pt[2].ry() = pt[3].y();
-        break;
+    const int idx = index();
+    if(event->modifiers() & Qt::ControlModifier) {
+        const QPointF delta{pt - lastPos_};
+        for(QPointF& p: pos)
+            p += delta;
+    } else if(event->modifiers() & Qt::ShiftModifier) {
+        pos[idx] = pt;
+    } else {
+        // Через ось булавка не переходит: на самой оси пара сливается в одну
+        // точку -- два штифта на оси переворота тоже рабочая схема. Сторону
+        // булавки на оси решает исходная раскладка: 0 и 3 -- левые.
+        const double axis = pressAxis_;
+        const bool left = std::abs(lastPos_.x() - axis) > 1e-9 ? lastPos_.x() < axis : (idx == 0 || idx == 3);
+        pt.rx() = left ? std::min(pt.x(), axis) : std::max(pt.x(), axis);
+        pos[idx] = pt;
+        pos[partner(idx)] = {2.0 * axis - pt.x(), pt.y()};
     }
 
     for(int i{}; i < 4; ++i)
-        App::pins()[i]->setPos(pt[i]);
-    App::project().setPinsPos(pt);
+        pins[i]->setPos(pos[i]);
+    App::project().setPinsPos(pos.data());
+    updateFlipAxis(flipAxisX(), pos);
 }
 
 void Pin::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsItem::mouseReleaseEvent(event);
-    if(moved) GCode::regenerateGCodeFiles();
+    if(moved) {
+        showFlipAxis(false);
+        GCode::regenerateGCodeFiles();
+    }
     moved = false;
 }
 
@@ -364,8 +365,9 @@ void Pin::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void Pin::mousePressEvent(QGraphicsSceneMouseEvent* event) {
-    for(int i{}; i < 4; ++i)
-        App::pins()[i]->lastPos_ = App::pins()[i]->pos();
+    for(Pin* pin: App::pins())
+        pin->lastPos_ = pin->pos();
+    pressAxis_ = flipAxisX();
     QGraphicsItem::mousePressEvent(event);
 }
 void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
@@ -425,13 +427,28 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         }
     });
 
+    menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates…"), [] {
+        PinsDialog{App::grView.ptr(), PinsDialog::Coordinates}.exec();
+    });
+    action = menu.addAction(QIcon::fromTheme(u"drill"_s), tr("Snap pins to &drill holes…"), [] {
+        PinsDialog{App::grView.ptr(), PinsDialog::SnapToHoles}.exec();
+    });
+    action->setEnabled(PinsDialog::hasHoles());
+    menu.addSeparator();
+
     action = menu.addAction(tr("Fixed"), [](bool fl) {
         for (Pin* pin : {&App::pin0(), &App::pin1(), &App::pin2(), &App::pin3()}) pin->setFlag(QGraphicsItem::ItemIsMovable, !fl); });
     action->setCheckable(true);
     action->setChecked(!(App::pin0().flags() & QGraphicsItem::ItemIsMovable));
 
     action = menu.addAction(tr("Used"), [this](bool fl) {
-        App::project().setPinUsed(fl, index_); update(); });
+        const double axis = flipAxisX();
+        App::project().setPinUsed(fl, index_);
+        update();
+        // Ось переворота считается по используемым булавкам -- а по ней
+        // зеркалится нижняя сторона в УП.
+        if(flipAxisX() != axis) GCode::regenerateGCodeFiles();
+    });
     action->setCheckable(true);
     action->setChecked(App::project().pinUsed(index_));
 
@@ -489,14 +506,149 @@ void Pin::setPos(const QPointF pos[]) {
 void Pin::updateToolTip() {
     const QPointF p(pos() - App::zero().pos());
     setToolTip(QObject::tr("Pin %1\nX %2:Y %3")
-            .arg(index_ + 1)
-            .arg(p.x())
-            .arg(p.y()));
+                   .arg(index_ + 1)
+                   .arg(p.x())
+                   .arg(p.y())
+        + u"\n\n"_s
+        + tr("Drag: the pin and its mirror partner\n"
+             "Shift+drag: this pin only\n"
+             "Ctrl+drag: all pins together"));
 }
 
 void Pin::setPos(const QPointF& pos) {
     QGraphicsItem::setPos(pos);
     updateToolTip();
+}
+
+Pin::Positions Pin::positions() {
+    const auto pins = App::pins();
+    Positions pos;
+    for(int i{}; i < 4; ++i)
+        pos[i] = pins[i]->pos();
+    return pos;
+}
+
+Pin::UsedFlags Pin::usedFlags() {
+    UsedFlags used;
+    for(int i{}; i < 4; ++i)
+        used[i] = App::project().pinUsed(i);
+    return used;
+}
+
+double Pin::flipAxisX() { return flipAxisX(positions(), usedFlags()); }
+
+double Pin::flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used) {
+    double sum[3]{};
+    int count[3]{};
+    for(int i: {0, 2}) {
+        const int tier = int(used[i]) + int(used[partner(i)]);
+        sum[tier] += (pos[i].x() + pos[partner(i)].x()) * 0.5;
+        ++count[tier];
+    }
+    for(int tier = 2; tier > 0; --tier)
+        if(count[tier]) return sum[tier] / count[tier];
+    return sum[0] / count[0]; // ни одна не используется -- обе пары
+}
+
+Pin::Symmetry Pin::symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used) {
+    Symmetry sym;
+    sym.axis = flipAxisX(pos, used);
+    for(int i{}; i < 4; ++i) {
+        if(!used[i]) continue;
+        const QPointF mirrored{2.0 * sym.axis - pos[i].x(), pos[i].y()};
+        // Ближайшая используемая булавка, партнёр -- первым: при равенстве
+        // (пара слита в точку на оси) отчёт называет именно его.
+        for(int j: {partner(i), i, partner(i) ^ 2, i ^ 2}) {
+            if(!used[j]) continue;
+            const double d = QLineF{mirrored, pos[j]}.length();
+            if(sym.target[i] < 0 || d < sym.deviation[i] - 1e-9) {
+                sym.target[i] = j;
+                sym.deviation[i] = d;
+            }
+        }
+        sym.maxDeviation = std::max(sym.maxDeviation, sym.deviation[i]);
+    }
+    return sym;
+}
+
+namespace {
+
+class PinFlipAxis;
+PinFlipAxis* pinFlipAxis{}; // создаётся при первом показе, владеет сцена
+
+// Ось переворота -- вертикальный пунктир с запасом за крайние булавки.
+// Постоянно не показывается: линия через всю плату только мешала бы.
+class PinFlipAxis final : public QGraphicsItem {
+public:
+    PinFlipAxis() {
+        setAcceptedMouseButtons(Qt::NoButton);
+        setAcceptHoverEvents(false);
+        // Под булавками, над всем остальным. У булавок max - index, но на
+        // таких порядках вычитание ничего не меняет -- у них просто max.
+        setZValue(std::numeric_limits<double>::max() * 0.5);
+        setVisible(false);
+    }
+    ~PinFlipAxis() override {
+        if(pinFlipAxis == this) pinFlipAxis = nullptr;
+    }
+
+    int type() const override { return Gi::Type::MarkPinAxis; }
+    QRectF boundingRect() const override { return App::drawPdf() ? QRectF{} : rect_; }
+    QPainterPath shape() const override { return {}; } // мышь проходит насквозь
+
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* /*option*/, QWidget* /*widget*/) override {
+        if(App::drawPdf()) return;
+        QColor color{App::settings().guiColor(GuiColors::Pin)};
+        color.setAlpha(255);
+        QPen pen{color, 0.0, Qt::DashLine};
+        pen.setCosmetic(true);
+        painter->save(); // вид рисует с DontSavePainterState
+        painter->setPen(pen);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawLine(line_);
+        painter->restore();
+    }
+
+    void setLine(const QLineF& line) {
+        prepareGeometryChange();
+        line_ = line;
+        // Косметическое перо шириной в пиксель: запас в пару пикселей при
+        // текущем масштабе, но не меньше миллиметра.
+        const double margin = std::max({1.0, line.length() * 0.01, App::viewScaleFactor() * 4.0});
+        rect_ = QRectF{line.p1(), line.p2()}.normalized().adjusted(-margin, -margin, margin, margin);
+        update();
+    }
+
+private:
+    QLineF line_;
+    QRectF rect_;
+};
+
+} // namespace
+
+void Pin::showFlipAxis(bool show) {
+    if(!show) {
+        if(pinFlipAxis) pinFlipAxis->hide();
+        return;
+    }
+    if(!pinFlipAxis) {
+        QGraphicsScene* scene = App::pin0().scene();
+        if(!scene) return;
+        scene->addItem(pinFlipAxis = new PinFlipAxis);
+    }
+    updateFlipAxis(flipAxisX(), positions());
+    pinFlipAxis->show();
+}
+
+void Pin::updateFlipAxis(double axisX, std::span<const QPointF, 4> pos) {
+    if(!pinFlipAxis) return;
+    double minY{pos[0].y()}, maxY{minY};
+    for(const QPointF& pt: pos) {
+        minY = std::min(minY, pt.y());
+        maxY = std::max(maxY, pt.y());
+    }
+    const double margin = std::max(5.0, (maxY - minY) * 0.1);
+    pinFlipAxis->setLine({axisX, minY - margin, axisX, maxY + margin});
 }
 
 } // namespace Gi
