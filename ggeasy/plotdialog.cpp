@@ -479,8 +479,13 @@ void PlotDialog::printPreview() {
         });
     // Растяжение записи зависит от экрана окна: окно, перенесённое на экран с
     // другим масштабом, пересобирает страницы заново. Само окно создаётся
-    // заранее -- иначе до exec не на что подписаться.
+    // заранее -- иначе до exec не на что подписаться. winId() у окна с
+    // родителем делает нативными всех детей PlotDialog и MainWindow
+    // (enforceNativeChildren) -- на время создания это отключено.
+    const bool nativeSiblingsOff = QCoreApplication::testAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
+    QCoreApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings, true);
     preview.winId();
+    QCoreApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings, nativeSiblingsOff);
     if(QWindow* previewWindow = preview.windowHandle())
         if(auto* previewWidget = preview.findChild<QPrintPreviewWidget*>())
             connect(previewWindow, &QWindow::screenChanged, previewWidget, &QPrintPreviewWidget::updatePreview);
