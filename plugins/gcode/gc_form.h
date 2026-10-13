@@ -75,6 +75,8 @@ protected:
     // Режим правки существующей УП. Меняет заодно надпись на кнопке -- иначе
     // «Create» врёт: файл будет перезаписан, а не создан.
     void setEditMode(bool on);
+    // Прогон отменён: присланные файлы fileHandler() удаляет.
+    bool canceled() const { return canceled_; }
 
     // QObject interface
     virtual void timerEvent(QTimerEvent* event) override;

@@ -75,6 +75,12 @@ private:
     std::map<ToolKey, int32_t> createdDrillFileIds_;
     std::map<ToolKey, int32_t> createdProfileFileIds_;
     std::map<ToolKey, int32_t> createdPocketFileIds_;
+    // Профиль и карман по отверстиям -- УП чужих File, без srcFileId: их id
+    // (с именем программы) по файлу сверловки, чтобы drillGroup() нашёл группу
+    // этого файла и после переименования. В showEvent() не сбрасывается --
+    // группа живёт дольше показа формы.
+    std::map<int32_t, std::vector<std::pair<int32_t, QString>>> srcPrograms_;
+    QString drillGroup(const AbstractFile* srcFile) const;
 
     void initToolTable();
     // Кнопки правки инструмента в столбце Edit -- по одной на строку модели.
@@ -126,6 +132,7 @@ protected:
         GCType worckType{};
         ToolKey key{};
         QString programName;
+        std::vector<int32_t> replacedIds; // УП этого ключа из прошлого Create
     };
     std::deque<PendingRun> pendingRuns_;
     // Плагины с собственной независимой моделью "что сейчас правится" (свои

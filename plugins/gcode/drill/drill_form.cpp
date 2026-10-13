@@ -42,6 +42,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QWidget>
+#include <algorithm>
 #include <set>
 
 namespace Drilling {
@@ -71,14 +72,22 @@ static QString programTag(const Tool& tool, const ToolKey& key) {
 
 // Группа в дереве по умолчанию: все УП одного файла сверловки (сверловка,
 // пазы, профиль и карман по отверстиям) -- в одну группу с его именем. Новые
-// УП ложатся туда же, где уже лежат сверловка и пазы этого файла: так они
-// находят группу и после переименования. Заменяемой на месте УП группу
-// оставит File::initFrom -- её мог переложить пользователь.
-static QString drillGroup(const AbstractFile* srcFile) {
+// УП ложатся туда же, где уже лежат прежние УП этого файла: так они находят
+// группу и после переименования. Сверловка и пазы помнят свой файл сами
+// (srcFileId), профиль и карман -- чужие File без этого поля, их форма
+// помнит в srcPrograms_. Заменяемой на месте УП группу оставит
+// File::initFrom -- её мог переложить пользователь.
+QString Form::drillGroup(const AbstractFile* srcFile) const {
     if(!srcFile) return {}; // окружности-фигуры, а не файл -- без группы
     for(const File* sibling: App::project().files<File>())
         if(sibling->srcFileId() == srcFile->id() && !sibling->group().isEmpty())
             return sibling->group();
+    if(auto it = srcPrograms_.find(srcFile->id()); it != srcPrograms_.end())
+        for(const auto& [id, programName]: it->second)
+            // id в проекте переиспользуются -- сверяется и имя программы.
+            if(auto* sibling = dynamic_cast<const GCode::File*>(App::project().file(id));
+                sibling && sibling->programName() == programName && !sibling->group().isEmpty())
+                return sibling->group();
     return srcFile->shortName();
 }
 
@@ -777,12 +786,12 @@ void Form::computePaths() {
                 switch(worckType) {
                 case GCType::Profile: {
                     const QString programName = programTag(val.tool, key);
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Profile, key, programName});
-                    fileName_ = programName;
-                    replacedIds_.clear();
+                    std::vector<int32_t> replaced;
                     if(auto it = createdProfileFileIds_.find(key);
                         it != createdProfileFileIds_.end() && App::project().file(it->second))
-                        replacedIds_ = {it->second};
+                        replaced = {it->second};
+                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Profile, key, programName, std::move(replaced)});
+                    fileName_ = programName;
                     gcp = {};
                     gcp.setConvent(ui->rbConventional->isChecked());
                     gcp.setSide(side);
@@ -795,12 +804,12 @@ void Form::computePaths() {
                 } break;
                 case GCType::Pocket: {
                     const QString programName = programTag(val.tool, key);
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Pocket, key, programName});
-                    fileName_ = programName;
-                    replacedIds_.clear();
+                    std::vector<int32_t> replaced;
                     if(auto it = createdPocketFileIds_.find(key);
                         it != createdPocketFileIds_.end() && App::project().file(it->second))
-                        replacedIds_ = {it->second};
+                        replaced = {it->second};
+                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Pocket, key, programName, std::move(replaced)});
+                    fileName_ = programName;
                     gcp = {};
                     gcp.setConvent(ui->rbConventional->isChecked());
                     gcp.setSide(GCode::Inner);
@@ -853,6 +862,13 @@ void Form::fileHandler(GCode::File* file_) {
         run = std::move(pendingRuns_.front());
         pendingRuns_.pop_front();
         fileName_ = run.programName;
+        // Все прогоны клика досчитаны ещё до первого fileReady, и общие поля
+        // формы к этому времени держат последний из них. Что заменить -- своё,
+        // из очереди (иначе файл первого прогона заменял бы УП последнего), и
+        // файл у прогона один: база по fileCount == 0 убирает лишнее и
+        // раскладывает дерево -- для каждого прогона, а не только для первого.
+        replacedIds_ = std::move(run.replacedIds);
+        fileCount = 1;
     }
 
     // Профиль и карман считает чужой Creator, а результат приходит асинхронно:
@@ -869,14 +885,22 @@ void Form::fileHandler(GCode::File* file_) {
     // и пазам. Разложит и покажет база, в конце прогона.
     if(file_) file_->setGroup(drillGroup(file));
 
+    // Файл отменённого прогона база удаляет -- после её вызова трогать file_
+    // можно, только если он принят. Принятый уже в проекте и со своим id; по
+    // имени программы id не найти: имя -- инструмент, и у УП из другого файла
+    // сверловки или из фигур оно то же.
+    const bool accepted = file_ && !canceled();
     GCode::Form::fileHandler(file_);
 
-    // file_ после вызова базы трогать нельзя (canceled_ его удаляет) -- берём
-    // итоговый id по имени программы, оно уникально на ключ (programTag()).
-    if(isAsyncRun && file_) {
+    if(isAsyncRun && accepted) {
         auto& map = run.worckType == GCType::Profile ? createdProfileFileIds_ : createdPocketFileIds_;
-        if(auto ids = programIds(run.programName); !ids.empty())
-            map[run.key] = ids.front();
+        map[run.key] = file_->id();
+        if(file) {
+            auto& programs = srcPrograms_[file->id()];
+            std::pair<int32_t, QString> entry{file_->id(), file_->programName()};
+            if(std::find(programs.begin(), programs.end(), entry) == programs.end()) // замена на месте -- тот же id
+                programs.push_back(std::move(entry));
+        }
     }
 }
 
