@@ -51,6 +51,10 @@ public:
     void initFrom(AbstractFile* file) override;
     FileTree::Node* node() override;
     std::vector<GraphicObject> getDataForGC(std::span<Criteria> criterias, GCType gcType, bool test = {}) const override;
+    // По сырым строкам координат (rawPos), а не по формату: число с точкой
+    // формат не читает вовсе. Сырые строки хранятся в проекте, а формат
+    // можно сменить в окне формата -- поэтому считается по запросу.
+    double coordinateResolution() const override;
 
     QIcon icon() const override { return QIcon::fromTheme(u"drill-path"_s); }
 

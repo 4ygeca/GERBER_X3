@@ -110,6 +110,11 @@ public:
         std::span<Criteria> criterias [[maybe_unused]],
         GCType gcType [[maybe_unused]],
         bool test [[maybe_unused]] = {}) const { return {}; };
+    // Разрешение координат файла, мм (до трансформации файла): точнее этого
+    // файл положения не задаёт -- у Excellon это знаки после точки. Булавки
+    // по нему сверяют симметрию отверстий: "точно" там значит "с точностью
+    // до записи файла", а не "в пределах допуска". 0 -- неизвестно.
+    virtual double coordinateResolution() const { return 0.0; }
     virtual void initFrom(AbstractFile* file);
     virtual uint32_t type() const = 0;
     virtual void createGi() = 0;

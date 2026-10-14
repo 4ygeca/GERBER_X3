@@ -119,4 +119,39 @@ std::vector<GraphicObject> File::getDataForGC(std::span<Criteria> criterias, GCT
     return retData;
 }
 
+double File::coordinateResolution() const {
+    // Число с точкой (X12.345) несёт свой шаг -- знаки после точки, формат
+    // при разборе оно не читает. Но нули в хвосте дробной части не пишут:
+    // X12.7 рядом с X12.345 -- тот же шаг 0.001. Поэтому знаков -- максимум
+    // по всему файлу, а не у отдельного числа.
+    int pointDecimals = -1;
+    bool implicitDecimals{}; // число без точки: знаки задаёт формат
+    auto scan = [&](const QString& raw) {
+        if(raw.isEmpty()) return;
+        if(const qsizetype dot = raw.indexOf(u'.'); dot >= 0)
+            pointDecimals = std::max(pointDecimals, static_cast<int>(raw.size() - dot - 1));
+        else
+            implicitDecimals = true;
+    };
+    for(const Hole& hole: *this) {
+        scan(hole.state.rawPos.x);
+        scan(hole.state.rawPos.y);
+        for(const State::Pos& raw: hole.state.rawPosList) {
+            scan(raw.x);
+            scan(raw.y);
+        }
+    }
+    // Без точки и без знаков в формате (decimal == 0) шаг неизвестен: целые
+    // миллиметры или дюймы -- это скорее не заданный формат, чем сетка.
+    double step{};
+    if(implicitDecimals && format_.decimal > 0)
+        step = std::pow(10.0, -format_.decimal);
+    // Записаны по-разному -- проверке нужен худший, то есть крупный, шаг.
+    if(pointDecimals >= 0)
+        step = std::max(step, std::pow(10.0, -pointDecimals));
+    if(!(step > 0.0))
+        return 0.0;
+    return format_.unitMode == Inches ? step * 25.4 : step;
+}
+
 } // namespace Excellon

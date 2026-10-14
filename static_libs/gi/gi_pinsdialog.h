@@ -13,6 +13,7 @@
 #include "gi_point.h"
 
 #include <QDialog>
+#include <QStringList>
 #include <vector>
 
 class QCheckBox;
@@ -24,8 +25,8 @@ class QPushButton;
 
 namespace Gi {
 
-// Координаты булавок (реперов), режим их симметрии и привязка к отверстиям
-// сверловки.
+// Координаты булавок (реперов), режим их симметрии и расстановка на
+// отверстия сверловки.
 //
 // Расстановка в окне всегда симметрична по выбранному режиму (ось или точка,
 // см. Pin): правка одной булавки двигает и остальные, правка оси/точки --
@@ -33,6 +34,12 @@ namespace Gi {
 // полями, метка симметрии видна, пока окно открыто. В проект -- а с ним и в
 // УП нижней стороны -- расстановка и режим уходят только по OK; Cancel
 // возвращает булавки на место, проект при этом и не трогался.
+//
+// На отверстия булавки встают только целым набором: 3-4 круглых отверстия
+// Excellon одного диаметра, симметричных по режиму ТОЧНО -- с точностью до
+// записи координат в файле, без допуска. Несимметричный набор -- отказ с
+// объяснением, булавки не двигаются: на такие штифты перевёрнутая плата не
+// сядет, а "ближайшие" отверстия молча уводили расстановку в сторону.
 class PinsDialog : public QDialog {
     Q_OBJECT
 
@@ -48,17 +55,33 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
-    struct Hole {
-        QPointF pos;     // центр, координаты сцены
-        double diameter; // на сцене, с масштабом файла
+    // Набор отверстий под булавки: 3-4 круглых отверстия одного диаметра.
+    // Только значения: файл могут перезагрузить, пока окно открыто, и
+    // указатели на Gi::Drill повисли бы.
+    struct HoleSet {
+        QString name;                 // файл и инструменты; пусто -- выделенные на сцене
+        std::vector<QPointF> centres; // координаты сцены, без повторов
+        double diameter{};            // мм, как в файле; 0 -- у выделенных разные
+        double eps{};                 // разрешение координат на сцене, мм
+        QString error;                // набор не годится независимо от режима
     };
-    // Откуда брать отверстия: выделенные на сцене (так пользователь сам
-    // выбирает, к каким) либо все отверстия одного файла сверловки.
-    struct HoleSource {
-        QString name;
-        std::vector<Hole> holes;
+    // Как булавки встают на набор в режиме окна.
+    struct Fit {
+        Pin::Positions pos{};
+        QString error;      // пусто -- встают; иначе почему нет (булавки не двигать)
+        QStringList notes;  // к успеху: например, пара на одном отверстии на оси
+        double maxOffset{}; // наибольший уход булавки от центра своего отверстия
+        bool symmetric{};   // при ошибке: симметричны, но четырём булавкам не годятся
     };
-    static std::vector<HoleSource> holeSources();
+    // Кандидаты -- из каждого файла Excellon, по инструменту и по диаметру;
+    // выделенные на сцене -- первыми. selected -- сколько круглых отверстий
+    // Excellon выделено (подсказать, если их не 3-4).
+    static std::vector<HoleSet> holeSets(qsizetype& selected);
+    // org -- точка Zero: координаты в сообщениях -- от неё, как в полях.
+    static Fit fitAxis(const HoleSet& set, QPointF org);
+    static Fit fitPoint(const HoleSet& set, QPointF org);
+    Fit fit(const HoleSet& set) const; // по режиму окна
+    void updateSetLabels();            // подписи наборов: симметричен ли в режиме окна
 
     // Ноль отсчёта полей -- всегда точка Zero: так же считают подсказка
     // булавки, "Zeroed" в строке состояния и сама УП.
@@ -66,7 +89,7 @@ private:
     void setPointMode(bool point);
     void pinEdited(int idx, bool isX);
     void centerEdited(bool isX);
-    void snapToHoles();
+    void placeOnHoles(); // на набор, выбранный в списке
     // Используемые булавки, чей зеркальный партнёр не используется, а сами
     // они не на оси: после переворота платы под такой булавкой нет отверстия.
     std::vector<int> unpairedPins() const;
@@ -79,7 +102,8 @@ private:
     bool pointMode_; // режим окна: false -- ось, true -- точка (в проект -- по OK)
     Pin::Positions pos_;
     Pin::UsedFlags used_;
-    const std::vector<HoleSource> sources_;
+    std::vector<HoleSet> sets_;
+    QString holesInfo_; // что сказать о наборах, пока булавки на них не ставили
 
     QCheckBox* chbxPoint_{};
     QDoubleSpinBox* dsbxX_[4]{};
