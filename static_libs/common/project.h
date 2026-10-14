@@ -144,6 +144,9 @@ public:
 
     bool isUntitled();
     bool isPinsPlaced() const;
+    // Булавки расставлены вручную (окно координат) -- сохранение УП больше не
+    // предлагает авторасстановку, которая эту расстановку и снесла бы.
+    void setPinsPlaced(bool placed);
     void setUntitled(bool value);
 
     // Bounding Rect
@@ -194,6 +197,13 @@ public:
     bool pinUsed(int idx) const;
     void setPinUsed(bool used, int idx);
 
+    // Симметрия булавок: false -- ось переворота (пары 1-2 и 4-3 зеркальны
+    // относительно вертикали), true -- точка (прямоугольник вокруг точки, все
+    // четыре двигаются вместе). Своя у каждого проекта: от неё зависит, как
+    // булавки этого проекта двигаются и правятся.
+    bool pinsPointSymmetry() const;
+    void setPinsPointSymmetry(bool point);
+
 signals:
     void changed();
     void homePosChanged(const QPointF&);
@@ -229,6 +239,7 @@ private:
     bool isUntitled_ = true;
     bool isPinsPlaced_{};
     bool pinsUsed_[4]{true, true, true, true};
+    bool pinsPointSymmetry_{};
     QPointF pins_[4];
     QPointF home_;
     QPointF zero_;
@@ -266,6 +277,10 @@ private:
         double plunge{};
         double glue{};
         QRectF viewRect;
+        // Последним: header() заполняет поля назначенными инициализаторами в
+        // порядке объявления. У старых проектов ключа нет -- остаётся ось,
+        // как и было.
+        bool pinsPointSymmetry{};
     };
     void applyHeader(const Header&); // применить всё, кроме viewRect
 

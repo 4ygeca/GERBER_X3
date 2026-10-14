@@ -27,6 +27,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QStyleOptionGraphicsItem>
+#include <QTimer>
 
 bool updateRect() {
     QRectF rect(App::grView().getSelectedBoundingRect());
@@ -295,15 +296,16 @@ QPainterPath Pin::shape() const {
     return shape_;
 }
 
-// Прежде булавка тащила за собой все четыре: противоположная по диагонали
-// уходила на столько же в обратную сторону, остальные две достраивали
-// прямоугольник, то есть расстановка раздувалась и сжималась вокруг
-// неподвижного центра (да ещё и не пускалась за центр рамки платы). Задать
-// так ось переворота в стороне от центра было нельзя вовсе.
-//
-// Теперь по умолчанию едет только пара: булавка и её зеркальный партнёр
-// относительно оси переворота, ось при этом стоит. Shift -- одна булавка,
-// без партнёра. Ctrl -- вся расстановка целиком, а с ней и ось.
+// Симметрия держится всегда (см. описание Pin), а что едет вслед за
+// булавкой -- решает режим проекта:
+//  * ось -- пара: булавка и её зеркальный партнёр относительно оси
+//    переворота, ось при этом стоит;
+//  * точка -- все четыре: противоположная по диагонали уходит на столько же
+//    в обратную сторону, остальные две достраивают прямоугольник (так
+//    булавки двигались исходно), точка стоит.
+// Ctrl -- вся расстановка целиком, а с ней и ось/точка. Одной булавки, без
+// партнёра, больше нет: она ломала симметрию, а на несимметричные штифты
+// перевёрнутая плата не садится.
 void Pin::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     // Базовый mouseMoveEvent не зовётся: он двигает ещё и все выделенные
     // подвижные элементы сцены (булавка не выделяемая, и выделение при
@@ -311,7 +313,7 @@ void Pin::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     if(!(event->buttons() & Qt::LeftButton) || !(flags() & ItemIsMovable))
         return;
     if(!std::exchange(moved, true))
-        showFlipAxis(true);
+        showSymmetryMark(true);
 
     // Всё -- от положений в момент нажатия, а не от прошлого события:
     // модификатор можно сменить посреди перетаскивания, и расстановка
@@ -324,50 +326,67 @@ void Pin::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     for(int i{}; i < 4; ++i)
         pos[i] = pins[i]->lastPos_;
 
+    const bool pointMode = pointSymmetry();
+    QPointF c = pressCenter_;
     const int idx = index();
     if(event->modifiers() & Qt::ControlModifier) {
         const QPointF delta{pt - lastPos_};
         for(QPointF& p: pos)
             p += delta;
-    } else if(event->modifiers() & Qt::ShiftModifier) {
-        pos[idx] = pt;
+        c += delta;
     } else {
-        // Через ось булавка не переходит: на самой оси пара сливается в одну
-        // точку -- два штифта на оси переворота тоже рабочая схема. Сторону
-        // булавки на оси решает исходная раскладка: 0 и 3 -- левые.
-        const double axis = pressAxis_;
-        const bool left = std::abs(lastPos_.x() - axis) > 1e-9 ? lastPos_.x() < axis : (idx == 0 || idx == 3);
-        pt.rx() = left ? std::min(pt.x(), axis) : std::max(pt.x(), axis);
-        pos[idx] = pt;
-        pos[partner(idx)] = {2.0 * axis - pt.x(), pt.y()};
+        // Через ось (в режиме точки -- и через горизонталь точки) булавка не
+        // переходит: на самой линии булавки сливаются в одну точку -- два
+        // штифта на оси переворота тоже рабочая схема. Сторону булавки на
+        // линии решает исходная раскладка: 0 и 3 -- левые, 0 и 1 -- нижние
+        // (сцена перевёрнута по Y: нижние -- с меньшей Y).
+        const bool left = std::abs(lastPos_.x() - c.x()) > 1e-9 ? lastPos_.x() < c.x() : (idx == 0 || idx == 3);
+        pt.rx() = left ? std::min(pt.x(), c.x()) : std::max(pt.x(), c.x());
+        if(pointMode) {
+            const bool bottom = std::abs(lastPos_.y() - c.y()) > 1e-9 ? lastPos_.y() < c.y() : (idx == 0 || idx == 1);
+            pt.ry() = bottom ? std::min(pt.y(), c.y()) : std::max(pt.y(), c.y());
+        }
+        pos = place(pos, idx, pt, c, pointMode);
     }
 
     for(int i{}; i < 4; ++i)
         pins[i]->setPos(pos[i]);
     App::project().setPinsPos(pos.data());
-    updateFlipAxis(flipAxisX(), pos);
+    updateSymmetryMark(pointMode, c, pos);
 }
 
 void Pin::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsItem::mouseReleaseEvent(event);
-    if(moved) {
-        showFlipAxis(false);
-        GCode::regenerateGCodeFiles();
-    }
-    moved = false;
+    if(!std::exchange(moved, false))
+        return;
+    showSymmetryMark(false);
+    flipAxisMoved(pressFlipX_);
 }
 
 void Pin::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     if(!(flags() & QGraphicsItem::ItemIsMovable))
         return;
+    // Пересчёт -- здесь, а не в resetPos: тот зовётся и из Project::close
+    // (через layoutFrameUpdate), и из "Авторасстановки", где УП и так
+    // пересчитывают переставленные следом Home и Zero.
+    const double before = flipAxisX();
     resetPos();
+    flipAxisMoved(before);
     QGraphicsItem::mouseDoubleClickEvent(event);
 }
 
 void Pin::mousePressEvent(QGraphicsSceneMouseEvent* event) {
-    for(Pin* pin: App::pins())
-        pin->lastPos_ = pin->pos();
-    pressAxis_ = mirrorAxisX(positions(), usedFlags(), index());
+    // Несимметричная расстановка (из прежних версий, где булавку можно было
+    // тащить одну) выравнивается под режим с первым же движением, а не при
+    // открытии проекта: так сами не съедут ни зафиксированные, ни уже
+    // просверленные булавки.
+    const UsedFlags used = usedFlags();
+    const Positions base = conform(positions(), used, pointSymmetry());
+    const auto pins = App::pins();
+    for(int i{}; i < 4; ++i)
+        pins[i]->lastPos_ = base[i];
+    pressCenter_ = center(base, used);
+    pressFlipX_ = flipAxisX(); // по этой оси посчитаны нынешние УП
     QGraphicsItem::mousePressEvent(event);
 }
 void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
@@ -428,16 +447,24 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     });
 
     // Зафиксированные (после "Создать УП для булавок" -- программа сверловки
-    // уже стоит на их местах) не двигаются и отсюда, как и перетаскиванием.
+    // уже стоит на их местах; и при каждом запуске -- флаг не хранится) не
+    // двигаются и отсюда, как и перетаскиванием: смена режима тоже может их
+    // сдвинуть (conform). Пункты погашены, а подсказка говорит, что снять.
     const bool movable = flags() & QGraphicsItem::ItemIsMovable;
-    action = menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates…"), [] {
-        PinsDialog{App::grView.ptr(), PinsDialog::Coordinates}.exec();
+    const QString fixedHint = movable ? QString{} : tr("Uncheck \"Fixed\" to edit the pins.");
+    menu.setToolTipsVisible(true);
+    // Одно окно на координаты и привязку к отверстиям: прежние два пункта
+    // открывали один и тот же диалог.
+    action = menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("Pin &coordinates and snapping…"), [] {
+        PinsDialog{App::grView.ptr()}.exec();
     });
     action->setEnabled(movable);
-    action = menu.addAction(QIcon::fromTheme(u"drill"_s), tr("Snap pins to &drill holes…"), [] {
-        PinsDialog{App::grView.ptr(), PinsDialog::SnapToHoles}.exec();
-    });
-    action->setEnabled(movable && PinsDialog::hasHoles());
+    action->setToolTip(fixedHint);
+    action = menu.addAction(tr("Symmetry &point"), [](bool point) { setPointSymmetry(point); });
+    action->setCheckable(true);
+    action->setChecked(pointSymmetry());
+    action->setEnabled(movable);
+    action->setToolTip(fixedHint);
     menu.addSeparator();
 
     action = menu.addAction(tr("Fixed"), [](bool fl) {
@@ -451,7 +478,7 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         update();
         // Ось переворота считается по используемым булавкам -- а по ней
         // зеркалится нижняя сторона в УП.
-        if(flipAxisX() != axis) GCode::regenerateGCodeFiles();
+        flipAxisMoved(axis);
     });
     action->setCheckable(true);
     action->setChecked(App::project().pinUsed(index_));
@@ -464,11 +491,6 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
 }
 
 int Pin::type() const { return Type::MarkPin; }
-
-void Pin::setPinsPos(QPointF pos[]) {
-    for(int i{}; i < 4; ++i)
-        App::pins()[i]->setPos(pos[i]);
-}
 
 void Pin::resetPos(bool fl) {
     if(fl)
@@ -514,9 +536,11 @@ void Pin::updateToolTip() {
                    .arg(p.x())
                    .arg(p.y())
         + u"\n\n"_s
-        + tr("Drag: the pin and its mirror partner\n"
-             "Shift+drag: this pin only\n"
-             "Ctrl+drag: all pins together"));
+        + (pointSymmetry()
+                ? tr("Drag: all four pins about the symmetry point\n"
+                     "Ctrl+drag: all pins together with the symmetry point")
+                : tr("Drag: the pin and its mirror partner (the flip axis stays)\n"
+                     "Ctrl+drag: all pins together with the flip axis")));
 }
 
 void Pin::setPos(const QPointF& pos) {
@@ -554,44 +578,98 @@ double Pin::flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> 
     return sum[0] / count[0]; // ни одна не используется -- обе пары
 }
 
-double Pin::mirrorAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, int idx) {
-    const auto tier = [&](int i) { return int(used[i]) + int(used[partner(i)]); };
-    const auto mid = [&](int i) { return (pos[i].x() + pos[partner(i)].x()) * 0.5; };
-    const int other = idx ^ 2; // булавка другой пары
-    return tier(other) >= tier(idx) ? mid(other) : mid(idx);
+QPointF Pin::center(std::span<const QPointF, 4> pos, std::span<const bool, 4> used) {
+    // Y -- середина между серединами пар: у симметричной расстановки это и
+    // центр прямоугольника, и горизонталь точки.
+    const double bottom = (pos[0].y() + pos[1].y()) * 0.5;
+    const double top = (pos[2].y() + pos[3].y()) * 0.5;
+    return {flipAxisX(pos, used), (bottom + top) * 0.5};
 }
 
-Pin::Symmetry Pin::symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used) {
-    Symmetry sym;
-    sym.axis = flipAxisX(pos, used);
-    for(int i{}; i < 4; ++i) {
-        if(!used[i]) continue;
-        const QPointF mirrored{2.0 * sym.axis - pos[i].x(), pos[i].y()};
-        // Ближайшая используемая булавка, партнёр -- первым: при равенстве
-        // (пара слита в точку на оси) отчёт называет именно его.
-        for(int j: {partner(i), i, partner(i) ^ 2, i ^ 2}) {
-            if(!used[j]) continue;
-            const double d = QLineF{mirrored, pos[j]}.length();
-            if(sym.target[i] < 0 || d < sym.deviation[i] - 1e-9) {
-                sym.target[i] = j;
-                sym.deviation[i] = d;
-            }
-        }
-        sym.maxDeviation = std::max(sym.maxDeviation, sym.deviation[i]);
+Pin::Positions Pin::place(Positions pos, int idx, QPointF pt, QPointF c, bool pointMode) {
+    pos[idx] = pt;
+    pos[partner(idx)] = {2.0 * c.x() - pt.x(), pt.y()}; // зеркально через ось
+    if(pointMode) {
+        pos[idx ^ 2] = 2.0 * c - pt;                   // по диагонали -- через точку
+        pos[idx ^ 3] = {pt.x(), 2.0 * c.y() - pt.y()}; // та же X -- через горизонталь точки
     }
-    return sym;
+    return pos;
 }
+
+bool Pin::isSymmetric(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, bool pointMode, double eps) {
+    const QPointF c = center(pos, used);
+    const auto same = [eps](QPointF a, QPointF b) { return std::abs(a.x() - b.x()) <= eps && std::abs(a.y() - b.y()) <= eps; };
+    for(int i{}; i < 4; ++i) {
+        if(!same(pos[partner(i)], {2.0 * c.x() - pos[i].x(), pos[i].y()}))
+            return false;
+        if(pointMode && !same(pos[i ^ 2], 2.0 * c - pos[i]))
+            return false;
+    }
+    return true;
+}
+
+Pin::Positions Pin::conform(Positions pos, std::span<const bool, 4> used, bool pointMode) {
+    // Пересчёт симметричной дал бы сдвиги в последний знак: проект числился
+    // бы изменённым, а булавка уходила бы с отверстия, на котором стоит.
+    if(isSymmetric(pos, used, pointMode))
+        return pos;
+    // Ось -- прежняя: по ней посчитаны УП нижней стороны.
+    const double axis = flipAxisX(pos, used);
+    for(int i: {0, 2}) {
+        const int j = partner(i);
+        if(used[i] != used[j]) {
+            // Используется одна -- она и стоит (могла встать на отверстие),
+            // неиспользуемая отражается к ней.
+            const int u = used[i] ? i : j;
+            pos[partner(u)] = {2.0 * axis - pos[u].x(), pos[u].y()};
+        } else {
+            // Обе или ни одной -- пара встаёт на ось, сохранив ширину и
+            // среднюю высоту.
+            const double halfWidth = (pos[j].x() - pos[i].x()) * 0.5;
+            const double y = (pos[i].y() + pos[j].y()) * 0.5;
+            pos[i] = {axis - halfWidth, y};
+            pos[j] = {axis + halfWidth, y};
+        }
+    }
+    if(pointMode) {
+        // Прямоугольник: ширину задаёт пара, где используемых больше (при
+        // равенстве -- нижняя), вторая встаёт по диагонали через точку,
+        // сохранив свою высоту.
+        const auto tier = [&](int i) { return int(used[i]) + int(used[partner(i)]); };
+        const int d = tier(2) > tier(0) ? 2 : 0;
+        const QPointF c{axis, center(pos, used).y()};
+        for(int k: {d, partner(d)})
+            pos[k ^ 2] = 2.0 * c - pos[k];
+    }
+    return pos;
+}
+
+void Pin::flipAxisMoved(double before) {
+    // Пересчёт всех УП (скрипт на каждую, да ещё копия в буфер обмена) идёт
+    // секундами -- это и была пауза после отпускания булавки, хотя пара или
+    // точка, двигаясь вокруг стоящей оси, программ не меняют.
+    if(std::abs(flipAxisX() - before) > 1e-9)
+        GCode::regenerateGCodeFiles();
+}
+
+bool Pin::pointSymmetry() { return App::project().pinsPointSymmetry(); }
 
 namespace {
 
-class PinFlipAxis;
-PinFlipAxis* pinFlipAxis{}; // создаётся при первом показе, владеет сцена
+class PinSymmetryMark;
+PinSymmetryMark* pinSymmetryMark{}; // создаётся при первом показе, владеет сцена
+// Счётчик показов и скрытий метки: отложенное скрытие после смены режима
+// не гасит метку, которую с тех пор показали заново (тащат булавку, открыт
+// диалог).
+unsigned pinSymmetryMarkShows{};
 
-// Ось переворота -- вертикальный пунктир с запасом за крайние булавки.
-// Постоянно не показывается: линия через всю плату только мешала бы.
-class PinFlipAxis final : public QGraphicsItem {
+// Метка симметрии булавок -- пунктир с запасом за крайние булавки:
+// вертикаль оси переворота, в режиме точки ещё и горизонталь через точку
+// (перекрестье). Постоянно не показывается: линии через всю плату только
+// мешали бы.
+class PinSymmetryMark final : public QGraphicsItem {
 public:
-    PinFlipAxis() {
+    PinSymmetryMark() {
         setAcceptedMouseButtons(Qt::NoButton);
         setAcceptHoverEvents(false);
         // Под булавками, над всем остальным. У булавок max - index, но на
@@ -599,8 +677,8 @@ public:
         setZValue(std::numeric_limits<double>::max() * 0.5);
         setVisible(false);
     }
-    ~PinFlipAxis() override {
-        if(pinFlipAxis == this) pinFlipAxis = nullptr;
+    ~PinSymmetryMark() override {
+        if(pinSymmetryMark == this) pinSymmetryMark = nullptr;
     }
 
     int type() const override { return Gi::Type::MarkPinAxis; }
@@ -616,50 +694,88 @@ public:
         painter->save(); // вид рисует с DontSavePainterState
         painter->setPen(pen);
         painter->setBrush(Qt::NoBrush);
-        painter->drawLine(line_);
+        painter->drawLine(vLine_);
+        if(cross_) painter->drawLine(hLine_);
         painter->restore();
     }
 
-    void setLine(const QLineF& line) {
+    // hLine рисуется только при cross (режим точки).
+    void setLines(const QLineF& vLine, const QLineF& hLine, bool cross) {
         prepareGeometryChange();
-        line_ = line;
+        vLine_ = vLine;
+        hLine_ = hLine;
+        cross_ = cross;
+        QRectF rect = QRectF{vLine.p1(), vLine.p2()}.normalized();
+        if(cross) rect |= QRectF{hLine.p1(), hLine.p2()}.normalized();
         // Косметическое перо шириной в пиксель: запас в пару пикселей при
         // текущем масштабе, но не меньше миллиметра.
-        const double margin = std::max({1.0, line.length() * 0.01, App::viewScaleFactor() * 4.0});
-        rect_ = QRectF{line.p1(), line.p2()}.normalized().adjusted(-margin, -margin, margin, margin);
+        const double margin = std::max({1.0, std::max(rect.width(), rect.height()) * 0.01, App::viewScaleFactor() * 4.0});
+        rect_ = rect.adjusted(-margin, -margin, margin, margin);
         update();
     }
 
 private:
-    QLineF line_;
+    QLineF vLine_;
+    QLineF hLine_;
     QRectF rect_;
+    bool cross_{};
 };
 
 } // namespace
 
-void Pin::showFlipAxis(bool show) {
+void Pin::showSymmetryMark(bool show) {
+    ++pinSymmetryMarkShows;
     if(!show) {
-        if(pinFlipAxis) pinFlipAxis->hide();
+        if(pinSymmetryMark) pinSymmetryMark->hide();
         return;
     }
-    if(!pinFlipAxis) {
+    if(!pinSymmetryMark) {
         QGraphicsScene* scene = App::pin0().scene();
         if(!scene) return;
-        scene->addItem(pinFlipAxis = new PinFlipAxis);
+        scene->addItem(pinSymmetryMark = new PinSymmetryMark);
     }
-    updateFlipAxis(flipAxisX(), positions());
-    pinFlipAxis->show();
+    const UsedFlags used = usedFlags();
+    const Positions pos = positions();
+    updateSymmetryMark(pointSymmetry(), center(pos, used), pos);
+    pinSymmetryMark->show();
 }
 
-void Pin::updateFlipAxis(double axisX, std::span<const QPointF, 4> pos) {
-    if(!pinFlipAxis) return;
-    double minY{pos[0].y()}, maxY{minY};
+void Pin::updateSymmetryMark(bool pointMode, QPointF c, std::span<const QPointF, 4> pos) {
+    if(!pinSymmetryMark) return;
+    double minX{pos[0].x()}, maxX{minX}, minY{pos[0].y()}, maxY{minY};
     for(const QPointF& pt: pos) {
+        minX = std::min(minX, pt.x());
+        maxX = std::max(maxX, pt.x());
         minY = std::min(minY, pt.y());
         maxY = std::max(maxY, pt.y());
     }
-    const double margin = std::max(5.0, (maxY - minY) * 0.1);
-    pinFlipAxis->setLine({axisX, minY - margin, axisX, maxY + margin});
+    const double marginX = std::max(5.0, (maxX - minX) * 0.1);
+    const double marginY = std::max(5.0, (maxY - minY) * 0.1);
+    pinSymmetryMark->setLines({c.x(), minY - marginY, c.x(), maxY + marginY},
+        {minX - marginX, c.y(), maxX + marginX, c.y()}, pointMode);
+}
+
+void Pin::setPointSymmetry(bool point) {
+    if(pointSymmetry() == point)
+        return;
+    const double before = flipAxisX();
+    App::project().setPinsPointSymmetry(point);
+    // Расстановка, симметричная относительно оси, относительно точки может
+    // быть и несимметрична (трапеция) -- выровнять сразу, чтобы режим и то,
+    // что видно на сцене, не расходились до первого движения.
+    const Positions pos = conform(positions(), usedFlags(), point);
+    if(pos != positions()) {
+        Pin::setPos(pos.data());
+        App::project().setPinsPos(pos.data());
+    }
+    for(Pin* pin: App::pins())
+        pin->updateToolTip(); // подсказка описывает режим
+    // Метку -- ненадолго: видно, вокруг чего теперь ходят булавки.
+    showSymmetryMark(true);
+    QTimer::singleShot(1500, &App::pin0(), [shows = pinSymmetryMarkShows] {
+        if(shows == pinSymmetryMarkShows) showSymmetryMark(false);
+    });
+    flipAxisMoved(before);
 }
 
 } // namespace Gi

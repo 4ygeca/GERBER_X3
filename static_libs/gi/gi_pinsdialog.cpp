@@ -32,23 +32,36 @@
 #include <QScopedValueRollback>
 #include <QSettings>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <cmath>
 
 namespace Gi {
 
-PinsDialog::PinsDialog(QWidget* parent, Mode mode)
+PinsDialog::PinsDialog(QWidget* parent)
     : QDialog{parent}
     , orig_{Pin::positions()}
     , origUsed_{Pin::usedFlags()}
-    , pos_{orig_}
+    , origPointMode_{Pin::pointSymmetry()}
+    , pointMode_{origPointMode_}
+    // Окно сразу показывает симметричную расстановку: несимметричная (из
+    // прежних версий) выравнивается под режим. На сцене это лишь
+    // предпросмотр -- Cancel вернёт как было.
+    , pos_{Pin::conform(orig_, origUsed_, origPointMode_)}
     , used_{origUsed_}
     , sources_{holeSources()} {
     setObjectName(u"PinsDialog"_s);
     setWindowTitle(tr("Pins"));
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
 
-    QSettings settings;
-    settings.beginGroup(u"Pin"_s);
+    {
+        // Отсчёт от начала сцены, "держать пары симметричными" и допуск
+        // проверки симметрии больше не настраиваются -- ключи прежних версий
+        // не нужны.
+        QSettings settings;
+        settings.beginGroup(u"Pin"_s);
+        for(const QString& key: {u"relativeToZero"_s, u"keepSymmetric"_s, u"symmetryTolerance"_s})
+            settings.remove(key);
+    }
 
     auto makeSpinBox = [this](double min, double max) {
         auto* dsbx = new QDoubleSpinBox{this};
@@ -63,10 +76,16 @@ PinsDialog::PinsDialog(QWidget* parent, Mode mode)
         return dsbx;
     };
 
-    // Координаты
-    auto* gbxCoordinates = new QGroupBox{tr("Coordinates"), this};
-    chbxRelative_ = new QCheckBox{tr("Relative to the Zero point (G-code coordinates)"), gbxCoordinates};
-    chbxRelative_->setChecked(settings.value(u"relativeToZero"_s, true).toBool());
+    // Координаты. Отсчёт -- всегда от точки Zero, как в подсказке булавки,
+    // в строке состояния ("Zeroed") и в самой УП: другой отсчёт только путал.
+    auto* gbxCoordinates = new QGroupBox{tr("Coordinates relative to the Zero point (as in G-code)"), this};
+    chbxPoint_ = new QCheckBox{tr("Symmetry point: all four pins move together"), gbxCoordinates};
+    chbxPoint_->setToolTip(tr("Off: symmetry axis. Pins 1 ↔ 2 and 4 ↔ 3 are mirrored about the vertical flip axis,\n"
+                              "a pin moves together with its mirror partner.\n"
+                              "On: symmetry point. The pins form a rectangle centred on the point,\n"
+                              "a pin moves all four.\n"
+                              "In both modes the board is flipped around the vertical line through the axis or the point."));
+    chbxPoint_->setChecked(pointMode_);
 
     auto* grid = new QGridLayout;
     grid->addWidget(new QLabel{u"X"_s, gbxCoordinates}, 0, 1, Qt::AlignHCenter);
@@ -79,19 +98,22 @@ PinsDialog::PinsDialog(QWidget* parent, Mode mode)
         grid->addWidget(chbxUsed_[i] = new QCheckBox{gbxCoordinates}, i + 1, 3, Qt::AlignHCenter);
         chbxUsed_[i]->setChecked(used_[i]);
     }
-    grid->addWidget(new QLabel{tr("Flip axis X:"), gbxCoordinates}, 5, 0);
-    grid->addWidget(dsbxAxis_ = makeSpinBox(-10000, 10000), 5, 1);
-    dsbxAxis_->setToolTip(tr("Vertical axis the board is flipped around for the bottom side.\n"
-                             "Changing it moves all pins together."));
+    // Ось переворота (X) либо точка симметрии (X, Y) -- подпись и поле Y
+    // меняет setPointMode.
+    grid->addWidget(lblCenter_ = new QLabel{gbxCoordinates}, 5, 0);
+    grid->addWidget(dsbxCenterX_ = makeSpinBox(-10000, 10000), 5, 1);
+    grid->addWidget(dsbxCenterY_ = makeSpinBox(-10000, 10000), 5, 2);
+    dsbxCenterY_->setToolTip(tr("Centre of the pin rectangle. The board is flipped around the vertical line through it.\n"
+                                "Changing it moves all pins together."));
 
-    chbxKeepSymmetric_ = new QCheckBox{tr("Keep pairs symmetric (pins 1 ↔ 2 and 4 ↔ 3)"), gbxCoordinates};
-    chbxKeepSymmetric_->setToolTip(tr("Changing a pin also moves its mirror partner, the flip axis stays in place."));
-    chbxKeepSymmetric_->setChecked(settings.value(u"keepSymmetric"_s, true).toBool());
+    lblStatus_ = new QLabel{gbxCoordinates};
+    lblStatus_->setTextFormat(Qt::RichText);
+    lblStatus_->setWordWrap(true);
 
     auto* coordinatesLayout = new QVBoxLayout{gbxCoordinates};
-    coordinatesLayout->addWidget(chbxRelative_);
+    coordinatesLayout->addWidget(chbxPoint_);
     coordinatesLayout->addLayout(grid);
-    coordinatesLayout->addWidget(chbxKeepSymmetric_);
+    coordinatesLayout->addWidget(lblStatus_);
 
     // Отверстия
     auto* gbxHoles = new QGroupBox{tr("Drill holes"), this};
@@ -118,33 +140,15 @@ PinsDialog::PinsDialog(QWidget* parent, Mode mode)
     holesLayout->addWidget(lblSnap_, 1, 0, 1, 3);
     holesLayout->setColumnStretch(1, 1);
 
-    // Проверка симметрии
-    auto* gbxCheck = new QGroupBox{tr("Symmetry check"), this};
-    dsbxTolerance_ = makeSpinBox(0.001, 10);
-    dsbxTolerance_->setSingleStep(0.01);
-    dsbxTolerance_->setValue(settings.value(u"symmetryTolerance"_s, 0.05).toDouble());
-    dsbxTolerance_->setToolTip(tr("Allowed miss of a mirrored pin from its partner after flipping the board."));
-    lblStatus_ = new QLabel{gbxCheck};
-    lblStatus_->setTextFormat(Qt::RichText);
-    lblStatus_->setWordWrap(true);
-
-    auto* checkLayout = new QGridLayout{gbxCheck};
-    checkLayout->addWidget(new QLabel{tr("Tolerance:"), gbxCheck}, 0, 0);
-    checkLayout->addWidget(dsbxTolerance_, 0, 1);
-    checkLayout->addWidget(lblStatus_, 1, 0, 1, 3);
-    checkLayout->setColumnStretch(2, 1);
-
     auto* buttons = new QDialogButtonBox{QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this};
 
     auto* mainLayout = new QVBoxLayout{this};
     mainLayout->addWidget(gbxCoordinates);
     mainLayout->addWidget(gbxHoles);
-    mainLayout->addWidget(gbxCheck);
     mainLayout->addStretch();
     mainLayout->addWidget(buttons);
 
-    updateFields();
-
+    connect(chbxPoint_, &QCheckBox::toggled, this, &PinsDialog::setPointMode);
     for(int i{}; i < 4; ++i) {
         connect(dsbxX_[i], &QDoubleSpinBox::valueChanged, this, [this, i] { pinEdited(i, true); });
         connect(dsbxY_[i], &QDoubleSpinBox::valueChanged, this, [this, i] { pinEdited(i, false); });
@@ -154,23 +158,17 @@ PinsDialog::PinsDialog(QWidget* parent, Mode mode)
             updatePreview();
         });
     }
-    connect(dsbxAxis_, &QDoubleSpinBox::valueChanged, this, &PinsDialog::axisEdited);
-    connect(chbxRelative_, &QCheckBox::toggled, this, [this] {
-        updateFields();
-        updatePreview();
-    });
-    connect(dsbxTolerance_, &QDoubleSpinBox::valueChanged, this, [this] { updatePreview(); });
+    connect(dsbxCenterX_, &QDoubleSpinBox::valueChanged, this, [this] { centerEdited(true); });
+    connect(dsbxCenterY_, &QDoubleSpinBox::valueChanged, this, [this] { centerEdited(false); });
     connect(pbSnap_, &QPushButton::clicked, this, &PinsDialog::snapToHoles);
     connect(buttons, &QDialogButtonBox::accepted, this, &PinsDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &PinsDialog::reject);
 
-    Pin::showFlipAxis(true);
-    if(mode == SnapToHoles)
-        snapToHoles();
-    updatePreview();
+    Pin::showSymmetryMark(true);
+    setPointMode(pointMode_); // подписи по режиму, поля, предпросмотр
 }
 
-PinsDialog::~PinsDialog() { Pin::showFlipAxis(false); }
+PinsDialog::~PinsDialog() { Pin::showSymmetryMark(false); }
 
 std::vector<PinsDialog::HoleSource> PinsDialog::holeSources() {
     // Только круглые отверстия: у паза нет одной точки, куда встал бы штифт.
@@ -203,14 +201,28 @@ std::vector<PinsDialog::HoleSource> PinsDialog::holeSources() {
     return sources;
 }
 
-bool PinsDialog::hasHoles() { return !holeSources().empty(); }
+QPointF PinsDialog::origin() const { return App::zero.ptr() ? App::zero().pos() : QPointF{}; }
 
-QPointF PinsDialog::origin() const {
-    return chbxRelative_->isChecked() && App::zero.ptr() ? App::zero().pos() : QPointF{};
+void PinsDialog::setPointMode(bool point) {
+    pointMode_ = point;
+    // Ось -> точка: трапеция становится прямоугольником (ширину задаёт пара,
+    // где используемых больше). Точка -> ось: прямоугольник симметричен и
+    // относительно оси, ничего не двигается.
+    pos_ = Pin::conform(pos_, used_, pointMode_);
+    lblCenter_->setText(point ? tr("Symmetry point:") : tr("Flip axis X:"));
+    dsbxCenterX_->setToolTip(point ? dsbxCenterY_->toolTip()
+                                   : tr("Vertical axis the board is flipped around for the bottom side.\n"
+                                        "Changing it moves all pins together."));
+    dsbxCenterY_->setVisible(point);
+    updateFields();
+    updatePreview();
 }
 
 void PinsDialog::pinEdited(int idx, bool isX) {
     if(updating_) return;
+    // Центр -- до правки: в режиме точки его Y -- среднее по всем четырём, и
+    // правленая булавка увела бы его, а с ним и противоположную пару.
+    const QPointF c = Pin::center(pos_, used_);
     const QPointF org = origin();
     QPointF pt = pos_[idx];
     // Меняется только правленая координата: вторая осталась бы округлённой
@@ -219,24 +231,24 @@ void PinsDialog::pinEdited(int idx, bool isX) {
         pt.setX(dsbxX_[idx]->value() + org.x());
     else
         pt.setY(dsbxY_[idx]->value() + org.y());
-    if(chbxKeepSymmetric_->isChecked()) {
-        // Ось -- до правки и без правленой пары: она стоит, партнёр
-        // отражается относительно неё (см. Pin::mirrorAxisX).
-        const double axis = Pin::mirrorAxisX(pos_, used_, idx);
-        pos_[Pin::partner(idx)] = {2.0 * axis - pt.x(), pt.y()};
-    }
-    pos_[idx] = pt;
+    // Остальные -- по симметрии режима: партнёр зеркально через ось, в
+    // режиме точки ещё и вторая пара.
+    pos_ = Pin::place(pos_, idx, pt, c, pointMode_);
     updateFields();
     updatePreview();
 }
 
-void PinsDialog::axisEdited(double value) {
+void PinsDialog::centerEdited(bool isX) {
     if(updating_) return;
-    // Ось сдвигается вместе со всей расстановкой: при сдвиге всех булавок по X
-    // на одно и то же середины пар уходят ровно туда же.
-    const double delta = value + origin().x() - Pin::flipAxisX(pos_, used_);
+    // Ось (точка) сдвигается вместе со всей расстановкой: при сдвиге всех
+    // булавок на одно и то же середины пар уходят ровно туда же. Сдвиг -- только
+    // по правленой координате: вторая в поле округлена до трёх знаков.
+    const QPointF org = origin();
+    const QPointF c = Pin::center(pos_, used_);
+    const QPointF delta = isX ? QPointF{dsbxCenterX_->value() + org.x() - c.x(), 0.0}
+                              : QPointF{0.0, dsbxCenterY_->value() + org.y() - c.y()};
     for(QPointF& pt: pos_)
-        pt.rx() += delta;
+        pt += delta;
     updateFields();
     updatePreview();
 }
@@ -275,17 +287,28 @@ void PinsDialog::snapToHoles() {
     // Неиспользуемый партнёр привязанной булавки -- зеркально ей. Ось задают
     // уже привязанные отверстия, если есть пара с обеими используемыми
     // булавками; иначе ось ничем не задана -- остаётся прежняя.
-    if(chbxKeepSymmetric_->isChecked()) {
-        const bool fullPair = (used_[0] && used_[1]) || (used_[2] && used_[3]);
-        const double mirror = fullPair ? Pin::flipAxisX(pos_, used_) : axis;
-        for(int i{}; i < 4; ++i)
-            if(snapped[i] && !used_[Pin::partner(i)])
-                pos_[Pin::partner(i)] = {2.0 * mirror - pos_[i].x(), pos_[i].y()};
-    }
+    const bool fullPair = (used_[0] && used_[1]) || (used_[2] && used_[3]);
+    const double mirror = fullPair ? Pin::flipAxisX(pos_, used_) : axis;
+    for(int i{}; i < 4; ++i)
+        if(snapped[i] && !used_[Pin::partner(i)])
+            pos_[Pin::partner(i)] = {2.0 * mirror - pos_[i].x(), pos_[i].y()};
+    // Расстановка в окне всегда симметрична: несимметрично стоящие
+    // отверстия сдвигают булавки лишь до симметричного положения по режиму.
+    pos_ = Pin::conform(pos_, used_, pointMode_);
 
     lblSnap_->setText(info.join(u'\n'));
     updateFields();
     updatePreview();
+}
+
+std::vector<int> PinsDialog::unpairedPins() const {
+    const double axis = Pin::flipAxisX(pos_, used_);
+    std::vector<int> pins;
+    for(int i{}; i < 4; ++i)
+        // Булавка на самой оси после переворота встаёт в своё же отверстие.
+        if(used_[i] && !used_[Pin::partner(i)] && std::abs(pos_[i].x() - axis) > 1e-6)
+            pins.push_back(i);
+    return pins;
 }
 
 void PinsDialog::updateFields() {
@@ -295,68 +318,55 @@ void PinsDialog::updateFields() {
         dsbxX_[i]->setValue(pos_[i].x() - org.x());
         dsbxY_[i]->setValue(pos_[i].y() - org.y());
     }
-    dsbxAxis_->setValue(Pin::flipAxisX(pos_, used_) - org.x());
+    const QPointF c = Pin::center(pos_, used_);
+    dsbxCenterX_->setValue(c.x() - org.x());
+    dsbxCenterY_->setValue(c.y() - org.y());
 }
 
 void PinsDialog::updatePreview() {
     Pin::setPos(pos_.data());
-    const Pin::Symmetry sym = Pin::symmetry(pos_, used_);
-    Pin::updateFlipAxis(sym.axis, pos_);
+    // Метка -- по режиму окна, а не проекта: в проект он уйдёт только по OK.
+    const QPointF c = Pin::center(pos_, used_);
+    Pin::updateSymmetryMark(pointMode_, c, pos_);
 
-    const double tolerance = dsbxTolerance_->value();
-    const auto colored = [](const QString& text, bool bad) -> QString {
-        return (bad ? u"<span style=\"color:#e04040\">"_s : u"<span style=\"color:#30a030\">"_s) + text + u"</span>"_s;
+    const auto red = [](const QString& text) -> QString {
+        return u"<span style=\"color:#e04040\">"_s + text + u"</span>"_s;
     };
 
+    const QPointF org = origin();
     QStringList lines;
-    lines << tr("Flip axis: X = %1 mm").arg(sym.axis - origin().x(), 0, 'f', 3);
-    bool anyUsed{};
-    for(int i{}; i < 4; ++i) {
-        const int target = sym.target[i];
-        if(target < 0) continue;
-        anyUsed = true;
-        QString line = tr("Pin %1 → pin %2: %3 mm").arg(i + 1).arg(target + 1).arg(sym.deviation[i], 0, 'f', 3);
-        const bool bad = sym.deviation[i] > tolerance;
-        if(bad && !used_[Pin::partner(i)]) {
-            line += u' ';
-            line += tr("(pin %1 is not used)").arg(Pin::partner(i) + 1);
-        }
-        lines << (bad ? colored(line, true) : line);
-    }
-    if(!anyUsed)
-        lines << colored(tr("No pins are used."), true);
-    else if(sym.maxDeviation > tolerance)
-        lines << colored(tr("The deviation of %1 mm exceeds the tolerance: after flipping, the bottom side will be offset.")
-                             .arg(sym.maxDeviation, 0, 'f', 3),
-            true);
+    if(pointMode_)
+        lines << tr("Symmetry point: X = %1 mm, Y = %2 mm. The board is flipped around the vertical line through it.")
+                     .arg(c.x() - org.x(), 0, 'f', 3)
+                     .arg(c.y() - org.y(), 0, 'f', 3);
     else
-        lines << colored(tr("Symmetric within the tolerance: the board can be flipped on these pins."), false);
+        lines << tr("Flip axis: X = %1 mm").arg(c.x() - org.x(), 0, 'f', 3);
+    if(std::ranges::find(used_, true) == used_.end())
+        lines << red(tr("No pins are used."));
+    for(int i: unpairedPins())
+        lines << red(tr("Pin %1 is used, but its mirror partner, pin %2, is not: after flipping the board, there is no hole for pin %1.")
+                         .arg(i + 1)
+                         .arg(Pin::partner(i) + 1));
     lblStatus_->setText(lines.join(u"<br>"_s));
 }
 
-void PinsDialog::saveSettings() const {
-    QSettings settings;
-    settings.beginGroup(u"Pin"_s);
-    settings.setValue(u"relativeToZero"_s, chbxRelative_->isChecked());
-    settings.setValue(u"keepSymmetric"_s, chbxKeepSymmetric_->isChecked());
-    settings.setValue(u"symmetryTolerance"_s, dsbxTolerance_->value());
-}
-
 void PinsDialog::accept() {
-    const Pin::Symmetry sym = Pin::symmetry(pos_, used_);
-    const double tolerance = dsbxTolerance_->value();
-    if(sym.maxDeviation > tolerance
+    // Положения симметричны всегда, а флаги "Используется" -- нет: у
+    // используемой булавки без используемого партнёра после переворота нет
+    // отверстия.
+    if(!unpairedPins().empty()
         && QMessageBox::warning(this, windowTitle(),
-               tr("The pins are not symmetric about the flip axis: the deviation of %1 mm exceeds the tolerance of %2 mm.\n"
-                  "After flipping, the bottom side will be offset.\n\n"
-                  "Apply anyway?")
-                   .arg(sym.maxDeviation, 0, 'f', 3)
-                   .arg(tolerance, 0, 'f', 3),
+               tr("Some used pins have no used mirror partner: after flipping the board, there are no holes for them.\n\n"
+                  "Apply anyway?"),
                QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
             != QMessageBox::Yes)
         return;
 
-    saveSettings();
+    // По этой оси посчитаны нынешние УП нижней стороны.
+    const double before = Pin::flipAxisX(orig_, origUsed_);
+    // Режим -- первым: Pin::setPos ниже обновляет подсказки булавок, а они
+    // пишутся по режиму.
+    App::project().setPinsPointSymmetry(pointMode_);
     const auto pins = App::pins();
     // Флаги -- раньше пересчёта УП: от них зависит ось переворота.
     for(int i{}; i < 4; ++i)
@@ -366,11 +376,13 @@ void PinsDialog::accept() {
         }
     Pin::setPos(pos_.data());
     // Без изменений проект не помечается изменённым.
-    const bool moved = pos_ != orig_;
-    if(moved)
+    if(pos_ != orig_) {
         App::project().setPinsPos(pos_.data());
-    if(moved || used_ != origUsed_)
-        GCode::regenerateGCodeFiles();
+        // Расставлены вручную: сохранение УП не должно звать к
+        // авторасстановке -- она эту расстановку и снесла бы.
+        App::project().setPinsPlaced(true);
+    }
+    Pin::flipAxisMoved(before);
     QDialog::accept();
 }
 
@@ -386,7 +398,6 @@ void PinsDialog::keyPressEvent(QKeyEvent* event) {
 }
 
 void PinsDialog::reject() {
-    saveSettings();
     Pin::setPos(orig_.data()); // проект не трогали -- вернуть только сцену
     QDialog::reject();
 }
