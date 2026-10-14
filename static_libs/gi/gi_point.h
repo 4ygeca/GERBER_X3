@@ -122,6 +122,11 @@ public:
     // отверстии точно. Ось переворота сохраняет.
     static Positions conform(Positions pos, std::span<const bool, 4> used, bool pointMode);
 
+    // УП зависят от булавок только осью переворота: по ней зеркалится нижняя
+    // сторона. Сдвинулась относительно before -- пересчитать УП; нет --
+    // ничего не делать.
+    static void flipAxisMoved(double before);
+
     // Метка симметрии: пунктир оси, а в режиме точки -- перекрестье через
     // точку. Видна, пока булавку тащат или открыт диалог булавок.
     static void showSymmetryMark(bool show);
@@ -148,6 +153,7 @@ private:
     const uint index_;
     static inline int ctr_;
     static inline QPointF pressCenter_{}; // ось/точка симметрии в момент нажатия
+    static inline double pressFlipX_{};   // ось переворота, по которой посчитаны УП
     bool moved{};
 
 protected:

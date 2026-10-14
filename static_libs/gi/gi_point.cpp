@@ -357,17 +357,21 @@ void Pin::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 
 void Pin::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsItem::mouseReleaseEvent(event);
-    if(moved) {
-        showSymmetryMark(false);
-        GCode::regenerateGCodeFiles();
-    }
-    moved = false;
+    if(!std::exchange(moved, false))
+        return;
+    showSymmetryMark(false);
+    flipAxisMoved(pressFlipX_);
 }
 
 void Pin::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     if(!(flags() & QGraphicsItem::ItemIsMovable))
         return;
+    // Пересчёт -- здесь, а не в resetPos: тот зовётся и из Project::close
+    // (через layoutFrameUpdate), и из "Авторасстановки", где УП и так
+    // пересчитывают переставленные следом Home и Zero.
+    const double before = flipAxisX();
     resetPos();
+    flipAxisMoved(before);
     QGraphicsItem::mouseDoubleClickEvent(event);
 }
 
@@ -382,6 +386,7 @@ void Pin::mousePressEvent(QGraphicsSceneMouseEvent* event) {
     for(int i{}; i < 4; ++i)
         pins[i]->lastPos_ = base[i];
     pressCenter_ = center(base, used);
+    pressFlipX_ = flipAxisX(); // по этой оси посчитаны нынешние УП
     QGraphicsItem::mousePressEvent(event);
 }
 void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
@@ -473,7 +478,7 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         update();
         // Ось переворота считается по используемым булавкам -- а по ней
         // зеркалится нижняя сторона в УП.
-        if(flipAxisX() != axis) GCode::regenerateGCodeFiles();
+        flipAxisMoved(axis);
     });
     action->setCheckable(true);
     action->setChecked(App::project().pinUsed(index_));
@@ -639,6 +644,14 @@ Pin::Positions Pin::conform(Positions pos, std::span<const bool, 4> used, bool p
     return pos;
 }
 
+void Pin::flipAxisMoved(double before) {
+    // Пересчёт всех УП (скрипт на каждую, да ещё копия в буфер обмена) идёт
+    // секундами -- это и была пауза после отпускания булавки, хотя пара или
+    // точка, двигаясь вокруг стоящей оси, программ не меняют.
+    if(std::abs(flipAxisX() - before) > 1e-9)
+        GCode::regenerateGCodeFiles();
+}
+
 bool Pin::pointSymmetry() { return App::project().pinsPointSymmetry(); }
 
 namespace {
@@ -745,6 +758,7 @@ void Pin::updateSymmetryMark(bool pointMode, QPointF c, std::span<const QPointF,
 void Pin::setPointSymmetry(bool point) {
     if(pointSymmetry() == point)
         return;
+    const double before = flipAxisX();
     App::project().setPinsPointSymmetry(point);
     // Расстановка, симметричная относительно оси, относительно точки может
     // быть и несимметрична (трапеция) -- выровнять сразу, чтобы режим и то,
@@ -761,6 +775,7 @@ void Pin::setPointSymmetry(bool point) {
     QTimer::singleShot(1500, &App::pin0(), [shows = pinSymmetryMarkShows] {
         if(shows == pinSymmetryMarkShows) showSymmetryMark(false);
     });
+    flipAxisMoved(before);
 }
 
 } // namespace Gi

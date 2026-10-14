@@ -362,6 +362,8 @@ void PinsDialog::accept() {
             != QMessageBox::Yes)
         return;
 
+    // По этой оси посчитаны нынешние УП нижней стороны.
+    const double before = Pin::flipAxisX(orig_, origUsed_);
     // Режим -- первым: Pin::setPos ниже обновляет подсказки булавок, а они
     // пишутся по режиму.
     App::project().setPinsPointSymmetry(pointMode_);
@@ -374,15 +376,13 @@ void PinsDialog::accept() {
         }
     Pin::setPos(pos_.data());
     // Без изменений проект не помечается изменённым.
-    const bool moved = pos_ != orig_;
-    if(moved) {
+    if(pos_ != orig_) {
         App::project().setPinsPos(pos_.data());
         // Расставлены вручную: сохранение УП не должно звать к
         // авторасстановке -- она эту расстановку и снесла бы.
         App::project().setPinsPlaced(true);
     }
-    if(moved || used_ != origUsed_)
-        GCode::regenerateGCodeFiles();
+    Pin::flipAxisMoved(before);
     QDialog::accept();
 }
 
