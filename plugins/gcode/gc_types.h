@@ -287,6 +287,11 @@ public:
     // Открытое -- просто набор линий, площади у них нет.
     Geo::Polygons closedCurves; // pocketAreaPaths
     Geo::Polylines openCurves;
+    // Внешняя граница стороны Outer -- контур платы или её рамка (растр HLDI
+    // засветки маски). Разрешает её форма в GUI-потоке: расчёт идёт рабочим, и
+    // ни проекта, ни сцены там не читают. Пусто -- прежняя рамка по габариту
+    // выделения (Creator::groupedPaths). В старых проектах ключа нет -- пусто.
+    Geo::Polygons boundary;
     // Траектории -- наборы линий, сгруппированные по проходам, а не регионы.
     std::vector<Geo::Polylines> supportCurvess;
     std::vector<Geo::Polylines> toolPathss;
