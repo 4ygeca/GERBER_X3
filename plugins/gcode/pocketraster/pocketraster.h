@@ -23,6 +23,10 @@ public:
     ~Creator() override = default;
 
     static inline const QString AccDistance = u"AccDistance"_s;
+    // Выбор внешней границы растра HLDI снаружи (Form::Border) -- только для
+    // правки формой: сама граница уже лежит в Params::boundary, расчёт этот
+    // ключ не читает.
+    static inline const QString Border = u"Border"_s;
     static inline const QString Fast = u"Fast"_s;
     static inline const QString Pass = u"Pass"_s;
     static inline const QString UseAngle = u"UseAngle"_s;

@@ -87,6 +87,12 @@ protected:
     virtual void updateName() = 0;
 
     const Params& getNewGcpWithGi();
+    // Выделенный элемент, который в материал не идёт вовсе (растр HLDI
+    // снаружи: контур платы -- граница засветки, а не медь). Такой элемент
+    // getNewGcpWithGi пропускает целиком: ни в геометрию, ни в источники УП
+    // (GrItems -- по ним подписи «Source:» и имя новой группы), ни в выбор
+    // стороны платы.
+    virtual bool skipGi(const Gi::Item* gi [[maybe_unused]]) const { return false; }
 
     Direction direction = Climb;
     SideOfMilling side = Outer;

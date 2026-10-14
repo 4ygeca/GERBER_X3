@@ -532,6 +532,7 @@ const Params& Form::getNewGcpWithGi() {
     Geo::Polylines closedContours;
     for(auto* gi: App::grView().selectedItems<Gi::Item>()) {
         qDebug() << gi << gi->file();
+        if(skipGi(gi)) continue;
         // switch(gi->type()) {
         // case Gi::Type::DataSolid:
         // gcp.closedPaths.append(gi->curves());

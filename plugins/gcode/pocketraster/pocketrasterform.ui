@@ -67,7 +67,7 @@
    </item>
    <item row="2" column="0" colspan="3">
     <layout class="QGridLayout" name="gridLayout">
-     <item row="2" column="0">
+     <item row="3" column="0" colspan="2">
       <widget class="QGroupBox" name="groupBox_4">
        <property name="enabled">
         <bool>true</bool>
@@ -111,6 +111,69 @@
           </property>
          </widget>
         </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayoutBorder">
+          <item>
+           <widget class="QLabel" name="labelBorder">
+            <property name="text">
+             <string>Outer border:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="cbxBorder">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="toolTip">
+             <string>Where the HLDI raster outside ends.
+Auto: the board outline layer if it encloses the selected objects,
+otherwise the board border (violet frame),
+otherwise about 1 mm beyond the selected objects.</string>
+            </property>
+            <property name="sizeAdjustPolicy">
+             <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
+            </property>
+            <property name="minimumContentsLength">
+             <number>8</number>
+            </property>
+            <item>
+             <property name="text">
+              <string>Auto</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Board outline layer</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Board border (violet frame)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Selection extent</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblBorder">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -140,7 +203,7 @@
        </layout>
       </widget>
      </item>
-     <item row="3" column="0">
+     <item row="2" column="0">
       <widget class="QGroupBox" name="groupBox_2">
        <property name="enabled">
         <bool>true</bool>
@@ -187,7 +250,7 @@
        </layout>
       </widget>
      </item>
-     <item row="1" column="1" rowspan="3">
+     <item row="1" column="1" rowspan="2">
       <widget class="QLabel" name="lblPixmap">
        <property name="enabled">
         <bool>true</bool>
