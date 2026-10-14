@@ -826,7 +826,12 @@ void Form::computePaths() {
         }
     }
 
-    if(revealId > -1) GCode::layoutAndReveal(revealId);
+    if(revealId > -1) {
+        GCode::layoutAndReveal(revealId);
+        // Готовую УП -- в буфер обмена, как у асинхронных веток (их копирует
+        // GCode::Form::fileHandler): пазы и простые точки идут мимо него.
+        if(auto* ready = App::project().file<GCode::File>(revealId)) ready->copyToClipboard();
+    }
 
     QTimer::singleShot(1, Qt::CoarseTimer, [this] { header->onChecked(); });
 }
