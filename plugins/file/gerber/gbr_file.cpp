@@ -19,6 +19,7 @@
 #include "geo/util.h"
 #include "gi_datapath.h"
 #include "gi_datasolid.h"
+#include "gi_point.h"
 #include "graphicsview.h"
 #include <QElapsedTimer>
 #include <algorithm>
@@ -26,6 +27,7 @@
 #include <cmath>
 #include <forward_list>
 #include <gi_dbg.h>
+#include <numeric>
 #include <optional>
 #include <qglobal.h>
 #include <utility>
@@ -485,6 +487,38 @@ Geo::Polygons File::mergeCompensated() const {
     return done;
 }
 
+bool File::isBoardOutlineFile() const {
+    if(fileFunction_ == static_cast<int32_t>(Attr::File::Profile)) return true;
+    // X2 назвал слой чем-то другим -- имени файла не верим.
+    if(fileFunction_ >= 0) return false;
+    const QString name = shortName();
+    return name.contains(u"Edge_Cuts"_s, Qt::CaseInsensitive)
+        || name.contains(u"Edge.Cuts"_s, Qt::CaseInsensitive)
+        || name.endsWith(u".gm1"_s, Qt::CaseInsensitive)
+        || name.endsWith(u".gml"_s, Qt::CaseInsensitive);
+}
+
+Geo::Polylines File::boardOutlineCurves() const {
+    // Из объектов файла, а не из элементов сцены: те есть только у видимого
+    // вида (Normal -- слитые тела, ApPaths -- осевые без повторов лишь при
+    // skipDuplicates), а контур нужен при любом виде и скрытом слое.
+    const bool whole = isBoardOutlineFile();
+    Geo::Polylines curves;
+    for(const GrObject& go: graphicObjects_) {
+        if(go.path.size() < 2 || go.state.imgPolarity() != Positive) continue; // вспышки пути не имеют
+        if(whole || go.state.aperFunction() == Attr::Aperture::Profile)
+            curves.push_back(go.path);
+    }
+    if(curves.empty()) return {};
+    Geo::transform(curves, transform_.toQTransform());
+    return uniqueCurves(std::move(curves));
+}
+
+bool File::isBoardOutlineItem(const Gi::Item* item) const {
+    if(!item || item->file() != this) return false;
+    return isBoardOutlineFile() || r::binary_search(outlineItems_, item);
+}
+
 bool File::hasX2() const {
     return !nets_.empty() || r::any_of(graphicObjects_, [](const GrObject& go) { return go.state.aperFunction() >= 0; });
 }
@@ -766,6 +800,43 @@ std::vector<int64_t> File::objectKeys(std::span<Gi::Item* const> items) const {
     return keys;
 }
 
+// Тот же приём, что и в copperNets: объект целиком в одном теле, и хватает
+// одной его внутренней точки. Тело -- контур платы, если в нём есть объекты
+// Profile и нет ни одного другого: площадка, задевшая край (полуотверстия),
+// сливается с обводкой, и такое тело остаётся материалом.
+std::vector<uint8_t> File::outlineBodies(const Geo::Polygons& copper) const {
+    std::vector<uint8_t> outline(copper.size());
+    const auto isProfile = [](const GrObject& go) { return go.state.aperFunction() == Attr::Aperture::Profile; };
+    if(isBoardOutlineFile() || r::none_of(graphicObjects_, isProfile)) return outline;
+
+    std::vector<QRectF> rects;
+    rects.reserve(copper.size());
+    for(const Geo::Polygon& body: copper) rects.push_back(body.boundingRect());
+    const auto bodyOf = [&](const GrObject& go, std::span<const size_t> candidates) -> std::optional<size_t> {
+        const auto pt = interiorPoint(go);
+        if(!pt) return std::nullopt;
+        for(size_t k: candidates)
+            if(rects[k].contains(*pt) && copper[k].contains(*pt)) return k;
+        return std::nullopt;
+    };
+
+    std::vector<size_t> all(copper.size());
+    std::iota(all.begin(), all.end(), size_t{});
+    for(const GrObject& go: graphicObjects_)
+        if(go.state.imgPolarity() == Positive && isProfile(go))
+            if(const auto k = bodyOf(go, all)) outline[*k] = 1;
+
+    std::vector<size_t> found;
+    for(size_t k{}; k < outline.size(); ++k)
+        if(outline[k]) found.push_back(k);
+    if(found.empty()) return outline;
+
+    for(const GrObject& go: graphicObjects_)
+        if(go.state.imgPolarity() == Positive && !isProfile(go))
+            if(const auto k = bodyOf(go, found)) outline[*k] = 0;
+    return outline;
+}
+
 QString File::netsToolTip(std::span<const int32_t> nets) const {
     QStringList names;
     for(int32_t id: nets) names.push_back(netName(id));
@@ -776,17 +847,21 @@ QString File::netsToolTip(std::span<const int32_t> nets) const {
 
 void File::createGi() {
     netItems_.assign(nets_.size(), {});
+    outlineItems_.clear();
     shorts_ = 0;
+    const bool partOutline = !isBoardOutlineFile();
 
     if constexpr(1) { // fill copper
         const Geo::Polygons& copper = groupedPaths();
         const auto nets = copperNets(copper);
+        const auto outline = outlineBodies(copper);
         for(size_t k{}; const Geo::Polygon& paths: copper) {
             // Gi::Debug(paths);
             Gi::Item* item = new Gi::DataFill{Geo::Polygons{paths}, this};
             item->setToolTip(netsToolTip(nets[k]));
             if(nets[k].size() > 1) ++shorts_; // см. netsToolTip
             for(int32_t net: nets[k]) netItems_[net].push_back(item);
+            if(outline[k]) outlineItems_.push_back(item);
             ++k;
             itemGroups_[Normal]->push_back(item);
         }
@@ -831,11 +906,13 @@ void File::createGi() {
             Gi::Item* item = new Gi::DataPath{{go.path}, this};
             item->setToolTip(netName(go.state.net()));
             if(go.state.net() >= 0) netItems_[go.state.net()].push_back(item);
+            if(partOutline && go.state.aperFunction() == Attr::Aperture::Profile) outlineItems_.push_back(item);
             itemGroups_[ApPaths]->push_back(item);
         }
 
         itemGroups_[ApPaths]->shrink_to_fit();
     }
+    r::sort(outlineItems_);
 
     bool zeroLine{};
     for(auto& [dCode, ap]: apertures_)
