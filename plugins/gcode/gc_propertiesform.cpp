@@ -18,6 +18,7 @@
 #include "project.h"
 #include "settings.h"
 #include <QMessageBox>
+#include <QScopedValueRollback>
 
 namespace GCode {
 
@@ -56,6 +57,36 @@ PropertiesForm::PropertiesForm(QWidget* parent)
     connect(ui->sbxStepsX, &QSpinBox::valueChanged, App::project.ptr(), &Project::setStepsX);
     connect(ui->sbxStepsY, &QSpinBox::valueChanged, App::project.ptr(), &Project::setStepsY);
 
+    // Поля, от которых зависит текст УП: Home/Zero (маркеры) и мультипликация
+    // (шаг и число копий, по ним скрипты раскладывают копии). Применяются они
+    // сразу (выше), а УП пересобираются один раз -- когда правка закончена:
+    // ушёл фокус или нажат Enter (editingFinished), либо OK. До тех пор
+    // отложенный пересчёт ждёт (isEditing), иначе вставал бы на каждую цифру.
+    // Шаг и число копий пересчёт заказывают и сами (LayoutFrames::updateRect),
+    // Home/Zero -- здесь.
+    auto edited = [this](QAbstractSpinBox* box, bool requestRegen) {
+        // Поля Home/Zero вслед за маркером пишет updatePosDsbxs -- на каждое
+        // движение мыши, пока маркер тащат (поля с тремя знаками округляют
+        // положение, и значение меняется почти всегда). Пересчёт тогда -- по
+        // отпусканию маркера, а не здесь.
+        if(syncingPos_) return;
+        if(box->hasFocus())
+            editing_ = true; // набор, стрелки, колесо -- ждём конца правки
+        else if(requestRegen)
+            scheduleRegenerateGCodeFiles(); // кнопки сброса, откат к снимку
+    };
+    for(QDoubleSpinBox* box: {ui->dsbxHomeX, ui->dsbxHomeY, ui->dsbxZeroX, ui->dsbxZeroY})
+        connect(box, &QDoubleSpinBox::valueChanged, this, [edited, box] { edited(box, true); });
+    for(QDoubleSpinBox* box: {ui->dsbxSpaceX, ui->dsbxSpaceY})
+        connect(box, &QDoubleSpinBox::valueChanged, this, [edited, box] { edited(box, false); });
+    for(QSpinBox* box: {ui->sbxStepsX, ui->sbxStepsY})
+        connect(box, &QSpinBox::valueChanged, this, [edited, box] { edited(box, false); });
+    for(QAbstractSpinBox* box: std::initializer_list<QAbstractSpinBox*>{ui->dsbxHomeX, ui->dsbxHomeY, ui->dsbxZeroX,
+            ui->dsbxZeroY, ui->dsbxSpaceX, ui->dsbxSpaceY, ui->sbxStepsX, ui->sbxStepsY})
+        connect(box, &QAbstractSpinBox::editingFinished, this, [this] {
+            if(std::exchange(editing_, false)) scheduleRegenerateGCodeFiles();
+        });
+
     connect(ui->dsbxClearence, &QDoubleSpinBox::valueChanged, App::project.ptr(), &Project::setClearence);
     connect(ui->dsbxPlunge, &QDoubleSpinBox::valueChanged, App::project.ptr(), &Project::setPlunge);
     connect(ui->dsbxSafeZ, &QDoubleSpinBox::valueChanged, App::project.ptr(), &Project::setSafeZ);
@@ -79,6 +110,7 @@ PropertiesForm::PropertiesForm(QWidget* parent)
     load();
 
     connect(ui->pbOk, &QPushButton::clicked, [this, parent] {
+        editing_ = false; // пересчёт ниже -- за всё сразу, и сразу
         regenerateGCodeFiles();
         if(ui->dsbxThickness->value() > 0.0
             && ui->dsbxCopperThickness->value() > 0.0
@@ -133,6 +165,9 @@ void PropertiesForm::showEvent(QShowEvent* event) {
 void PropertiesForm::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     if(!committed_) applySnapshot(snapshot_);
+    // Скрытой форме править нечего: начатая правка (и откат снимка в поле с
+    // фокусом) -- в пересчёт сейчас, не дожидаясь ухода фокуса.
+    if(std::exchange(editing_, false)) scheduleRegenerateGCodeFiles();
 }
 
 void PropertiesForm::applySnapshot(const Snapshot& s) {
@@ -156,7 +191,11 @@ void PropertiesForm::applySnapshot(const Snapshot& s) {
 }
 
 void PropertiesForm::updatePosDsbxs() {
-    regenerateGCodeFiles();
+    // Пересчёта УП здесь нет: метод зовут на каждое движение мыши, пока
+    // маркер тащат, и пересчёт всех УП на каждое движение подвешивал программу.
+    // Пересобирает тот, кто маркер сдвинул: отпускание, двойной щелчок,
+    // авторасстановка, рамка (LayoutFrames::updateRect).
+    const QScopedValueRollback syncing{syncingPos_, true};
     ui->dsbxHomeX->setValue(App::home().pos().x());
     ui->dsbxHomeY->setValue(App::home().pos().y());
     ui->dsbxZeroX->setValue(App::zero().pos().x());

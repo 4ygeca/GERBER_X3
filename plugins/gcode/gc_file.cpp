@@ -15,6 +15,7 @@
 #include "gc_node.h"
 #include "gc_plugin.h"
 #include "gc_programdialog.h"
+#include "gc_propertiesform.h"
 
 #include "app.h"
 #include "gi.h"
@@ -27,13 +28,16 @@
 #include "plugintypes.h"
 #include "project.h"
 
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJSEngine>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QTimer>
 #include <algorithm>
 
 #undef emit
@@ -42,12 +46,98 @@
 
 namespace GCode {
 
-void regenerateGCodeFiles() {
-    // r::for_each(App::project().files<File>(), &File::regenerate);
+namespace {
+
+// Имена здесь -- с приставкой gcRegen: unity build склеивает .cpp цели
+// пачками, и безымянное пространство у них на всех одно.
+
+// Пересобрать files. Курсор ожидания -- на всё время: секунды без отклика
+// иначе выглядят зависанием. Окно просмотра обновляется только открытое:
+// lines2() и подсветка с разбором для 3D у большой УП сами недёшевы.
+void gcRegenFiles(const std::vector<File*>& files) {
+    if(files.empty()) return;
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    for(File* file: files) {
+        file->regenerate();
+        if(Dialog::isOpen(file->id()))
+            Dialog::programChanged(file->id(), file->lines2(), file->name());
+    }
+    QGuiApplication::restoreOverrideCursor();
+}
+
+// Отложенный пересчёт: какие УП его ждут.
+//
+// УП запоминаются в момент запроса (только как адреса -- для сравнения, не
+// для обращения), а при срабатывании из них берутся только оставшиеся в
+// проекте. Удалённые так выпадают сами, а появившиеся после запроса (новый
+// расчёт, замена на месте, другой открытый проект) и так только что собраны.
+// Без этого пересобрался бы целиком следующий открытый проект: закрытие
+// текущего само шлёт запрос (hideEvent формы свойств откатывает поля,
+// Project::close сбрасывает шаги мультипликации -> LayoutFrames::updateRect).
+std::vector<File*> gcRegenQueue;
+
+// Номер последнего взвода. Срабатывает только его таймер, прежние гаснут
+// вхолостую: новый запрос отодвигает пересчёт, и серия (колесо над полем
+// шага, повтор клавиши) даёт один пересчёт после паузы, а не по шагу.
+unsigned gcRegenTicket{};
+
+// Задержка, а не 0: singleShot(0) -- обычное событие в очереди, и оно
+// обгоняет перерисовку (у неё пониженный приоритет). Отпустили булавку --
+// пунктир оси так и висел бы на экране все секунды пересчёта.
+constexpr int gcRegenDelayMs = 100;
+
+void gcRegenFire();
+
+// Контекст -- проект: умер он, и ждущий вызов снимается вместе с ним.
+void gcRegenArm() {
+    QTimer::singleShot(gcRegenDelayMs, App::project.ptr(), [ticket = ++gcRegenTicket] {
+        if(ticket == gcRegenTicket) gcRegenFire();
+    });
+}
+
+// Пересчёт пока рано начинать: он встал бы посреди действия пользователя.
+bool gcRegenOnHold() {
+    // Кнопка мыши нажата -- жест не окончен: тащат булавку или маркер,
+    // держат стрелку счётчика. Так сливаются и запросы одного щелчка: поле
+    // теряет фокус на нажатии OK, а сам OK (с полным пересчётом) приходит на
+    // отпускании.
+    if(QGuiApplication::mouseButtons() != Qt::NoButton) return true;
+    // В форме свойств ещё правят поле (набор, стрелки, колесо): ждём конца
+    // правки -- ухода фокуса или Enter, -- а не пересчитываем на каждую цифру.
+    auto* form = App::gcPropertiesForm.ptr();
+    return form && form->isEditing();
+}
+
+void gcRegenFire() {
+    if(gcRegenOnHold()) return gcRegenArm();
+    const auto queued = std::exchange(gcRegenQueue, {});
+    // Маркеры удаляются вместе с окном, а текст УП их читает (Home/Zero).
+    if(!App::home.ptr() || !App::zero.ptr()) return;
     auto files = App::project().files<File>();
-    std::for_each( // std::execution::par_unseq,
-        files.begin(), files.end(),
-        [](File* f) { f->regenerate(); });
+    std::erase_if(files, [&queued](File* file) { return !r::contains(queued, file); });
+    gcRegenFiles(files);
+}
+
+// Файл в пересчёт: всех сторон или только своей.
+bool gcRegenSideOf(const File* file, Side side) { return side == NullSide || file->side() == side; }
+
+} // namespace
+
+void regenerateGCodeFiles(Side side) {
+    auto files = App::project().files<File>();
+    std::erase_if(files, [side](File* file) { return !gcRegenSideOf(file, side); });
+    // Отложенный запрос на эти же УП исполняется здесь -- повторять его незачем.
+    std::erase_if(gcRegenQueue, [&files](File* file) { return r::contains(files, file); });
+    gcRegenFiles(files);
+}
+
+void scheduleRegenerateGCodeFiles(Side side) {
+    if(!App::project.ptr()) return;
+    for(File* file: App::project().files<File>())
+        if(gcRegenSideOf(file, side) && !r::contains(gcRegenQueue, file))
+            gcRegenQueue.push_back(file);
+    // Пересобирать нечего -- и таймер ни к чему.
+    if(!gcRegenQueue.empty()) gcRegenArm();
 }
 
 QString File::getLastDir() {
@@ -188,6 +278,10 @@ void File::initFrom(AbstractFile* file) {
 }
 
 void File::regenerate(unsigned sections) {
+    // Пост -- один раз на весь пересчёт: Settings::post() при каждом вызове
+    // сверяет файл поста с диском (stat), а нужен пост на каждую дугу и
+    // каждый комментарий.
+    post_ = &App::gcSettings().post();
     initSave();
     if(sections & Header) writeHeader();
     addInfo();
@@ -201,21 +295,29 @@ void File::regenerate(unsigned sections) {
             // файл без плагина (отладочный) -- текста не имеет
         } else if(scriptPath.isEmpty() || !QFile::exists(scriptPath)) {
             qCritical() << "GCode: no script for" << plugin->gcName() << scriptPath;
-            lines_.emplace_back(comment(u"ERROR: no G-code script for "_s + plugin->gcName()));
+            lines_.emplace_back(currentPost().comment(u"ERROR: no G-code script for "_s + plugin->gcName()));
         } else if(!runJsScript(scriptPath)) {
             qCritical() << "GCode: script failed" << scriptPath << jsError_;
-            lines_.emplace_back(comment(u"ERROR: G-code script failed: "_s + jsError_));
+            lines_.emplace_back(currentPost().comment(u"ERROR: G-code script failed: "_s + jsError_));
         }
     }
 
     if(sections & Footer) writeFooter();
 
     std::erase_if(lines_, std::bind(&QString::isEmpty, _1)); // remove epty lines
-    if(sections == All)
-        qApp->clipboard()->setText(lines_
-            | v::filter([post = &App::gcSettings().post()](QString& str) { return !post->isComment(str); })
-            | v::join_with(u'\n')
-            | r::to<QString>());
+    // Буфер обмена здесь не трогаем: regenerate() зовут и в рабочем потоке
+    // расчёта (конструкторы УП), и на каждый пересчёт всех УП. Текст новой УП
+    // копирует форма (copyToClipboard).
+    post_ = nullptr;
+}
+
+void File::copyToClipboard() const {
+    const Post& post = App::gcSettings().post();
+    QStringList text;
+    text.reserve(qsizetype(lines_.size()));
+    for(const QString& line: lines_)
+        if(!post.isComment(line)) text.push_back(line);
+    QGuiApplication::clipboard()->setText(text.join(u'\n'));
 }
 
 bool File::save(const QString& name) {
@@ -240,8 +342,10 @@ QString File::comment(const QString& text) { return App::gcSettings().post().com
 
 QString File::renderText(const std::vector<QString>& lines) { return App::gcSettings().post().renderText(lines); }
 
+Post& File::currentPost() { return post_ ? *post_ : App::gcSettings().post(); }
+
 Post::Context File::postContext() {
-    Post& post = App::gcSettings().post();
+    Post& post = currentPost();
     Post::Context ctx;
     ctx.laser = toolType == Tool::Laser;
     ctx.name = shortName();
@@ -274,7 +378,7 @@ void File::initSave() {
         for(bool& fl: kind)
             fl = false;
 
-    Post& post = App::gcSettings().post();
+    Post& post = currentPost();
     const bool laser = gcp.tool().type() == Tool::Laser;
     parseFormat(post.formatLinear(laser), formatFlags[Linear]);
     parseFormat(post.formatArc(laser), formatFlags[Arc]);
@@ -287,7 +391,7 @@ void File::initSave() {
 }
 
 void File::writeHeader() {
-    Post& post = App::gcSettings().post();
+    Post& post = currentPost();
     lines_.append_range(post.header(postContext()));
     if(toolType == Tool::Laser)
         lines_.emplace_back(formated({g0(), z(0)})); // Z0 for visible in Candle
@@ -307,7 +411,7 @@ void File::addSourceInfo() {
         // Файл мог быть удалён уже после расчёта: addInfo() зовётся при каждом
         // regenerate(), в том числе после перезагрузки проекта.
         auto* source = App::project().file(key.front());
-        lines_.emplace_back(comment(QObject::tr("\t         Source: %1 [%2]")
+        lines_.emplace_back(currentPost().comment(QObject::tr("\t         Source: %1 [%2]")
                 .arg(source ? source->shortName() : QObject::tr("#%1 (deleted)").arg(key.front()))
                 .arg(ids.size())));
     }
@@ -316,21 +420,22 @@ void File::addSourceInfo() {
 void File::addInfo() {
     const static auto side_{QObject::tr("Top|Bottom").split(u'|')};
     if(App::gcSettings().info()) {
-        lines_.emplace_back(comment(QObject::tr("\t           Name: %1").arg(shortName())));
+        const Post& post = currentPost();
+        lines_.emplace_back(post.comment(QObject::tr("\t           Name: %1").arg(shortName())));
         if(!programName_.isEmpty())
-            lines_.emplace_back(comment(QObject::tr("\t        Program: %1").arg(programName_)));
+            lines_.emplace_back(post.comment(QObject::tr("\t        Program: %1").arg(programName_)));
         addSourceInfo();
-        lines_.emplace_back(comment(QObject::tr("\t           Tool: %1").arg(gcp.tool().name())));
-        lines_.emplace_back(comment(QObject::tr("\t  Tool Stepover: %1").arg(gcp.tool().stepover())));
-        lines_.emplace_back(comment(QObject::tr("\t Feed Rate mm/s: %1").arg(gcp.tool().feedRate_mmPerSec())));
-        lines_.emplace_back(comment(QObject::tr("\tTool Pass Depth: %1").arg(gcp.tool().passDepth())));
-        lines_.emplace_back(comment(QObject::tr("\t          Depth: %1").arg(gcp.getDepth())));
-        lines_.emplace_back(comment(QObject::tr("\t           Side: %1").arg(side_[side()])));
+        lines_.emplace_back(post.comment(QObject::tr("\t           Tool: %1").arg(gcp.tool().name())));
+        lines_.emplace_back(post.comment(QObject::tr("\t  Tool Stepover: %1").arg(gcp.tool().stepover())));
+        lines_.emplace_back(post.comment(QObject::tr("\t Feed Rate mm/s: %1").arg(gcp.tool().feedRate_mmPerSec())));
+        lines_.emplace_back(post.comment(QObject::tr("\tTool Pass Depth: %1").arg(gcp.tool().passDepth())));
+        lines_.emplace_back(post.comment(QObject::tr("\t          Depth: %1").arg(gcp.getDepth())));
+        lines_.emplace_back(post.comment(QObject::tr("\t           Side: %1").arg(side_[side()])));
     }
 }
 
 void File::writeFooter() {
-    Post& post = App::gcSettings().post();
+    Post& post = currentPost();
     const Post::Context ctx = postContext();
     if(toolType == Tool::Laser) {
         lines_.emplace_back(post.laserOff(ctx));
@@ -463,7 +568,7 @@ std::vector<QString> File::savePath(const Geo::Polyline& srcCurve, double perime
     // оборот неоднозначен, а хордами он и так идёт по точкам, -- в этих
     // диалектах она остаётся двумя половинами.
     if(!zk && curve.closed && curve.size() == 2
-        && App::gcSettings().post().arcs() == Post::Arcs::IJ
+        && currentPost().arcs() == Post::Arcs::IJ
         && curve.front().bulge == curve.back().bulge
         && std::abs(std::abs(curve.front().bulge) - 1.0) < 1e-9) {
         const Geo::Vertex& start = curve.front();
@@ -487,7 +592,7 @@ std::vector<QString> File::savePath(const Geo::Polyline& srcCurve, double perime
 // (спираль), так что и хорды получают конечный z_: точнее по каждой хорде
 // набирать нечего -- разница в тысячные на длине одной хорды.
 void File::arcLines(std::vector<QString>& lines, const Geo::Vertex& fr, const Geo::Vertex& to, const Geo::Arc& arc) {
-    switch(App::gcSettings().post().arcs()) {
+    switch(currentPost().arcs()) {
     case Post::Arcs::IJ: {
         auto [I, J] = arc.center - static_cast<const QPointF&>(fr);
         lines.emplace_back(formated({g(fr), x(to.x()), y(to.y()), z(z_), i(I), j(J), strFeed, strSpindle}));
@@ -510,7 +615,7 @@ void File::arcLines(std::vector<QString>& lines, const Geo::Vertex& fr, const Ge
     }
     case Post::Arcs::Linear: {
         // Шаг по стрелке прогиба: хорда с отклонением от дуги не больше допуска.
-        const double tol = std::min(App::gcSettings().post().arcTolerance(), arc.radius);
+        const double tol = std::min(currentPost().arcTolerance(), arc.radius);
         const double step = 2.0 * std::acos(std::max(0.0, 1.0 - tol / arc.radius));
         const int n = std::max(1, static_cast<int>(std::ceil(std::abs(arc.theta) / std::max(step, 1e-6))));
         for(int k = 1; k <= n; ++k) {

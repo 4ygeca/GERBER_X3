@@ -643,8 +643,13 @@ void Project::setName(const QString& name) {
 }
 
 void Project::setChanged() {
-    isModified_ = true;
-    changed();
+    // Сигнал -- только на переходе в «изменён». Слушатель у него один
+    // (MainWindow::documentWasModified -> setWindowModified), а зовут
+    // setChanged на каждое движение булавки и маркера; Windows на каждый
+    // setWindowModified переписывает заголовок окна. Сброс флага save/close
+    // сигналят сами, а тихий (open, setModified) сопровождает явный
+    // setWindowModified(false) в MainWindow::setCurrentFile.
+    if(!std::exchange(isModified_, true)) changed();
 }
 
 bool Project::pinsPlacedMessage() {

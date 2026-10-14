@@ -102,6 +102,8 @@ Dialog* Dialog::showFor(int32_t fileId, const QString& text, const QString& wind
     return dialog;
 }
 
+bool Dialog::isOpen(int32_t fileId) { return openDialogs().contains(fileId); }
+
 void Dialog::programChanged(int32_t fileId, const QString& text, const QString& windowTitle) {
     auto& dialogs = openDialogs();
     if(auto it = dialogs.find(fileId); it != dialogs.end())
