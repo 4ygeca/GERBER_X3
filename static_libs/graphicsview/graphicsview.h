@@ -164,7 +164,7 @@ private:
     void onTransformChanged();
     template <class T>
     void animate(QObject* target, const QByteArray& propertyName, T begin, T end);
-    QPointF scenePos, rulPt1, rulPt2, pressPos;
+    QPointF scenePos, rulPt1, rulPt2;
 
     // Экранные украшения (перекрестье под курсором и мерная линейка) рисуются
     // поверх вьюпорта в его собственных координатах, а не в слое сцены: плечи
@@ -207,6 +207,51 @@ private:
     void zoomAt(QPointF viewPos, double factor);
     void showSceneContextMenu(const QMouseEvent* event);
 
+    // Рамка выделения -- своя, а не RubberBandDrag: у Qt::ItemSelectionOperation
+    // нет «вычесть», а AddToSelection не снимает задетое, когда рамку тянут
+    // обратно. Операция задаётся модификатором в момент нажатия, режим --
+    // направлением по горизонтали, как в KiCad: слева направо -- только
+    // целиком внутри (сплошная), справа налево -- всё задетое (пунктир).
+    enum class BandOp : uint8_t {
+        Replace, // без модификаторов
+        Add,     // Shift
+        Remove,  // Ctrl (и Ctrl+Shift)
+    };
+    static BandOp bandOp(Qt::KeyboardModifiers mods);
+    struct Band {
+        enum State : uint8_t {
+            Idle,   // ЛКМ не нажата или рамка здесь не положена
+            Armed,  // нажата, порог не пройден -- это ещё может быть щелчок
+            Active, // рамка тянется и правит выделение
+        } state{Idle};
+        BandOp op{BandOp::Replace};
+        bool fromItem{};        // нажали по неподвижному item'у -- на пороге отнять у него мышь
+        bool crossing{};        // тянут справа налево
+        bool appliedCrossing{}; // режим, которым выставлено выделение по applied
+        bool applyQueued{};     // смену вида досчитать одним проходом в конце такта
+        QPointF originScene;    // угол держится за точку СЦЕНЫ -- зум и прокрутка его не сдвигают
+        QPoint pressPx;         // вьюпорт: точка нажатия -- для порога
+        QPoint cursorPx;        // вьюпорт: второй угол
+        QRect rect;             // нарисованная рамка, вьюпорт
+        QRectF applied;         // она же в сцене -- по ней выделение уже выставлено
+        // Выделение до нажатия -- ТОЛЬКО contains(): файл могут перечитать
+        // посреди жеста, и указатели в нём повиснут.
+        QSet<QGraphicsItem*> base;
+    };
+    Band band_;
+    void pressLeft(QMouseEvent* event, bool doubleClick);
+    void armBand(QPointF pressPos, BandOp op, bool fromItem, QSet<QGraphicsItem*> base);
+    void updateBand(QPoint cursorPx);
+    void placeBand();
+    void applyBand();
+    void bandViewChanged();
+    void endBand();
+    // Esc посреди рамки: вернуть выделение, каким оно было до нажатия.
+    void cancelBand();
+    void drawBand(QPainter* painter) const;
+    static QRegion bandFrameRegion(const QRect& r);
+    static bool bandHit(const QGraphicsItem* item, const QRectF& band, bool crossing);
+
     void GiToShapeEvent(QMouseEvent* event, QGraphicsItem* item);
     // QWidget interface
 protected:
@@ -222,6 +267,8 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    bool event(QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
     // Фон рисует сам QGraphicsView кистью из setBackgroundBrush.
     void drawForeground(QPainter* painter, const QRectF& rect) override;
