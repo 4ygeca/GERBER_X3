@@ -405,16 +405,16 @@ void GraphicsView::scheduleSceneRectUpdate() {
 }
 
 void GraphicsView::addAnimated(QGraphicsItem* item) {
-    if(!r::contains(animated_, item)) animated_.push_back(item);
+    animated_.insert(item);
     updateAnimationTimer();
 }
 
 void GraphicsView::removeAnimated(QGraphicsItem* item) {
-    if(std::erase(animated_, item)) updateAnimationTimer();
+    if(animated_.remove(item)) updateAnimationTimer();
 }
 
 void GraphicsView::updateAnimationTimer() {
-    const bool need = !animated_.empty() && App::settings().animSelection();
+    const bool need = !animated_.isEmpty() && App::settings().animSelection();
     if(need && !animTimerId_)
         animTimerId_ = startTimer(40, Qt::CoarseTimer); // 25 Гц
     else if(!need && animTimerId_)
@@ -1037,12 +1037,13 @@ void GraphicsView::timerEvent(QTimerEvent* event) {
     // Период узора -- 4pi-1. Держим смещение внутри периода: прежний счётчик
     // int за долгую сессию уходил в переполнение.
     App::dashOffset() = std::fmod(App::dashOffset() + 1.0, 4 * std::numbers::pi - 1);
+    // std::as_const: неконстантный begin() у контейнеров Qt отсоединяет данные.
     if(animated_.size() > 256) { // много выделено -- один регион дешевле
         QRectF r;
-        for(auto* i: animated_) r |= i->sceneBoundingRect();
+        for(auto* i: std::as_const(animated_)) r |= i->sceneBoundingRect();
         scene()->invalidate(r, QGraphicsScene::ItemLayer);
     } else
-        r::for_each(animated_, [](QGraphicsItem* i) { i->update(); });
+        for(auto* i: std::as_const(animated_)) i->update();
 }
 
 #include "moc_graphicsview.cpp"

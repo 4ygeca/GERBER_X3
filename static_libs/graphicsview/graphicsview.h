@@ -15,6 +15,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsView>
 #include <QScreen>
+#include <QSet>
 #include <QSettings>
 
 #include <ranges>
@@ -175,7 +176,9 @@ private:
     void updateOverlay();
     QPoint cursorViewPos_;
 
-    std::vector<QGraphicsItem*> animated_;
+    // Множество, а не вектор: рамка и «выделить всё» меняют выделение у
+    // тысяч item'ов разом, и поиск по вектору делал это O(N²).
+    QSet<QGraphicsItem*> animated_;
     int animTimerId_{};
     void updateAnimationTimer();
 
