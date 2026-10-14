@@ -71,21 +71,18 @@ protected:
 // партнёра: пара обязана быть зеркальной относительно оси переворота. Ось же
 // ни к центру платы, ни к нулю УП не привязана -- она там, где стоят булавки
 // (flipAxisX), и по ней же зеркалится нижняя сторона в УП.
+//
+// Симметрия держится всегда, режим выбирается в проекте:
+//  * ось -- пары зеркальны относительно одной вертикали X = a; булавка ходит
+//    вместе со своим партнёром, ось стоит;
+//  * точка -- прямоугольник с центром в точке C; булавка тащит все четыре
+//    (как было исходно). Переворот и тут вокруг вертикали X = C.x.
+// Ctrl в обоих режимах сдвигает всю расстановку вместе с осью/точкой.
 class Pin : public QGraphicsObject {
     Q_OBJECT
 public:
     using Positions = std::array<QPointF, 4>;
     using UsedFlags = std::array<bool, 4>;
-
-    // Итог проверки расстановки на симметрию. Для каждой ИСПОЛЬЗУЕМОЙ
-    // булавки: на какую используемую булавку ложится её зеркальное
-    // отражение (на оси -- на саму себя) и на сколько оно промахивается.
-    struct Symmetry {
-        double axis{};
-        std::array<int, 4> target{-1, -1, -1, -1}; // -1 -- булавка не используется
-        std::array<double, 4> deviation{};         // мм
-        double maxDeviation{};
-    };
 
     Pin();
     ~Pin() override;
@@ -94,37 +91,41 @@ public:
     QPainterPath shape() const override;
     int type() const override;
 
-    static void setPinsPos(QPointF pos[4]);
-
-    static double minX() { return qMin(App::pin0().x(), App::pin1().x()); }
-    static double maxX() { return std::max(App::pin0().x(), App::pin1().x()); }
-    static double minY() { return qMin(App::pin0().y(), App::pin2().y()); }
-    static double maxY() { return std::max(App::pin0().y(), App::pin2().y()); }
-
-    // Зеркальный партнёр булавки: 0-1, 2-3.
+    // Зеркальный партнёр булавки: 0-1, 2-3. По диагонали -- idx ^ 2, с той
+    // же X -- idx ^ 3.
     static constexpr int partner(int idx) { return idx ^ 1; }
 
     static Positions positions(); // текущие, в координатах сцены
     static UsedFlags usedFlags(); // флаги "Используется" проекта
 
+    // Режим симметрии проекта: false -- ось, true -- точка.
+    static bool pointSymmetry();
+    // Сменить режим из меню булавки: проект, выравнивание расстановки под
+    // новый режим (conform), подсказки, ненадолго -- метка симметрии.
+    static void setPointSymmetry(bool point);
+
     // X оси переворота -- средняя из середин пар. Берутся пары, где
     // используются обе булавки; нет таких -- где хотя бы одна; нет и таких --
-    // все. У старых проектов булавки всегда стояли прямоугольником, середины
-    // пар совпадают -- ось та же, что прежняя (minX + maxX) / 2.
+    // все. У симметричной расстановки середины пар совпадают, и ось от флагов
+    // не зависит.
     static double flipAxisX();
     static double flipAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
-    // Ось, относительно которой зеркалится правка пары булавки idx: середина
-    // ДРУГОЙ пары, если та весит в flipAxisX не меньше (тот же или старший
-    // разряд "Используется"), иначе середина своей пары. Тогда flipAxisX после
-    // правки не сдвигается, а пара встаёт симметрично остальной расстановке --
-    // среднее двух несовпадающих середин уезжало бы с каждой правкой.
-    static double mirrorAxisX(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, int idx);
-    static Symmetry symmetry(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
+    // Центр симметрии: X -- ось переворота, Y -- посередине между парами.
+    static QPointF center(std::span<const QPointF, 4> pos, std::span<const bool, 4> used);
+    // Булавку idx -- в pt, остальные -- по симметрии режима относительно c:
+    // партнёр зеркально через вертикаль c.x, в режиме точки ещё и вторая
+    // пара (по диагонали -- через c, с той же X -- через горизонталь c.y).
+    static Positions place(Positions pos, int idx, QPointF pt, QPointF c, bool pointMode);
+    static bool isSymmetric(std::span<const QPointF, 4> pos, std::span<const bool, 4> used, bool pointMode, double eps = 1e-9);
+    // Привести расстановку к симметрии режима. Уже симметричную (в пределах
+    // 1e-9) возвращает как есть, без единого сдвига: булавка могла стоять на
+    // отверстии точно. Ось переворота сохраняет.
+    static Positions conform(Positions pos, std::span<const bool, 4> used, bool pointMode);
 
-    // Пунктир оси переворота. Виден, пока булавку тащат или открыт диалог
-    // булавок.
-    static void showFlipAxis(bool show);
-    static void updateFlipAxis(double axisX, std::span<const QPointF, 4> pos);
+    // Метка симметрии: пунктир оси, а в режиме точки -- перекрестье через
+    // точку. Видна, пока булавку тащат или открыт диалог булавок.
+    static void showSymmetryMark(bool show);
+    static void updateSymmetryMark(bool pointMode, QPointF c, std::span<const QPointF, 4> pos);
 
     int index() const { return static_cast<int>(index_); }
 
@@ -146,7 +147,7 @@ private:
     QPointF lastPos_; // положение в момент нажатия -- от него считается перетаскивание
     const uint index_;
     static inline int ctr_;
-    static inline double pressAxis_{}; // ось переворота в момент нажатия
+    static inline QPointF pressCenter_{}; // ось/точка симметрии в момент нажатия
     bool moved{};
 
 protected:
