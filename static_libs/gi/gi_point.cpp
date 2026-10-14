@@ -31,11 +31,14 @@
 bool updateRect() {
     QRectF rect(App::grView().getSelectedBoundingRect());
     if(rect.isEmpty()) {
+        // Кнопки -- набором Yes|No, а умолчание -- Yes: прежний вызов
+        // question(..., No, Yes) читался как «кнопка No, умолчание Yes», и
+        // согласиться в окне было просто нечем.
         if(QMessageBox::question(nullptr, {},
                QObject::tr("There are no selected items to define the border.\n"
                            "The old border will be used."),
-               QMessageBox::No, QMessageBox::Yes)
-            == QMessageBox::No)
+               QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes)
+            != QMessageBox::Yes)
             return false;
     }
     App::layoutFrames().updateRect();
