@@ -620,6 +620,9 @@ void MainWindow::createActionsService() {
             Gi::Pin::resetPos(false);
             App::home().resetPos(false);
             App::zero().resetPos(false);
+            // Один пересчёт УП на всю расстановку (Zero сдвигает все, булавки --
+            // нижнюю сторону, рамка -- раскладку копий), и уже после перерисовки.
+            GCode::scheduleRegenerateGCodeFiles();
         }
         ui.grView->zoomFit();
     }));

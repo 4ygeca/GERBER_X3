@@ -15,6 +15,7 @@
 #include "gc_node.h"
 #include "gc_plugin.h"
 #include "gc_programdialog.h"
+#include "gc_propertiesform.h"
 
 #include "app.h"
 #include "gi.h"
@@ -99,7 +100,11 @@ bool gcRegenOnHold() {
     // держат стрелку счётчика. Так сливаются и запросы одного щелчка: поле
     // теряет фокус на нажатии OK, а сам OK (с полным пересчётом) приходит на
     // отпускании.
-    return QGuiApplication::mouseButtons() != Qt::NoButton;
+    if(QGuiApplication::mouseButtons() != Qt::NoButton) return true;
+    // В форме свойств ещё правят поле (набор, стрелки, колесо): ждём конца
+    // правки -- ухода фокуса или Enter, -- а не пересчитываем на каждую цифру.
+    auto* form = App::gcPropertiesForm.ptr();
+    return form && form->isEditing();
 }
 
 void gcRegenFire() {

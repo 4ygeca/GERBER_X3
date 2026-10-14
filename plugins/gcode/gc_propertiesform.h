@@ -29,7 +29,11 @@ public:
 
     ~PropertiesForm() override;
 
+    // Поля Home/Zero -- вслед за маркерами. Только поля: УП не пересобирает.
     void updatePosDsbxs();
+    // Поле, от которого зависит текст УП (Home/Zero, мультипликация), ещё
+    // правят: отложенный пересчёт УП ждёт конца правки (editingFinished).
+    bool isEditing() const { return editing_; }
     void updateAll();
 
     void load();
@@ -50,6 +54,12 @@ private slots:
 private:
     Ui::GCodePropertiesForm* ui;
     bool committed_ = false;
+    // Поля Home/Zero пишет сама форма (updatePosDsbxs) -- это не правка
+    // пользователя, и пересчёта УП она не просит.
+    bool syncingPos_ = false;
+    // Поле с фокусом правят (набор, стрелки, колесо): УП пересоберутся, когда
+    // правка закончится (editingFinished), а не на каждое промежуточное значение.
+    bool editing_ = false;
 
     struct Snapshot {
         double safeZ{}, clearence{}, plunge{};

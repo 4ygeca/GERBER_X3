@@ -157,6 +157,13 @@ void Marker::setPosX(double x) {
         return;
     point.setX(x);
     setPos(point);
+    // Как и в setPosY: положение в проекте -- то, что уходит в файл проекта и
+    // в свойства УП для скриптов (properties.home/zero). Без этого правка X в
+    // поле формы терялась при сохранении проекта.
+    if(type_ == Home)
+        App::project().setHomePos(pos());
+    else
+        App::project().setZeroPos(pos());
 }
 
 void Marker::setPosY(double y) {
@@ -185,7 +192,14 @@ void Marker::updateGCPForm() {
     }
 }
 
+namespace {
+// Положение маркера в момент нажатия: по нему отпускание решает, сдвинулся ли
+// он на самом деле. Одно на оба маркера -- тащат всегда только один.
+QPointF markerPressPos;
+} // namespace
+
 void Marker::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if(!moved) markerPressPos = pos(); // первое движение -- маркер ещё там, где нажали
     QGraphicsItem::mouseMoveEvent(event);
     moved = true;
     setPos(App::settings().getSnappedPos(pos(), event->modifiers()));
@@ -195,18 +209,29 @@ void Marker::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 
 void Marker::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsItem::mouseReleaseEvent(event);
-    if(moved) GCode::regenerateGCodeFiles();
-    moved = false;
+    // УП пересобираются здесь, а не на каждом движении, и только если маркер
+    // и правда сдвинулся: щелчок с дрожанием мыши в пиксель (а с привязкой к
+    // сетке -- и побольше) оставляет его на месте. Zero сдвигает все УП, Home
+    // -- концовку лазерных.
+    if(std::exchange(moved, false) && pos() != markerPressPos)
+        GCode::scheduleRegenerateGCodeFiles();
 }
 
 void Marker::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     if(!(flags() & QGraphicsItem::ItemIsMovable))
         return;
+    // Двойной щелчок ставит маркер по рамке, а рамку -- по выделенному
+    // (updateRect). УП зависят от обоих: от рамки -- раскладка копий
+    // мультипликации. Не сдвинулось ни то, ни другое -- и пересчёт ни к чему.
+    const QPointF before = pos();
+    const QRectF workRect = App::project().worckRect();
     resetPos();
     // QMatrix matrix(scene()->views().first()->matrix());
     // matrix.translate(-pos().x(), pos().y());
     // scene()->views().first()->setMatrix(matrix);
     updateGCPForm();
+    if(pos() != before || App::project().worckRect() != workRect)
+        GCode::scheduleRegenerateGCodeFiles();
     QGraphicsItem::mouseDoubleClickEvent(event);
 }
 void Marker::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
@@ -782,6 +807,9 @@ void LayoutFrames::updateRect(bool fl) {
         App::home().resetPos(false);
         App::zero().resetPos(false);
         Gi ::Pin::resetPos(false);
+        // Шаг или число копий мультипликации: по ним скрипты раскладывают
+        // копии, а маркеры и булавки только что встали по новой рамке.
+        GCode::scheduleRegenerateGCodeFiles();
     }
 }
 
