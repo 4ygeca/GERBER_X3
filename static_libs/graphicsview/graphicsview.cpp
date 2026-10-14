@@ -968,10 +968,11 @@ void GraphicsView::contextMenuEvent(QContextMenuEvent* event) {
 }
 
 bool GraphicsView::event(QEvent* event) {
-    // Esc посреди рамки -- отмена жеста, а не QShortcut главного окна
-    // («снять всё», да и тот молчит, пока открыта форма). Приняв
-    // ShortcutOverride, получаем клавишу сами -- в keyPressEvent.
-    if(event->type() == QEvent::ShortcutOverride && band_.state == Band::Active
+    // Esc при нажатой ЛКМ (рамка тянется или ещё может пойти) -- отмена
+    // жеста, а не QShortcut главного окна («снять всё», да и тот молчит, пока
+    // открыта форма). Приняв ShortcutOverride, получаем клавишу сами -- в
+    // keyPressEvent.
+    if(event->type() == QEvent::ShortcutOverride && band_.state != Band::Idle
         && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
         event->accept();
         return true;
@@ -980,7 +981,7 @@ bool GraphicsView::event(QEvent* event) {
 }
 
 void GraphicsView::keyPressEvent(QKeyEvent* event) {
-    if(event->key() == Qt::Key_Escape && band_.state == Band::Active) {
+    if(event->key() == Qt::Key_Escape && band_.state != Band::Idle) {
         cancelBand();
         return event->accept();
     }
@@ -1175,6 +1176,10 @@ void GraphicsView::endBand() {
 }
 
 void GraphicsView::cancelBand() {
+    // Рамка ещё не пошла, а нажали по item'у: отменяем и щелчок -- его
+    // отпускание переключило бы item или оставило выделенным его одного.
+    if(band_.state == Band::Armed && band_.fromItem)
+        if(QGraphicsItem* grabber = scene()->mouseGrabberItem()) grabber->ungrabMouse();
     const QSet<QGraphicsItem*> base = std::move(band_.base);
     endBand(); // кнопка ещё нажата -- дальше движения рамку не продолжат
     // Обход всех item'ов сцены, а не по base: указатели в нём могли повиснуть.

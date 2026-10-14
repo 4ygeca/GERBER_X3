@@ -246,7 +246,8 @@ private:
     void applyBand();
     void bandViewChanged();
     void endBand();
-    // Esc посреди рамки: вернуть выделение, каким оно было до нажатия.
+    // Esc при нажатой ЛКМ: отменить жест -- вернуть выделение, каким оно
+    // было до нажатия.
     void cancelBand();
     void drawBand(QPainter* painter) const;
     static QRegion bandFrameRegion(const QRect& r);
