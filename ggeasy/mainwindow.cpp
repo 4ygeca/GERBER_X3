@@ -649,6 +649,17 @@ void MainWindow::createActionsService() {
         }
         ui.grView->zoomFit();
     }));
+    // Set Board Border: фиолетовая рамка -- по точному замкнутому контуру,
+    // отдельно от расстановки булавок и нуля. По ней растр HLDI засвечивает
+    // маску до края платы.
+    serviceMenu->addAction(action = toolpathToolBar->addAction(QIcon::fromTheme(u"board-border"_s), tr("Set Board Border"), [] {
+        setBoardBorderFromSelection();
+    }));
+    action->setObjectName(u"actSetBoardBorder"_s);
+    action->setToolTip(tr("Board border (violet frame) from the selected closed contour,\n"
+                          "e.g. the board outline shown as aperture paths.\n"
+                          "Shift+click on an aperture-path segment selects the whole connected outline.\n"
+                          "Pins, zero and home are not moved."));
     // Separator
     serviceMenu->addAction(toolpathToolBar->addSeparator());
     // Snap to grid

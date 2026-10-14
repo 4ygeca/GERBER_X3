@@ -3,6 +3,7 @@
         <file>256.png</file>
         <file>icons/ggeasy-dark/actions/16/acrobat.svg</file>
         <file>icons/ggeasy-dark/actions/16/application-exit.svg</file>
+        <file>icons/ggeasy-dark/actions/16/board-border.svg</file>
         <file>icons/ggeasy-dark/actions/16/color-management.svg</file>
         <file>icons/ggeasy-dark/actions/16/configure-shortcuts.svg</file>
         <file>icons/ggeasy-dark/actions/16/crosshairs.svg</file>
@@ -118,6 +119,7 @@
         <file>icons/ggeasy-dark/actions/22/zoom-out.svg</file>
         <file>icons/ggeasy-dark/actions/24/acrobat.svg</file>
         <file>icons/ggeasy-dark/actions/24/application-exit.svg</file>
+        <file>icons/ggeasy-dark/actions/24/board-border.svg</file>
         <file>icons/ggeasy-dark/actions/24/color-management.svg</file>
         <file>icons/ggeasy-dark/actions/24/configure-shortcuts.svg</file>
         <file>icons/ggeasy-dark/actions/24/crosshatch-path.svg</file>
@@ -180,6 +182,7 @@
         <file>icons/ggeasy-dark/toolpath/prof_out_conv.svg</file>
         <file>icons/ggeasy-light/actions/16/acrobat.svg</file>
         <file>icons/ggeasy-light/actions/16/application-exit.svg</file>
+        <file>icons/ggeasy-light/actions/16/board-border.svg</file>
         <file>icons/ggeasy-light/actions/16/color-management.svg</file>
         <file>icons/ggeasy-light/actions/16/configure-shortcuts.svg</file>
         <file>icons/ggeasy-light/actions/16/crosshairs.svg</file>
@@ -295,6 +298,7 @@
         <file>icons/ggeasy-light/actions/22/zoom-out.svg</file>
         <file>icons/ggeasy-light/actions/24/acrobat.svg</file>
         <file>icons/ggeasy-light/actions/24/application-exit.svg</file>
+        <file>icons/ggeasy-light/actions/24/board-border.svg</file>
         <file>icons/ggeasy-light/actions/24/color-management.svg</file>
         <file>icons/ggeasy-light/actions/24/configure-shortcuts.svg</file>
         <file>icons/ggeasy-light/actions/24/crosshatch-path.svg</file>
