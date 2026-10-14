@@ -29,12 +29,14 @@
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QMenu>
+#include <QMetaMethod>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QOpenGLWidget>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QStyleHints>
 #include <QUndoCommand>
 
 #include <algorithm>
@@ -80,7 +82,9 @@ GraphicsView::GraphicsView(QWidget* parent)
     // Режим обновления и кэш ставятся в setOpenGL(): setViewport() сбрасывает
     // атрибуты вьюпорта, поэтому задавать их до него бессмысленно.
     setOptimizationFlag(DontSavePainterState);
-    setDragMode(RubberBandDrag);
+    // Рамка выделения своя (band_): штатная умеет только заменить выделение
+    // или добавить к нему, а снять рамкой -- нет.
+    setDragMode(NoDrag);
 
     // setContextMenuPolicy(Qt::DefaultContextMenu);
 
@@ -89,12 +93,36 @@ GraphicsView::GraphicsView(QWidget* parent)
     ////////////////////////////////////
     struct Scene final : public QGraphicsScene {
         QPointF last;
+        // Точка нажатия ЛКМ -- та же, что база запоминает захватчику
+        // (buttonDownScenePos): по равенству с ней Qt отличает щелчок от сдвига.
+        QPointF down;
         using QGraphicsScene::QGraphicsScene;
-        QPointF mappedPos() { return qobject_cast<GraphicsView*>(parent())->scenePos; }
-        void mousePressEvent(QGraphicsSceneMouseEvent* event) override {
-            event->setScenePos(last = mappedPos());
-            QGraphicsScene::mousePressEvent(event);
+        GraphicsView* view() const { return qobject_cast<GraphicsView*>(parent()); }
+        QPointF mappedPos() { return view()->scenePos; }
+        // Shift -- «добавить», а Qt о Shift ничего не знает: нажатие мимо
+        // item'ов (сцена) и по item'у (QGraphicsItem::mousePressEvent) без
+        // Ctrl снимает прочее выделение, и рамке с Shift добавлять было бы не
+        // к чему. Ctrl подставляем в событие СЦЕНЫ, а не в QMouseEvent: копию
+        // того вид хранит и повторяет захватчику при прокрутке и зуме
+        // (replayLastMouseEvent), а Pin::mouseMoveEvent читает Ctrl сам.
+        static bool shiftAdds(const QGraphicsSceneMouseEvent* event) {
+            return event->button() == Qt::LeftButton
+                && (event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier)) == Qt::ShiftModifier;
         }
+        void pressLike(QGraphicsSceneMouseEvent* event, bool doubleClick) {
+            event->setScenePos(last = mappedPos());
+            if(event->button() == Qt::LeftButton) down = last;
+            const auto mods = event->modifiers();
+            if(shiftAdds(event)) event->setModifiers(mods | Qt::ControlModifier);
+            // Квалифицированно: через указатель на член вызов ушёл бы
+            // виртуально -- обратно сюда.
+            if(doubleClick)
+                QGraphicsScene::mouseDoubleClickEvent(event);
+            else
+                QGraphicsScene::mousePressEvent(event);
+            event->setModifiers(mods);
+        }
+        void mousePressEvent(QGraphicsSceneMouseEvent* event) override { pressLike(event, false); }
         void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override {
             if(last == mappedPos()) return;
             event->setScenePos(last = mappedPos());
@@ -102,12 +130,32 @@ GraphicsView::GraphicsView(QWidget* parent)
         }
         void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override {
             event->setScenePos(last = mappedPos());
+            // Захватчика смотрим только ДО базы: Bridge в своём отпускании
+            // может удалить себя.
+            const QGraphicsItem* grabber = mouseGrabberItem();
+            if(event->button() != Qt::LeftButton || !grabber) return QGraphicsScene::mouseReleaseEvent(event);
+            const GraphicsView* v = view();
+            // Щелчок по неподвижному item'у (рамка так и не пошла): сюда
+            // приходит точка ПОСЛЕДНЕГО движения, а Qt отличает щелчок от сдвига
+            // точным равенством с точкой нажатия. Без привязки к сетке дрожь
+            // руки в пиксель глушила и Ctrl+щелчок, и сужение выделения щелчком.
+            if(v->band_.state == GraphicsView::Band::Armed && !(grabber->flags() & QGraphicsItem::ItemIsMovable))
+                event->setScenePos(down);
+            const auto mods = event->modifiers();
+            if(shiftAdds(event)) {
+                // С Ctrl база несдвинутый item ПЕРЕКЛЮЧАЕТ: невыделенный
+                // добавит, но уже выделенный снимет. Ему сдвигаем точку на
+                // пиксель -- щелчок для базы становится сдвигом, и выделение
+                // она не трогает. DataPath цепочку соседей по Shift добирает и
+                // так: по модификатору, не по точке.
+                event->setModifiers(mods | Qt::ControlModifier);
+                if(grabber->isSelected() && event->scenePos() == down)
+                    event->setScenePos(down + QPointF{v->scaleFactor(), 0.0});
+            }
             QGraphicsScene::mouseReleaseEvent(event);
+            event->setModifiers(mods);
         }
-        void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override {
-            event->setScenePos(last = mappedPos());
-            QGraphicsScene::mouseDoubleClickEvent(event);
-        }
+        void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override { pressLike(event, true); }
     };
     setScene(new Scene{this});
     App::grView.set(this);
@@ -405,16 +453,16 @@ void GraphicsView::scheduleSceneRectUpdate() {
 }
 
 void GraphicsView::addAnimated(QGraphicsItem* item) {
-    if(!r::contains(animated_, item)) animated_.push_back(item);
+    animated_.insert(item);
     updateAnimationTimer();
 }
 
 void GraphicsView::removeAnimated(QGraphicsItem* item) {
-    if(std::erase(animated_, item)) updateAnimationTimer();
+    if(animated_.remove(item)) updateAnimationTimer();
 }
 
 void GraphicsView::updateAnimationTimer() {
-    const bool need = !animated_.empty() && App::settings().animSelection();
+    const bool need = !animated_.isEmpty() && App::settings().animSelection();
     if(need && !animTimerId_)
         animTimerId_ = startTimer(40, Qt::CoarseTimer); // 25 Гц
     else if(!need && animTimerId_)
@@ -457,6 +505,7 @@ void GraphicsView::onTransformChanged() {
     // месте вьюпорта.
     cursorViewPos_ = QGraphicsView::mapFromScene(scenePos);
     updateRuler();
+    bandViewChanged();
 }
 
 void GraphicsView::updateRuler() {
@@ -770,6 +819,7 @@ void GraphicsView::scrollContentsBy(int dx, int dy) {
     // и то, где оно должно быть.
     const QRegion region = overlayRegion();
     viewport()->update(region | region.translated(dx, dy));
+    bandViewChanged();
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent* event) {
@@ -784,10 +834,10 @@ void GraphicsView::mousePressEvent(QMouseEvent* event) {
         return event->accept();
     }
     if(event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
-        // В базу НЕ отдаём: в режиме RubberBandDrag она на любую кнопку, не
-        // принятую сценой, заводит резинку и снимает выделение, а подвижные
-        // item'ы захватили бы мышь правой кнопкой. Прежняя СКМ-панорама через
-        // ScrollHandDrag, setInteractive(false) и поддельную ЛКМ больше не нужна.
+        // В базу НЕ отдаём: сцена на любую кнопку, не принятую item'ами,
+        // снимает выделение, а подвижные item'ы захватили бы мышь правой
+        // кнопкой. Прежняя СКМ-панорама через ScrollHandDrag,
+        // setInteractive(false) и поддельную ЛКМ больше не нужна.
         event->accept();
         // Прежнее отпускание могло потеряться (модальное окно, Alt+Tab).
         endPan();
@@ -800,9 +850,13 @@ void GraphicsView::mousePressEvent(QMouseEvent* event) {
         else
             panState_ = PanState::Armed; // ПКМ -- клик (меню) или панорама, решит порог
     } else {
-        pressPos = mapToScene(event->position());
-        QGraphicsView::mousePressEvent(event);
-        // это для выделения рамкой  - работа по-умолчанию левой кнопки мыши
+        if(event->button() == Qt::LeftButton)
+            pressLeft(event, false);
+        else
+            QGraphicsView::mousePressEvent(event);
+        // Нажатие по виду родителю не уходит -- как и при RubberBandDrag,
+        // которая принимала всё, что не взяла сцена.
+        event->accept();
         if(ruler_ && !(rulerCtr++ & 0x1)) rulPt1 = scenePos;
 
         if(auto item{scene()->itemAt(scenePos, transform())};
@@ -846,7 +900,10 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent* event) {
             showSceneContextMenu(event);
         }
     } else {
+        // Рамку гасим ПОСЛЕ базы: по её состоянию сцена узнаёт щелчок
+        // (Scene::mouseReleaseEvent в конструкторе).
         QGraphicsView::mouseReleaseEvent(event);
+        if(event->button() == Qt::LeftButton) endBand();
         emit mouseClickL(toScenePos(event));
     }
 }
@@ -867,11 +924,12 @@ void GraphicsView::mouseMoveEvent(QMouseEvent* event) {
     }
     QGraphicsView::mouseMoveEvent(event);
 
-    auto dir = pressPos - mapToScene(event->position());
-    if(dir.x() > 0 && dir.y() < 0)
-        setRubberBandSelectionMode(Qt::IntersectsItemShape);
-    else
-        setRubberBandSelectionMode(Qt::ContainsItemShape);
+    if(band_.state != Band::Idle) {
+        if(!(event->buttons() & Qt::LeftButton))
+            endBand(); // отпускание потерялось (модальное окно, Alt+Tab)
+        else
+            updateBand(event->position().toPoint());
+    }
 
     QPoint pt = event->position().toPoint();
     vRuler->setCursorPos(pt);
@@ -891,7 +949,12 @@ void GraphicsView::mouseDoubleClickEvent(QMouseEvent* event) {
     if(event->button() == Qt::RightButton || event->button() == Qt::MiddleButton
         || panState_ != PanState::Idle)
         return mousePressEvent(event);
-    QGraphicsView::mouseDoubleClickEvent(event);
+    if(event->button() != Qt::LeftButton) return QGraphicsView::mouseDoubleClickEvent(event);
+    // ЛКМ: двойной клик item'ам -- как раньше, но и рамка от него тоже.
+    // Иначе «щёлкнул и сразу потянул» молча ничего не делал: второе нажатие
+    // пришло двойным кликом, а рамку заводит только обычное.
+    toScenePos(event);
+    pressLeft(event, true);
 }
 
 void GraphicsView::contextMenuEvent(QContextMenuEvent* event) {
@@ -902,6 +965,27 @@ void GraphicsView::contextMenuEvent(QContextMenuEvent* event) {
     // Shift+F10) -- как было.
     if(event->reason() == QContextMenuEvent::Mouse) return event->accept();
     QGraphicsView::contextMenuEvent(event);
+}
+
+bool GraphicsView::event(QEvent* event) {
+    // Esc при нажатой ЛКМ (рамка тянется или ещё может пойти) -- отмена
+    // жеста, а не QShortcut главного окна («снять всё», да и тот молчит, пока
+    // открыта форма). Приняв ShortcutOverride, получаем клавишу сами -- в
+    // keyPressEvent.
+    if(event->type() == QEvent::ShortcutOverride && band_.state != Band::Idle
+        && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+        event->accept();
+        return true;
+    }
+    return QGraphicsView::event(event);
+}
+
+void GraphicsView::keyPressEvent(QKeyEvent* event) {
+    if(event->key() == Qt::Key_Escape && band_.state != Band::Idle) {
+        cancelBand();
+        return event->accept();
+    }
+    QGraphicsView::keyPressEvent(event);
 }
 
 void GraphicsView::showSceneContextMenu(const QMouseEvent* event) {
@@ -924,6 +1008,209 @@ void GraphicsView::endPan() {
     if(std::exchange(panState_, PanState::Idle) == PanState::Panning)
         viewport()->setCursor(panSavedCursor_);
     panButton_ = Qt::NoButton;
+}
+
+// Рамка выделения ////////////////////////////////////////////////////////////
+
+// Запас выборки кандидатов вокруг рамки, px. Выделение правится только у
+// тех, кого вернула выборка по габаритам, а попадание решается по форме:
+// где форма вылезает за габарит, известный индексу (ручки выделенной фигуры
+// -- HandleSize 20 px, abstract_shape.cpp; округление на кромке рамки), item
+// выпал бы из выборки и остался в прежнем состоянии.
+constexpr int kBandSlackPx = 20;
+
+GraphicsView::BandOp GraphicsView::bandOp(Qt::KeyboardModifiers mods) {
+    if(mods & Qt::ControlModifier) return BandOp::Remove; // и Ctrl+Shift
+    if(mods & Qt::ShiftModifier) return BandOp::Add;
+    return BandOp::Replace;
+}
+
+void GraphicsView::pressLeft(QMouseEvent* event, bool doubleClick) {
+    endBand(); // прежнее отпускание могло потеряться
+    // Рамки нет в режиме измерения (ЛКМ ставит точки линейки) и пока рисуется
+    // фигура: там каждое отпускание ЛКМ -- её точка (mouseClickL).
+    const bool bandable = !ruler_ && !isSignalConnected(QMetaMethod::fromSignal(&GraphicsView::mouseClickL));
+    const BandOp op = bandOp(event->modifiers());
+    // Снимок -- до нажатия: оно само меняет выделение (без модификаторов --
+    // снимает прочее). Нужен и замене: по нему Esc откатывает рамку.
+    QSet<QGraphicsItem*> base;
+    if(bandable) {
+        const auto selected = scene()->selectedItems();
+        base = QSet<QGraphicsItem*>(selected.cbegin(), selected.cend());
+    }
+    if(doubleClick)
+        QGraphicsView::mouseDoubleClickEvent(event);
+    else
+        QGraphicsView::mousePressEvent(event); // NoDrag: только доставка сцене
+    if(bandable) {
+        if(!event->isAccepted()) { // мимо item'ов -- как штатная рамка
+            armBand(event->position(), op, false, std::move(base));
+        } else if(const QGraphicsItem* grabber = scene()->mouseGrabberItem();
+                  grabber && !(grabber->flags() & QGraphicsItem::ItemIsMovable)) {
+            // По неподвижному item'у тащить нечего, а площадки и полигоны
+            // покрывают плату так, что пустого места под начало рамки нет.
+            // Подвижные (редактируемые фигуры, булавки, маркеры, мосты,
+            // направляющие) тянутся, как раньше.
+            armBand(event->position(), op, true, std::move(base));
+        }
+    }
+    event->accept();
+}
+
+void GraphicsView::armBand(QPointF pressPos, BandOp op, bool fromItem, QSet<QGraphicsItem*> base) {
+    band_ = Band{};
+    band_.state = Band::Armed;
+    band_.op = op;
+    band_.fromItem = fromItem;
+    band_.originScene = mapToScene(pressPos);
+    band_.pressPx = band_.cursorPx = pressPos.toPoint();
+    band_.base = std::move(base);
+}
+
+void GraphicsView::updateBand(QPoint cursorPx) {
+    band_.cursorPx = cursorPx;
+    if(band_.state == Band::Armed) {
+        // С item'а порог вдвое: дрогнувшая рука при щелчке по трассе не
+        // должна превращать его в крошечную рамку, которая эту же трассу снимет.
+        const int threshold = QGuiApplication::styleHints()->startDragDistance() * (band_.fromItem ? 2 : 1);
+        if((cursorPx - band_.pressPx).manhattanLength() < threshold) return;
+        band_.state = Band::Active;
+        // Отпускание item'у больше не нужно: оно переключило бы его или
+        // оставило выделенным его одного.
+        if(QGraphicsItem* grabber = scene()->mouseGrabberItem(); band_.fromItem && grabber)
+            grabber->ungrabMouse();
+        // Нажатие по item'у уже выделило его одного -- теперь решает рамка.
+        if(band_.op == BandOp::Replace) scene()->clearSelection();
+    }
+    placeBand();
+    applyBand();
+}
+
+void GraphicsView::placeBand() {
+    const QRect old = band_.rect;
+    const bool oldCrossing = band_.crossing;
+    const QPoint o = QGraphicsView::mapFromScene(band_.originScene), c = band_.cursorPx;
+    // Не QRect::normalized(): в Qt 6 она при обмене углов сдвигает их на
+    // пиксель внутрь, и рамка теряла бы точку нажатия и курсор.
+    band_.rect = QRect{std::min(o.x(), c.x()), std::min(o.y(), c.y()),
+        std::abs(o.x() - c.x()) + 1, std::abs(o.y() - c.y()) + 1};
+    band_.crossing = c.x() < o.x();
+    if(band_.rect != old || band_.crossing != oldCrossing)
+        viewport()->update(bandFrameRegion(old) | bandFrameRegion(band_.rect));
+}
+
+void GraphicsView::applyBand() {
+    if(band_.state != Band::Active) return;
+    const QRectF now = QGraphicsView::mapToScene(band_.rect).boundingRect();
+    if(now == band_.applied && band_.crossing == band_.appliedCrossing) return;
+    // Кандидаты -- всё, что габаритом задевает прежнюю рамку или новую, и
+    // каждому состояние назначается заново: по base и попаданию. Прежнюю
+    // выборку не храним -- файл могут перечитать посреди жеста, а
+    // пересчитывать её по прежней рамке нельзя: габарит и форма фигуры
+    // меняются вместе с её выделением.
+    const double slack = kBandSlackPx * scaleFactor();
+    const QRectF query = now.united(band_.applied).adjusted(-slack, -slack, slack, slack);
+    const auto candidates = scene()->items(query, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder, viewportTransform());
+    for(QGraphicsItem* item: candidates) {
+        if(!(item->flags() & QGraphicsItem::ItemIsSelectable)) continue;
+        const bool in = bandHit(item, now, band_.crossing);
+        bool want = in;
+        if(band_.op == BandOp::Add)
+            want = in || band_.base.contains(item);
+        else if(band_.op == BandOp::Remove)
+            want = !in && band_.base.contains(item);
+        // Только где состояние меняется: у Gi::Item это перекраска и реестр
+        // анимации, у фигуры -- ещё и редактор, у термопревью -- дерево формы.
+        if(item->isSelected() != want) item->setSelected(want);
+    }
+    band_.applied = now;
+    band_.appliedCrossing = band_.crossing;
+}
+
+bool GraphicsView::bandHit(const QGraphicsItem* item, const QRectF& band, bool crossing) {
+    // Свои сравнения вместо QRectF::contains/intersects: те считают
+    // прямоугольник нулевой ширины пустым, а у горизонтального или
+    // вертикального отрезка габарит именно такой.
+    auto inside = [&band](const QRectF& r) {
+        return r.left() >= band.left() && r.right() <= band.right()
+            && r.top() >= band.top() && r.bottom() <= band.bottom();
+    };
+    const QRectF bounds = item->sceneBoundingRect();
+    if(bounds.left() > band.right() || bounds.right() < band.left()
+        || bounds.top() > band.bottom() || bounds.bottom() < band.top())
+        return false; // габарит мимо -- форма тем более
+    // Фигуре -- контур без ручек: выделенная редактируемая фигура отдаёт
+    // shape() вместе с ними, и рамка у её края выделяла бы её и снимала
+    // попеременно, с каждым движением мыши.
+    const int type = item->type();
+    const QPainterPath shape = type >= Gi::Type::ShapeBegin && type < Gi::Type::ShapeEnd
+        ? static_cast<const Gi::Item*>(item)->Gi::Item::shape()
+        : item->shape();
+    if(shape.isEmpty()) return false;
+    if(crossing && inside(bounds)) return true; // габарит внутри -- форма задета
+    // По форме, а не по габариту, как ContainsItemShape у Qt: у DataPath
+    // габарит с запасом 3 мм под прицел (gi_datapath.cpp), и «целиком внутри»
+    // требовало бы обводить трассу с таким же запасом. Вид не вращается --
+    // рамка в сцене остаётся прямоугольником.
+    const QTransform t = item->sceneTransform();
+    if(crossing)
+        return t.isRotating() ? t.map(shape).intersects(band) : shape.intersects(t.inverted().mapRect(band));
+    return inside(t.isRotating() ? t.map(shape).boundingRect() : t.mapRect(shape.boundingRect()));
+}
+
+void GraphicsView::bandViewChanged() {
+    if(band_.state != Band::Active) return;
+    placeBand(); // угол держится за точку сцены
+    // Выделение -- одним проходом в конце такта: шаг колеса проходит здесь
+    // по нескольку раз (полосы прокрутки, затем onTransformChanged).
+    if(std::exchange(band_.applyQueued, true)) return;
+    QTimer::singleShot(0, this, [this] {
+        band_.applyQueued = false;
+        applyBand();
+    });
+}
+
+void GraphicsView::endBand() {
+    if(band_.state == Band::Active) viewport()->update(bandFrameRegion(band_.rect));
+    band_ = Band{};
+}
+
+void GraphicsView::cancelBand() {
+    // Рамка ещё не пошла, а нажали по item'у: отменяем и щелчок -- его
+    // отпускание переключило бы item или оставило выделенным его одного.
+    if(band_.state == Band::Armed && band_.fromItem)
+        if(QGraphicsItem* grabber = scene()->mouseGrabberItem()) grabber->ungrabMouse();
+    const QSet<QGraphicsItem*> base = std::move(band_.base);
+    endBand(); // кнопка ещё нажата -- дальше движения рамку не продолжат
+    // Обход всех item'ов сцены, а не по base: указатели в нём могли повиснуть.
+    // Замена снимала выделение где угодно (нажатие мимо item'ов), поэтому и
+    // возвращать его приходится по всей сцене; Esc жмут редко -- O(N) терпимо.
+    for(QGraphicsItem* item: scene()->items()) {
+        if(!(item->flags() & QGraphicsItem::ItemIsSelectable)) continue;
+        if(const bool want = base.contains(item); item->isSelected() != want) item->setSelected(want);
+    }
+}
+
+QRegion GraphicsView::bandFrameRegion(const QRect& r) {
+    // Только контур: рамка не залита, и перерисовывать её внутренность при
+    // каждом движении незачем (в MinimalViewportUpdate это вся площадь рамки).
+    if(r.isEmpty()) return {};
+    QRegion region{r.adjusted(-1, -1, 1, 1)};
+    if(r.width() > 4 && r.height() > 4) region -= QRegion{r.adjusted(2, 2, -2, -2)};
+    return region;
+}
+
+void GraphicsView::drawBand(QPainter* painter) const {
+    QColor color;
+    switch(band_.op) {
+    case BandOp::Replace: color = QColor{App::settings().guiColor(GuiColors::Background).rgb() ^ 0xFFFFFF}; break;
+    case BandOp::Add    : color = Qt::green; break;
+    case BandOp::Remove : color = Qt::red; break;
+    }
+    painter->setPen(QPen{color, 1.0, band_.crossing ? Qt::DashLine : Qt::SolidLine});
+    painter->setBrush(Qt::NoBrush);
+    // QRect в drawRect рисуется на пиксель шире и выше -- как у штатной рамки.
+    painter->drawRect(band_.rect.adjusted(0, 0, -1, -1));
 }
 
 void GraphicsView::drawForeground(QPainter* painter, const QRectF& rect) {
@@ -1007,6 +1294,8 @@ QRegion GraphicsView::overlayRegion() const {
     // раскладку из drawRuller и снова разъезжаться с ней; режим кратковременный
     // и интерактивный, поэтому проще обновить вьюпорт целиком.
     if(ruler_) region += viewport()->rect();
+    // Рамка -- тоже оверлей: при прокрутке её уносит блиттингом вместе со сценой.
+    if(band_.state == Band::Active) region += bandFrameRegion(band_.rect);
     return region;
 }
 
@@ -1020,6 +1309,7 @@ void GraphicsView::updateOverlay() {
 }
 
 void GraphicsView::drawOverlay(QPainter* painter) {
+    if(band_.state == Band::Active) drawBand(painter);
     if(viewport()->underMouse()) { // перекрестье под курсором
         const auto& p = cursorViewPos_;
         painter->setPen({Qt::red, 1.0});
@@ -1037,12 +1327,13 @@ void GraphicsView::timerEvent(QTimerEvent* event) {
     // Период узора -- 4pi-1. Держим смещение внутри периода: прежний счётчик
     // int за долгую сессию уходил в переполнение.
     App::dashOffset() = std::fmod(App::dashOffset() + 1.0, 4 * std::numbers::pi - 1);
+    // std::as_const: неконстантный begin() у контейнеров Qt отсоединяет данные.
     if(animated_.size() > 256) { // много выделено -- один регион дешевле
         QRectF r;
-        for(auto* i: animated_) r |= i->sceneBoundingRect();
+        for(auto* i: std::as_const(animated_)) r |= i->sceneBoundingRect();
         scene()->invalidate(r, QGraphicsScene::ItemLayer);
     } else
-        r::for_each(animated_, [](QGraphicsItem* i) { i->update(); });
+        for(auto* i: std::as_const(animated_)) i->update();
 }
 
 #include "moc_graphicsview.cpp"
