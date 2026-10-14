@@ -519,8 +519,14 @@ void Pin::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     // (через layoutFrameUpdate), и из "Авторасстановки", где УП и так
     // пересчитывают переставленные следом Home и Zero.
     const double before = flipAxisX();
+    const QRectF workRect = App::project().worckRect();
     resetPos();
-    flipAxisMoved(before);
+    // Рамку двойной щелчок берёт по выделенному (updateRect), а по ней скрипты
+    // раскладывают копии мультипликации -- тогда пересчитать надо все УП.
+    if(App::project().worckRect() != workRect)
+        GCode::scheduleRegenerateGCodeFiles();
+    else
+        flipAxisMoved(before);
     QGraphicsItem::mouseDoubleClickEvent(event);
 }
 
@@ -794,11 +800,13 @@ Pin::Positions Pin::conform(Positions pos, std::span<const bool, 4> used, bool p
 }
 
 void Pin::flipAxisMoved(double before) {
-    // Пересчёт всех УП (скрипт на каждую, да ещё копия в буфер обмена) идёт
-    // секундами -- это и была пауза после отпускания булавки, хотя пара или
-    // точка, двигаясь вокруг стоящей оси, программ не меняют.
+    // Пересчёт УП (скрипт на каждую) идёт секундами -- это и была пауза после
+    // отпускания булавки, хотя пара или точка, двигаясь вокруг стоящей оси,
+    // программ не меняют. Только нижняя сторона: верхняя от булавок не
+    // зависит (File::mirrorAndOffsetCurves). Отложенно -- отпускание успеет
+    // перерисоваться, а серия правок даст один пересчёт.
     if(std::abs(flipAxisX() - before) > 1e-9)
-        GCode::regenerateGCodeFiles();
+        GCode::scheduleRegenerateGCodeFiles(::Bottom);
 }
 
 bool Pin::pointSymmetry() { return App::project().pinsPointSymmetry(); }
