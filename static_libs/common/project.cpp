@@ -99,6 +99,7 @@ Project::Header Project::header() const {
         .plunge = plunge_,
         .glue = glue_,
         .viewRect = App::grView().getViewRect(),
+        .pinsPointSymmetry = pinsPointSymmetry_,
     };
     std::ranges::copy(pins_, h.pins);
     std::ranges::copy(pinsUsed_, h.pinsUsed);
@@ -119,6 +120,7 @@ void Project::applyHeader(const Header& h) {
     glue_ = h.glue;
     std::ranges::copy(h.pins, pins_);
     std::ranges::copy(h.pinsUsed, pinsUsed_);
+    pinsPointSymmetry_ = h.pinsPointSymmetry;
 }
 
 bool Project::save(const QString& fileName) {
@@ -351,6 +353,10 @@ bool Project::open(const QString& fileName) {
 }
 
 void Project::close() {
+    // Режим булавок -- первым: setStepsX/setSpaceX ниже переставляют булавки
+    // (layoutFrameUpdate(true) -> Pin::resetPos), а их подсказка пишется уже
+    // по текущему режиму.
+    pinsPointSymmetry_ = false;
     setWorckRect({});
     setStepsX(1);
     setStepsY(1);
@@ -668,6 +674,11 @@ bool Project::isUntitled() { return isUntitled_; }
 
 bool Project::isPinsPlaced() const { return isPinsPlaced_; }
 
+void Project::setPinsPlaced(bool placed) {
+    if(std::exchange(isPinsPlaced_, placed) != placed)
+        setChanged();
+}
+
 void Project::setUntitled(bool value) {
     isUntitled_ = value;
     emit layoutFrameUpdate();
@@ -735,6 +746,12 @@ bool Project::pinUsed(int idx) const { return pinsUsed_[idx]; }
 void Project::setPinUsed(bool used, int idx) {
     pinsUsed_[idx] = used;
     setChanged();
+}
+
+bool Project::pinsPointSymmetry() const { return pinsPointSymmetry_; }
+void Project::setPinsPointSymmetry(bool point) {
+    if(std::exchange(pinsPointSymmetry_, point) != point)
+        setChanged();
 }
 
 double Project::safeZ() const { return safeZ_; }
