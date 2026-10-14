@@ -12,6 +12,7 @@
  *******************************************************************************/
 #include "pocketraster.h"
 #include "gc_pathutils.h"
+#include "gi_gcpath.h"
 #include "gi_point.h"
 #include "project.h"
 
@@ -292,9 +293,23 @@ File::File(GCode::Params&& newGcp)
 }
 
 void File::createGi() {
-    if(toolType == Tool::Laser)
+    if(toolType == Tool::Laser) {
         createGiLaser();
-    else
+        // Граница, до которой шёл растр снаружи, -- тонким пунктиром: видно,
+        // что взято (контур платы, рамка проекта), и пересчитать ли УП после
+        // того, как граница сменилась. Без границы -- прежняя рамка по
+        // выделенному, рисовать нечего.
+        if(!gcp.boundary.empty()) {
+            auto* item = new Gi::GcPath{gcp.boundary.contours(), this};
+            QPen pen{
+                QColor{255, 0, 255},
+                1.0, Qt::DashLine
+            };
+            pen.setCosmetic(true);
+            item->setPen(pen);
+            itemGroup()->push_back(item);
+        }
+    } else
         createGiRaster();
     itemGroup()->setVisible(true);
 }

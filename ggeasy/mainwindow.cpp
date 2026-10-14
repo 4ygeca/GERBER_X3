@@ -50,6 +50,18 @@ bool operator<(const QPair<Tool, Side>& p1, const QPair<Tool, Side>& p2) {
     return p1.first.hash() < p2.first.hash() || (!(p2.first.hash() < p1.first.hash()) && p1.second < p2.second);
 }
 
+// Ключ действия панели в настройках видимости. Одного номера, как прежде,
+// мало: действие, вставленное посреди панели («Задать границу платы» следом
+// за авторасстановкой), сдвигало бы сохранённые флаги всех, что за ним. Имя
+// объекта, иначе имя значка темы -- от языка интерфейса оно не зависит, --
+// иначе текст.
+static QString toolBarActionKey(const QAction* action) {
+    if(action->isSeparator()) return {};
+    if(!action->objectName().isEmpty()) return action->objectName();
+    if(const QString icon = action->icon().name(); !icon.isEmpty()) return icon;
+    return action->text();
+}
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow{parent}
     , recentFiles{this, u"recentFiles"_s}
@@ -402,13 +414,26 @@ void MainWindow::loadSettings() {
     lastPath = settings.value(u"lastPath"_s).toString();
 
     for(auto toolBar: findChildren<QToolBar*>()) {
-        settings.beginReadArray(toolBar->objectName());
-        int ctr{};
-        for(auto action: toolBar->actions()) {
-            settings.setArrayIndex(ctr++);
-            action->setVisible(settings.value(u"actionIsVisible"_s, true).toBool());
+        const int size = settings.beginReadArray(toolBar->objectName());
+        // Записи с ключом -- по ключу; без ключей (настройки прежних версий) --
+        // по номеру, как они и писались.
+        QHash<QString, bool> byKey;
+        QList<bool> byIndex;
+        for(int i{}; i < size; ++i) {
+            settings.setArrayIndex(i);
+            const bool visible = settings.value(u"actionIsVisible"_s, true).toBool();
+            byIndex.push_back(visible);
+            if(const QString key = settings.value(u"actionKey"_s).toString(); !key.isEmpty())
+                byKey.insert(key, visible);
         }
         settings.endArray();
+        for(int index{}; auto action: toolBar->actions()) {
+            if(byKey.isEmpty()) {
+                if(index < byIndex.size()) action->setVisible(byIndex[index]);
+            } else if(auto it = byKey.constFind(toolBarActionKey(action)); it != byKey.cend())
+                action->setVisible(*it);
+            ++index;
+        }
     }
 
     if(App::isDebug())
@@ -431,6 +456,7 @@ void MainWindow::saveSettings() {
         for(auto action: toolBar->actions()) {
             settings.setArrayIndex(ctr++);
             settings.setValue(u"actionIsVisible"_s, action->isVisible());
+            settings.setValue(u"actionKey"_s, toolBarActionKey(action));
         }
         settings.endArray();
     }
@@ -626,6 +652,17 @@ void MainWindow::createActionsService() {
         }
         ui.grView->zoomFit();
     }));
+    // Set Board Border: фиолетовая рамка -- по точному замкнутому контуру,
+    // отдельно от расстановки булавок и нуля. По ней растр HLDI засвечивает
+    // маску до края платы.
+    serviceMenu->addAction(action = toolpathToolBar->addAction(QIcon::fromTheme(u"board-border"_s), tr("Set Board Border"), [] {
+        setBoardBorderFromSelection();
+    }));
+    action->setObjectName(u"actSetBoardBorder"_s);
+    action->setToolTip(tr("Board border (violet frame) from the selected closed contour,\n"
+                          "e.g. the board outline shown as aperture paths.\n"
+                          "Shift+click on an aperture-path segment selects the whole connected outline.\n"
+                          "Pins, zero and home are not moved."));
     // Separator
     serviceMenu->addAction(toolpathToolBar->addSeparator());
     // Snap to grid

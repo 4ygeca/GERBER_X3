@@ -183,7 +183,21 @@ public:
     void setGlue(double glue);
 
     QRectF worckRect() const;
+    // Габарит заново задан автоматической расстановкой (выделенным) -- контуры
+    // границы платы к нему больше не относятся и сбрасываются.
     void setWorckRect(const QRectF& worckRect);
+
+    // Граница платы -- точные замкнутые контуры (кнопка «Задать границу
+    // платы»), по ним растр HLDI засвечивает маску до края. Только для
+    // GUI-потока, и в Header их нет намеренно: header() зовётся и из рабочего
+    // потока (шапка каждой новой УП), а скрипту уходит как file.properties --
+    // массив полилиний там был бы гонкой данных и мусором. В проекте -- свой
+    // ключ "boardBorder" рядом с "ggeasy".
+    const Geo::Polylines& boardBorder() const { return boardBorder_; }
+    // worckRect -- габарит контуров, рамка перерисовывается (layoutFrameUpdate
+    // без сброса маркеров). Булавки, ноль и дом не трогаются, isPinsPlaced
+    // тоже: предупреждение «размеры платы могли измениться» остаётся в силе.
+    void setBoardBorder(Geo::Polylines contours);
 
     QPointF homePos() const;
     void setHomePos(const QPointF& pos);
@@ -244,6 +258,7 @@ private:
     QPointF home_;
     QPointF zero_;
     QRectF worckRect_;
+    Geo::Polylines boardBorder_; // см. boardBorder()
 
     double safeZ_{};
     double boardThickness_{};

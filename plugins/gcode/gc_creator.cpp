@@ -110,6 +110,12 @@ std::vector<Geo::Polygon>& Creator::groupedPaths(Grouping group, double margin, 
     if(group == Grouping::Copper) {
         // Медь -- это сам регион: его разбор на тела с отверстиями уже есть.
         groupedPss = closedSrc.all();
+    } else if(!gcp.boundary.empty()) {
+        // Граница задана (контур платы, рамка проекта): поле между ней и медью
+        // -- рабочая область, а не артефакт рамки, и выбрасывать из вырезов
+        // нечего. Прежний erase(begin()) здесь съел бы как раз его -- всё, что
+        // вне выделенных реперов-колец.
+        groupedPss = (gcp.boundary - closedSrc).all();
     } else {
         // Вырезы -- всё, что осталось от габаритной рамки после вычитания меди.
         // Прежде то же самое получалось объединением с рамкой по EvenOdd и
@@ -118,7 +124,9 @@ std::vector<Geo::Polygon>& Creator::groupedPaths(Grouping group, double margin, 
         groupedPss = (frame - closedSrc).all();
 
         // Первым вырезом идёт «поле» между рамкой и деталью -- сама рамка с
-        // деталью в качестве дырки. Оно не вырез, а артефакт рамки.
+        // деталью в качестве дырки. Оно не вырез, а артефакт рамки. skipFrame
+        // -- его, наоборот, оставить (имя историческое). На этом держится и
+        // приём «кольцо контура платы в Normal + маска»: поле за кольцом уходит.
         if(!skipFrame && groupedPss.size() > 1)
             groupedPss.erase(groupedPss.begin());
     }
@@ -127,11 +135,14 @@ std::vector<Geo::Polygon>& Creator::groupedPaths(Grouping group, double margin, 
 }
 
 // Габарит всего, из чего строится УП. Открытые пути идут наравне с
-// замкнутыми: профиль по разомкнутой линии -- такая же траектория.
+// замкнутыми: профиль по разомкнутой линии -- такая же траектория. Граница
+// стороны Outer -- тоже: растр до неё и доходит.
 QRectF Creator::sourceExtent() const {
     QRectF extent = closedSrc.boundingRect();
     for(const Geo::Polyline& path: openSrcPaths)
         extent = extent.united(path.boundingRect());
+    if(!gcp.boundary.empty())
+        extent = extent.united(gcp.boundary.boundingRect());
     return extent;
 }
 
@@ -363,6 +374,8 @@ bool Creator::checkMilling(SideOfMilling side) {
 
         // Замыкание: раздуть и сжать обратно. Всё, что при этом ПРИБАВИЛОСЬ к
         // меди, -- материал в щелях уже самой фрезы, выбрать его нечем.
+        // Граница gcp.boundary сюда не входит: щель уже луча между медью и
+        // краем платы не ищется и молча остаётся незасвеченной.
         const Geo::Polygons closing = Geo::Inflate(Geo::Inflate(closedSrc, +toolDiameter), -toolDiameter);
         const Geo::Polygons nonCut = closing - closedSrc;
 

@@ -116,6 +116,15 @@ public:
     virtual void setItemType([[maybe_unused]] int type);
     virtual int itemsType() const;
 
+    // Контур платы (Edge.Cuts, X2 Profile) -- по нему растр HLDI засвечивает
+    // маску до самого края. Кривые -- в координатах сцены (трансформация файла
+    // применена), без повторов, независимо от вида и видимости слоя; склеивает
+    // их потребитель (boardContours в gi_point.h). Пусто -- контура в файле нет.
+    // Гранулярность -- объект, а не файл: KiCad кладёт Edge.Cuts и в слой маски.
+    virtual Geo::Polylines boardOutlineCurves() const { return {}; }
+    // Элемент сцены этого файла -- контур платы, материалом растра он не идёт.
+    virtual bool isBoardOutlineItem(const Gi::Item* item [[maybe_unused]]) const { return false; }
+
     virtual bool isVisible() const;
     virtual void setVisible(bool visible);
     const QColor& color() const;

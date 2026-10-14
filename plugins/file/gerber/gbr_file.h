@@ -66,6 +66,14 @@ public:
     bool hasX2() const;
     // X2-функция файла (%TF.FileFunction, Attr::File::Function), -1 -- нет.
     int32_t fileFunction() const { return fileFunction_; }
+    // Слой контура платы целиком: X2 %TF.FileFunction,Profile, а без X2 --
+    // по имени (Edge_Cuts, Edge.Cuts, .gm1, .gml). .gko сюда не входит: у
+    // Altium это keep-out, а не край платы.
+    bool isBoardOutlineFile() const;
+    // Весь файл, если это слой контура, иначе -- объекты с функцией апертуры
+    // Profile (KiCad выводит Edge.Cuts и в слои меди и маски).
+    Geo::Polylines boardOutlineCurves() const override;
+    bool isBoardOutlineItem(const Gi::Item* item) const override;
     // Слитых полигонов меди, на которых больше одной цепи, -- по последнему createGi.
     int32_t shorts() const { return shorts_; }
     // Слить слой заново и пересоздать элементы сцены (GUI-поток).
@@ -83,6 +91,8 @@ private:
     Geo::Polygons mergeCompensated() const;
     // На каждый слитый полигон меди -- номера цепей объектов, что в нём оказались.
     std::vector<std::vector<int32_t>> copperNets(const Geo::Polygons& copper) const;
+    // Какие слитые полигоны -- целиком контур платы (одни объекты Profile).
+    std::vector<uint8_t> outlineBodies(const Geo::Polygons& copper) const;
     QString netsToolTip(std::span<const int32_t> nets) const;
 
 private:
@@ -94,6 +104,10 @@ private:
     // Элементы сцены каждой цепи (обе группы, Normal и ApPaths), индекс -- номер
     // цепи. Собирается в createGi вместе с элементами, в проект не пишется.
     [[= Serial::skip]] std::vector<std::vector<Gi::Item*>> netItems_;
+    // Элементы сцены, целиком из объектов Profile (обе группы), по возрастанию
+    // -- для isBoardOutlineItem. Собирает createGi, только если файл не слой
+    // контура целиком (тогда контур -- всё).
+    [[= Serial::skip]] std::vector<const Gi::Item*> outlineItems_;
     std::vector<GrObject> graphicObjects_;
     ApertureMap apertures_;
 

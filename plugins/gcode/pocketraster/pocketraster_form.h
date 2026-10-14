@@ -28,6 +28,14 @@ public:
     explicit Form(GCode::Plugin* plugin);
     ~Form();
 
+    // Внешняя граница растра HLDI снаружи -- в порядке пунктов cbxBorder.
+    enum class Border {
+        Auto,      // слой контура платы, если он охватывает выделенное, иначе рамка, иначе по выделенному
+        Outline,   // слой контура платы (Edge.Cuts, X2 Profile)
+        Frame,     // граница платы -- фиолетовая рамка проекта
+        Selection, // габарит выделенного плюс миллиметр -- ровно как было всегда
+    };
+
 private slots:
     void onNameTextChanged(const QString& arg1);
 
@@ -37,6 +45,22 @@ private:
     int direction{};
     void updatePixmap();
     void rb_clicked();
+
+    // Что станет границей. Считается в GUI-потоке: проект и сцену читать
+    // можно только здесь, расчёт получает готовое в Params::boundary.
+    struct BorderChoice {
+        Geo::Polygons region{}; // пусто -- прежняя рамка по габариту выделенного
+        QString label{};        // что будет взято -- для надписи под списком
+        QString question{};     // не пусто -- спросить перед расчётом
+    };
+    // selection -- параметры уже собранного выделенного; без них (надпись) --
+    // только то, что известно о проекте.
+    BorderChoice resolveBorder(const GCode::Params* selection) const;
+    Border borderMode() const;
+    // Граница нужна только растру HLDI снаружи: фрезерный растр снаружи --
+    // вырезы, и до края платы он пошёл бы фрезеровать всю плату.
+    bool borderEnabled() const;
+    void updateBorder();
     const QStringList names;
     static inline const QString pixmaps[]{
         u"pock_rast_climb"_s,
@@ -51,6 +75,9 @@ protected:
 protected:
     void computePaths() override;
     void updateName() override;
+    // Контур платы при растре HLDI снаружи -- граница, а не материал: иначе
+    // выделенный вместе с маской он поглотил бы все площадки внутри себя.
+    bool skipGi(const Gi::Item* gi) const override;
 
 public:
     void editFile(GCode::File* file) override;
