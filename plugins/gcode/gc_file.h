@@ -142,6 +142,12 @@ public:
     };
     void regenerate(unsigned sections = All);
 
+    // Текст УП без комментариев -- в системный буфер обмена. Только из
+    // GUI-потока; зовёт форма, когда новая УП готова (Form::fileHandler,
+    // синхронные ветки сверловки). Из regenerate() -- нельзя: того зовут и в
+    // рабочем потоке, и на каждый пересчёт всех УП.
+    void copyToClipboard() const;
+
     static void ensureDefaultScripts();
 
     // Расширение прокси для скрипта: объект, доступный как file.ext. Плагин

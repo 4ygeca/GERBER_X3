@@ -28,6 +28,7 @@
 #include "plugintypes.h"
 #include "project.h"
 
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -300,11 +301,18 @@ void File::regenerate(unsigned sections) {
     if(sections & Footer) writeFooter();
 
     std::erase_if(lines_, std::bind(&QString::isEmpty, _1)); // remove epty lines
-    if(sections == All)
-        qApp->clipboard()->setText(lines_
-            | v::filter([post = &App::gcSettings().post()](QString& str) { return !post->isComment(str); })
-            | v::join_with(u'\n')
-            | r::to<QString>());
+    // Буфер обмена здесь не трогаем: regenerate() зовут и в рабочем потоке
+    // расчёта (конструкторы УП), и на каждый пересчёт всех УП. Текст новой УП
+    // копирует форма (copyToClipboard).
+}
+
+void File::copyToClipboard() const {
+    const Post& post = App::gcSettings().post();
+    QStringList text;
+    text.reserve(qsizetype(lines_.size()));
+    for(const QString& line: lines_)
+        if(!post.isComment(line)) text.push_back(line);
+    QGuiApplication::clipboard()->setText(text.join(u'\n'));
 }
 
 bool File::save(const QString& name) {
