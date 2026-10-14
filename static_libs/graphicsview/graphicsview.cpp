@@ -93,8 +93,12 @@ GraphicsView::GraphicsView(QWidget* parent)
     ////////////////////////////////////
     struct Scene final : public QGraphicsScene {
         QPointF last;
+        // Точка нажатия ЛКМ -- та же, что база запоминает захватчику
+        // (buttonDownScenePos): по равенству с ней Qt отличает щелчок от сдвига.
+        QPointF down;
         using QGraphicsScene::QGraphicsScene;
-        QPointF mappedPos() { return qobject_cast<GraphicsView*>(parent())->scenePos; }
+        GraphicsView* view() const { return qobject_cast<GraphicsView*>(parent()); }
+        QPointF mappedPos() { return view()->scenePos; }
         // Shift -- «добавить», а Qt о Shift ничего не знает: нажатие мимо
         // item'ов (сцена) и по item'у (QGraphicsItem::mousePressEvent) без
         // Ctrl снимает прочее выделение, и рамке с Shift добавлять было бы не
@@ -107,6 +111,7 @@ GraphicsView::GraphicsView(QWidget* parent)
         }
         void pressLike(QGraphicsSceneMouseEvent* event, bool doubleClick) {
             event->setScenePos(last = mappedPos());
+            if(event->button() == Qt::LeftButton) down = last;
             const auto mods = event->modifiers();
             if(shiftAdds(event)) event->setModifiers(mods | Qt::ControlModifier);
             // Квалифицированно: через указатель на член вызов ушёл бы
@@ -125,7 +130,30 @@ GraphicsView::GraphicsView(QWidget* parent)
         }
         void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override {
             event->setScenePos(last = mappedPos());
+            // Захватчика смотрим только ДО базы: Bridge в своём отпускании
+            // может удалить себя.
+            const QGraphicsItem* grabber = mouseGrabberItem();
+            if(event->button() != Qt::LeftButton || !grabber) return QGraphicsScene::mouseReleaseEvent(event);
+            const GraphicsView* v = view();
+            // Щелчок по неподвижному item'у (рамка так и не пошла): сюда
+            // приходит точка ПОСЛЕДНЕГО движения, а Qt отличает щелчок от сдвига
+            // точным равенством с точкой нажатия. Без привязки к сетке дрожь
+            // руки в пиксель глушила и Ctrl+щелчок, и сужение выделения щелчком.
+            if(v->band_.state == GraphicsView::Band::Armed && !(grabber->flags() & QGraphicsItem::ItemIsMovable))
+                event->setScenePos(down);
+            const auto mods = event->modifiers();
+            if(shiftAdds(event)) {
+                // С Ctrl база несдвинутый item ПЕРЕКЛЮЧАЕТ: невыделенный
+                // добавит, но уже выделенный снимет. Ему сдвигаем точку на
+                // пиксель -- щелчок для базы становится сдвигом, и выделение
+                // она не трогает. DataPath цепочку соседей по Shift добирает и
+                // так: по модификатору, не по точке.
+                event->setModifiers(mods | Qt::ControlModifier);
+                if(grabber->isSelected() && event->scenePos() == down)
+                    event->setScenePos(down + QPointF{v->scaleFactor(), 0.0});
+            }
             QGraphicsScene::mouseReleaseEvent(event);
+            event->setModifiers(mods);
         }
         void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override { pressLike(event, true); }
     };
@@ -872,8 +900,10 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent* event) {
             showSceneContextMenu(event);
         }
     } else {
-        if(event->button() == Qt::LeftButton) endBand();
+        // Рамку гасим ПОСЛЕ базы: по её состоянию сцена узнаёт щелчок
+        // (Scene::mouseReleaseEvent в конструкторе).
         QGraphicsView::mouseReleaseEvent(event);
+        if(event->button() == Qt::LeftButton) endBand();
         emit mouseClickL(toScenePos(event));
     }
 }
