@@ -31,9 +31,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJSEngine>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QTimer>
 #include <algorithm>
 
 #undef emit
@@ -42,12 +44,94 @@
 
 namespace GCode {
 
-void regenerateGCodeFiles() {
-    // r::for_each(App::project().files<File>(), &File::regenerate);
+namespace {
+
+// Имена здесь -- с приставкой gcRegen: unity build склеивает .cpp цели
+// пачками, и безымянное пространство у них на всех одно.
+
+// Пересобрать files. Курсор ожидания -- на всё время: секунды без отклика
+// иначе выглядят зависанием. Окно просмотра обновляется только открытое:
+// lines2() и подсветка с разбором для 3D у большой УП сами недёшевы.
+void gcRegenFiles(const std::vector<File*>& files) {
+    if(files.empty()) return;
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    for(File* file: files) {
+        file->regenerate();
+        if(Dialog::isOpen(file->id()))
+            Dialog::programChanged(file->id(), file->lines2(), file->name());
+    }
+    QGuiApplication::restoreOverrideCursor();
+}
+
+// Отложенный пересчёт: какие УП его ждут.
+//
+// УП запоминаются в момент запроса (только как адреса -- для сравнения, не
+// для обращения), а при срабатывании из них берутся только оставшиеся в
+// проекте. Удалённые так выпадают сами, а появившиеся после запроса (новый
+// расчёт, замена на месте, другой открытый проект) и так только что собраны.
+// Без этого пересобрался бы целиком следующий открытый проект: закрытие
+// текущего само шлёт запрос (hideEvent формы свойств откатывает поля,
+// Project::close сбрасывает шаги мультипликации -> LayoutFrames::updateRect).
+std::vector<File*> gcRegenQueue;
+
+// Номер последнего взвода. Срабатывает только его таймер, прежние гаснут
+// вхолостую: новый запрос отодвигает пересчёт, и серия (колесо над полем
+// шага, повтор клавиши) даёт один пересчёт после паузы, а не по шагу.
+unsigned gcRegenTicket{};
+
+// Задержка, а не 0: singleShot(0) -- обычное событие в очереди, и оно
+// обгоняет перерисовку (у неё пониженный приоритет). Отпустили булавку --
+// пунктир оси так и висел бы на экране все секунды пересчёта.
+constexpr int gcRegenDelayMs = 100;
+
+void gcRegenFire();
+
+// Контекст -- проект: умер он, и ждущий вызов снимается вместе с ним.
+void gcRegenArm() {
+    QTimer::singleShot(gcRegenDelayMs, App::project.ptr(), [ticket = ++gcRegenTicket] {
+        if(ticket == gcRegenTicket) gcRegenFire();
+    });
+}
+
+// Пересчёт пока рано начинать: он встал бы посреди действия пользователя.
+bool gcRegenOnHold() {
+    // Кнопка мыши нажата -- жест не окончен: тащат булавку или маркер,
+    // держат стрелку счётчика. Так сливаются и запросы одного щелчка: поле
+    // теряет фокус на нажатии OK, а сам OK (с полным пересчётом) приходит на
+    // отпускании.
+    return QGuiApplication::mouseButtons() != Qt::NoButton;
+}
+
+void gcRegenFire() {
+    if(gcRegenOnHold()) return gcRegenArm();
+    const auto queued = std::exchange(gcRegenQueue, {});
+    // Маркеры удаляются вместе с окном, а текст УП их читает (Home/Zero).
+    if(!App::home.ptr() || !App::zero.ptr()) return;
     auto files = App::project().files<File>();
-    std::for_each( // std::execution::par_unseq,
-        files.begin(), files.end(),
-        [](File* f) { f->regenerate(); });
+    std::erase_if(files, [&queued](File* file) { return !r::contains(queued, file); });
+    gcRegenFiles(files);
+}
+
+// Файл в пересчёт: всех сторон или только своей.
+bool gcRegenSideOf(const File* file, Side side) { return side == NullSide || file->side() == side; }
+
+} // namespace
+
+void regenerateGCodeFiles(Side side) {
+    auto files = App::project().files<File>();
+    std::erase_if(files, [side](File* file) { return !gcRegenSideOf(file, side); });
+    // Отложенный запрос на эти же УП исполняется здесь -- повторять его незачем.
+    std::erase_if(gcRegenQueue, [&files](File* file) { return r::contains(files, file); });
+    gcRegenFiles(files);
+}
+
+void scheduleRegenerateGCodeFiles(Side side) {
+    if(!App::project.ptr()) return;
+    for(File* file: App::project().files<File>())
+        if(gcRegenSideOf(file, side) && !r::contains(gcRegenQueue, file))
+            gcRegenQueue.push_back(file);
+    // Пересобирать нечего -- и таймер ни к чему.
+    if(!gcRegenQueue.empty()) gcRegenArm();
 }
 
 QString File::getLastDir() {
