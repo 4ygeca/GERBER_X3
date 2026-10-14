@@ -16,6 +16,7 @@
 #include "gc_file.h"
 #include "gc_propertiesform.h"
 #include "gc_types.h"
+#include "geo/boolean.h"
 #include "gi.h"
 #include "gi_pinsdialog.h"
 #include "project.h"
@@ -27,6 +28,9 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QStyleOptionGraphicsItem>
+
+#include <cmath>
+#include <set>
 
 bool updateRect() {
     QRectF rect(App::grView().getSelectedBoundingRect());
@@ -42,6 +46,123 @@ bool updateRect() {
             return false;
     }
     App::layoutFrames().updateRect();
+    return true;
+}
+
+Geo::Polylines uniqueCurves(Geo::Polylines curves) {
+    // Ключ -- вершины в нанометрах: шум double у одинаковых штрихов уходит, а
+    // настоящая геометрия на таком шаге не различается. Направление --
+    // каноническое: из двух обходов берётся меньший ключ, так что отрезок и
+    // он же навстречу -- одно.
+    using Key = std::vector<int64_t>;
+    auto keyOf = [](const Geo::Polyline& curve) {
+        constexpr double perMm = 1e6;
+        Key key;
+        key.reserve(curve.size() * 3 + 1);
+        key.push_back(curve.closed);
+        for(size_t i{}; i < curve.size(); ++i) {
+            const Geo::Vertex& vertex = curve[i];
+            key.push_back(std::llround(vertex.x() * perMm));
+            key.push_back(std::llround(vertex.y() * perMm));
+            // Хвостовой прогиб открытой кривой не описывает никакого сегмента.
+            const bool tail = !curve.closed && i + 1 == curve.size();
+            key.push_back(tail ? 0 : std::llround(vertex.bulge * perMm));
+        }
+        return key;
+    };
+    std::set<Key> seen;
+    std::erase_if(curves, [&](const Geo::Polyline& curve) {
+        return !seen.insert(std::min(keyOf(curve), keyOf(curve.reversed()))).second;
+    });
+    return curves;
+}
+
+Geo::Polylines boardContours(Geo::Polylines curves) {
+    std::erase_if(curves, [](const Geo::Polyline& curve) { return curve.size() < 2; });
+    curves = uniqueCurves(std::move(curves));
+
+    // Осевые путей апертур -- открытые обрывки: контур платы в Гербере это
+    // десятки отдельных штрихов. Клей -- тот же, что у выделения цепочки по
+    // Shift+щелчку (Gi::DataPath) и у сырых путей в расчёте УП.
+    const double glue = App::project().glue();
+    Geo::stitch(curves, glue);
+
+    for(Geo::Polyline& curve: curves) {
+        if(curve.size() < 3) continue;
+        // stitch замыкает только то, где вершин больше трёх, а полная
+        // окружность одной дугой (G75) приходит тремя: две дуговые вершины и
+        // повтор начала -- им парсер её размыкает. Две полуокружности
+        // отдельными штрихами после склейки -- те же три.
+        if(!curve.closed && Geo::distance(curve.front(), curve.back()) <= glue)
+            curve.closed = true;
+        // Повтор начала в хвосте замкнутого -- долой. Polyline::close снимает
+        // лишь точный повтор, а при ненулевом клее конец отстоит от начала:
+        // остался бы отрезок короче клея, и точная геометрия на нём спотыкается.
+        if(curve.closed && Geo::distance(curve.front(), curve.back()) <= glue)
+            curve.pop_back();
+    }
+
+    // Годится только то, что возьмёт точная геометрия: замкнутое, невырожденное,
+    // без самокасаний. Негодный контур Geo::Polygon молча превратил бы в пустоту.
+    std::erase_if(curves, [](const Geo::Polyline& curve) { return !Geo::isExactContour(curve); });
+    return curves;
+}
+
+bool setBoardBorderFromSelection() {
+    QWidget* const parent = App::grView().window();
+    const QString title = QObject::tr("Board border");
+
+    Geo::Polylines curves;
+    for(const Gi::Item* gi: App::grView().selectedItems<Gi::Item>()) {
+        const int type = gi->type();
+        // Отверстия и всё служебное (траектории УП, превью, ошибки) контуром
+        // платы не бывают.
+        if(type == Gi::Type::Drill || (type >= Gi::Type::Path_ && type < Gi::Type::ShapeBegin)) continue;
+        if(type == Gi::Type::DataSolid) {
+            // Заливка (слой в виде Normal) -- внешние края тел. У обводки
+            // контура это наружный край штриха, на полширины линии дальше
+            // настоящего края платы: точнее -- путями апертур.
+            for(const Geo::Polygon& body: gi->region())
+                curves.push_back(body.outer());
+        } else
+            curves.append_range(gi->curves()); // в сцене: трансформация файла уже применена
+    }
+
+    const QString hint = QObject::tr("Shift+click on an aperture-path segment selects the whole connected outline.");
+    if(curves.empty()) {
+        QMessageBox::information(parent, title,
+            QObject::tr("Select the closed board contour, e.g. the board outline layer shown as aperture paths.")
+                + u"\n"_s + hint);
+        return false;
+    }
+
+    Geo::Polylines contours = boardContours(std::move(curves));
+    if(contours.empty()) {
+        QMessageBox::warning(parent, title,
+            QObject::tr("The selected objects do not form a closed contour.\n"
+                        "Gaps between the ends must not exceed the Glue setting (G-Code Properties): %1 mm.")
+                    .arg(App::project().glue())
+                + u"\n"_s + hint);
+        return false;
+    }
+
+    // Рамка проекта -- ещё и шаг раскладки (скрипт G-кода раскладывает УП по
+    // workRect): сменится габарит -- уедут все копии на плате-панели.
+    QRectF rect;
+    for(const Geo::Polyline& contour: contours)
+        rect = rect.isNull() ? contour.boundingRect() : rect.united(contour.boundingRect());
+    Project& project = App::project();
+    if(project.stepsX() * project.stepsY() > 1 && rect != project.worckRect()
+        && QMessageBox::question(parent, title,
+               QObject::tr("The board border is also the step of the step-and-repeat layout (%1 × %2), "
+                           "so the copies will move.\nSet the border anyway?")
+                   .arg(project.stepsX())
+                   .arg(project.stepsY()),
+               QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+            != QMessageBox::Yes)
+        return false;
+
+    project.setBoardBorder(std::move(contours));
     return true;
 }
 
@@ -703,10 +824,29 @@ void LayoutFrames::paint(QPainter* painter, const QStyleOptionGraphicsItem* /*op
     painter->setPen(pen);
 
     painter->drawPath(path_);
+
+    if(!borderPath_.isEmpty()) {
+        // Точный контур границы -- косметическим пунктиром в пиксель: видно,
+        // ЧТО задано кнопкой, и уголков рамки он не заслоняет.
+        QPen dash{
+            QColor{255, 0, 255},
+            1.0, Qt::DashLine
+        };
+        dash.setCosmetic(true);
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(dash);
+        painter->drawPath(borderPath_);
+    }
     painter->restore();
 }
 
 void LayoutFrames::updateRect(bool fl) {
+    // Габарит меняется: индекс BSP сцены должен узнать об этом ДО смены
+    // rect_, иначе держит прежний прямоугольник -- следы перерисовки там, где
+    // рамки уже нет, и пропуски там, где она теперь.
+    prepareGeometryChange();
+    borderPath_ = App::project().boardBorder().toPath();
+
     QPainterPath path;
     QRectF rect(App::project().worckRect());
     rect_ = rect;

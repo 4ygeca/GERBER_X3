@@ -181,6 +181,12 @@ bool Project::save(const QString& fileName) {
         // группе лежит УП, хранит она сама (GCode::File::group).
         sb.append_raw(",\"groups\":");
         Serial::write(sb, GCode::groupStates());
+        // Граница платы -- своим ключом, не в шапке (см. Project::boardBorder).
+        // Нет её -- нет и ключа: проект без неё пишется как прежде.
+        if(!boardBorder_.empty()) {
+            sb.append_raw(",\"boardBorder\":");
+            Serial::write(sb, boardBorder_);
+        }
         sb.end_object();
 
         std::string_view view;
@@ -316,6 +322,16 @@ bool Project::open(const QString& fileName) {
             simdjson::ondemand::value value;
             if(!root["groups"].get(value) && Serial::read(value, groups))
                 groups.clear(); // разобрано не до конца -- лучше никак, чем наполовину
+        }
+
+        // Граница платы -- последним ключом, как и пишется (ondemand читает
+        // ключи по порядку). В старых проектах ключа нет -- остаётся только
+        // прямоугольник workRect из шапки, как и было.
+        boardBorder_.clear();
+        {
+            simdjson::ondemand::value value;
+            if(!root["boardBorder"].get(value) && Serial::read(value, boardBorder_))
+                boardBorder_.clear(); // разобрано не до конца -- лучше никак, чем наполовину
         }
 
         for(const auto& [id, filePtr]: files_)
@@ -705,7 +721,22 @@ void Project::setStepsY(uint value) {
 QRectF Project::worckRect() const { return worckRect_; }
 void Project::setWorckRect(const QRectF& worckRect) {
     worckRect_ = worckRect;
+    // Рамку переопределили (двойной щелчок по маркеру, авторасстановка) --
+    // заданные кнопкой контуры к ней больше не относятся.
+    boardBorder_.clear();
     isPinsPlaced_ = true;
+    emit layoutFrameUpdate();
+    setChanged();
+}
+
+void Project::setBoardBorder(Geo::Polylines contours) {
+    QRectF rect;
+    for(const Geo::Polyline& contour: contours)
+        rect = rect.isNull() ? contour.boundingRect() : rect.united(contour.boundingRect());
+    boardBorder_ = std::move(contours);
+    worckRect_ = rect;
+    // Без true: LayoutFrames::updateRect(true) переставил бы булавки, ноль и
+    // дом, а граница задаётся отдельно от них.
     emit layoutFrameUpdate();
     setChanged();
 }
