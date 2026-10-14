@@ -220,6 +220,16 @@ protected:
     [[= Serial::skip]] Geo::Polylines g0path_;
     [[= Serial::skip]] double z_{};
 
+    // Пост на время regenerate(): берётся один раз в его начале. Settings::post()
+    // на каждом вызове сверяет время изменения файла поста с диском (stat), а
+    // нужен пост на каждую дугу и каждый комментарий. Поле у каждого файла своё,
+    // а не общая метка «давно ли сверяли» в Post: созданные расчётом файлы
+    // пересобираются в его рабочем потоке одновременно с GUI, и общую метку
+    // писали бы оба потока. Файл же в каждый момент в руках одного потока.
+    [[= Serial::skip]] Post* post_{};
+    // Пост пересчёта, вне его -- Settings::post(), как прежде.
+    Post& currentPost();
+
     static inline QString lastDir;
     static inline bool redirected;
     static inline constexpr auto CMD_LIST = u"GXYZIJRSF"_sv;
