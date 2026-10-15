@@ -241,6 +241,27 @@ private slots:
         QVERIFY(normalize(pieces(0.05), 0.001).region.empty());
     }
 
+    // Дуга в обрывке, который склейке пришлось развернуть: прогиб первого
+    // ребра лежит на начальной точке, а та при стыковке уходит как повтор.
+    // Контур платы со скруглённым торцом не должен терять дугу (хорда).
+    void stitchKeepsArcOfReversedPiece() {
+        const Polyline arc{
+            Vertex{20, 10, -1.0},
+            Vertex{20, 0}
+        }; // полуокружность, навстречу
+        Polylines pieces{
+            Polyline{{0, 0},   {20, 0}},
+            arc,
+            Polyline{{20, 10}, {0, 10}},
+            Polyline{{0, 10},  {0, 0} },
+        };
+        const Normalized norm = normalize(pieces, exitWeldTolerance);
+        QVERIFY(norm.open.empty());
+        QCOMPARE(norm.region.size(), std::size_t{1});
+        // Прямоугольник 20x10 и полукруг радиуса 5: с хордой было бы ровно 200.
+        QVERIFY(std::abs(std::abs(norm.region.area() - 200.0) - 12.5 * pi) < 1e-3);
+    }
+
     // Что замкнуть не вышло -- не теряется: профиль по разомкнутой линии такая
     // же траектория.
     void openStaysOpen() {

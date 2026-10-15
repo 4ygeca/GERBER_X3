@@ -131,7 +131,13 @@ void stitch(Polylines& polylines, double glue) {
     auto joinable = [glue](QPointF a, QPointF b) { return distance(a, b) <= glue; };
 
     // Приклеивает `src` к хвосту `dst`, не дублируя общую точку стыка.
+    // Прогиб первого ребра src лежит на src.front(), а она уходит как повтор
+    // dst.back() -- прогиб переезжает на хвост dst (хвостовой прогиб открытой
+    // полилинии сам ничего не описывает). Иначе обрывок, начинающийся дугой
+    // (в том числе развёрнутый), стыковался бы хордой: скруглённые углы
+    // контура платы срезались.
     auto append = [](Polyline& dst, const Polyline& src) {
+        dst.back().bulge = src.front().bulge;
         dst.insert(dst.end(), src.begin() + 1, src.end());
     };
 

@@ -452,6 +452,7 @@ void Form::computePaths() {
         }
     }
 
+    GCode::File* lastCreated{}; // в буфер обмена -- как в базовой форме (fileHandler)
     for(auto [usedToolId, data]: pathsMap) {
         if(data.paths.size()) {
             GCode::Params gcp{App::toolHolder().tool(usedToolId), dsbxDepth->value(), std::move(data.paths)};
@@ -481,8 +482,12 @@ void Form::computePaths() {
                 App::project().replaceFile(it->second, gcode);
             else
                 createdFileIds_[usedToolId] = App::project().addFile(gcode);
+            lastCreated = gcode;
         }
     }
+    // Расчёт резьбы синхронный и мимо GCode::Form::fileHandler: новая УП
+    // попадает в буфер обмена здесь (File::regenerate больше не копирует).
+    if(lastCreated) lastCreated->copyToClipboard();
 
     QTimer::singleShot(1, Qt::CoarseTimer, [this] { header->onChecked(); });
 }

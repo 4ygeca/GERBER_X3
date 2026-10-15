@@ -147,6 +147,27 @@ bool setBoardBorderFromSelection() {
         return false;
     }
 
+    // Граница -- наружные контуры. Shift+щелчок добавляет цепочку контура к
+    // уже выделенному, и замкнутый край площадки или репера внутри платы попал
+    // бы в границу лишним пунктиром. Вложенный в другой контур -- долой (панель
+    // с платами внутри остаётся панелью).
+    {
+        std::vector<Geo::Polygon> bodies;
+        std::vector<QRectF> boxes;
+        for(const Geo::Polyline& contour: contours) {
+            bodies.emplace_back(contour);
+            boxes.push_back(contour.boundingRect());
+        }
+        std::vector<bool> nested(contours.size());
+        for(size_t i{}; i < contours.size(); ++i)
+            for(size_t j{}; j < contours.size() && !nested[i]; ++j)
+                nested[i] = j != i && boxes[j].contains(boxes[i]) && bodies[j].contains(contours[i].front());
+        Geo::Polylines outer;
+        for(size_t i{}; i < contours.size(); ++i)
+            if(!nested[i]) outer.push_back(std::move(contours[i]));
+        contours = std::move(outer);
+    }
+
     // Рамка проекта -- ещё и шаг раскладки (скрипт G-кода раскладывает УП по
     // workRect): сменится габарит -- уедут все копии на плате-панели.
     QRectF rect;
@@ -163,7 +184,12 @@ bool setBoardBorderFromSelection() {
             != QMessageBox::Yes)
         return false;
 
+    const QRectF oldRect = project.worckRect();
     project.setBoardBorder(std::move(contours));
+    // По рамке скрипты раскладывают копии мультипликации: сменился габарит --
+    // пересобрать УП с новым шагом.
+    if(project.worckRect() != oldRect)
+        GCode::scheduleRegenerateGCodeFiles();
     return true;
 }
 
@@ -598,6 +624,7 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
             auto drillls = new Drilling::File{std::move(gcp)};
             drillls->setFileName(tr("Pin_") + tool.nameEnc());
             App::project().addFile(drillls);
+            drillls->copyToClipboard(); // новая УП -- в буфер обмена, как из форм
         }
     });
 

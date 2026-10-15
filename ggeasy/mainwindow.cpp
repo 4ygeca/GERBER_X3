@@ -427,9 +427,13 @@ void MainWindow::loadSettings() {
                 byKey.insert(key, visible);
         }
         settings.endArray();
+        // По номеру -- лишь если панель та же по составу: в новую версию на
+        // панель могли добавить действие, и номера после него съехали бы
+        // (спрятанное раньше всплыло бы, а спрятался бы разделитель).
+        const bool sameLayout = byIndex.size() == toolBar->actions().size();
         for(int index{}; auto action: toolBar->actions()) {
             if(byKey.isEmpty()) {
-                if(index < byIndex.size()) action->setVisible(byIndex[index]);
+                if(sameLayout) action->setVisible(byIndex[index]);
             } else if(auto it = byKey.constFind(toolBarActionKey(action)); it != byKey.cend())
                 action->setVisible(*it);
             ++index;
