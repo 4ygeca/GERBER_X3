@@ -257,8 +257,12 @@ std::vector<PinsDialog::HoleSet> PinsDialog::holeSets(qsizetype& selected) {
         std::vector<Round> holes;
         for(QGraphicsItem* item: view->scene()->selectedItems())
             if(auto hole = roundHole(item)) holes.push_back(*hole);
-        Distinct found = distinct(holes, std::numeric_limits<size_t>::max());
-        selected = static_cast<qsizetype>(found.centres.size());
+        // Больше четырёх разных -- набор уже не годится, а их точное число
+        // для подсказки не нужно: при выделенной целиком панели попарное
+        // сравнение десятков тысяч отверстий держало бы окно секундами.
+        Distinct found = distinct(holes, 4);
+        selected = found.centres.size() > 4 ? static_cast<qsizetype>(holes.size())
+                                            : static_cast<qsizetype>(found.centres.size());
         if(selected == 3 || selected == 4) {
             HoleSet set;
             set.centres = std::move(found.centres);
@@ -559,9 +563,15 @@ PinsDialog::Fit PinsDialog::fitPoint(const HoleSet& set, QPointF org) {
             worstScore = score;
             const QString line = vertical ? tr("the vertical line X = %1 mm through the symmetry point").arg(number(c.x() - org.x(), 3))
                                           : tr("the horizontal line Y = %1 mm through the symmetry point").arg(number(c.y() - org.y(), 3));
-            worst = tr("The mirror image of the hole X %1, Y %2 about %3 misses the hole X %4, Y %5 by %6 mm.")
-                        .arg(number(h[i].x() - org.x(), 3), number(h[i].y() - org.y(), 3), line,
-                            number(h[j].x() - org.x(), 3), number(h[j].y() - org.y(), 3), offset(QLineF{m, h[j]}.length()));
+            // На самой линии отверстие отражается в себя: промаха нет, а
+            // углом прямоугольника оно быть не может -- это и сказать.
+            if(offLine <= eps)
+                worst = tr("The hole X %1, Y %2 lies on %3, so it cannot be a corner of the rectangle.")
+                            .arg(number(h[i].x() - org.x(), 3), number(h[i].y() - org.y(), 3), line);
+            else
+                worst = tr("The mirror image of the hole X %1, Y %2 about %3 misses the hole X %4, Y %5 by %6 mm.")
+                            .arg(number(h[i].x() - org.x(), 3), number(h[i].y() - org.y(), 3), line,
+                                number(h[j].x() - org.x(), 3), number(h[j].y() - org.y(), 3), offset(QLineF{m, h[j]}.length()));
         }
     if(!worst.isEmpty())
         return refuse(worst + u'\n'
@@ -633,11 +643,12 @@ void PinsDialog::updateSetLabels() {
         // под точку (трапеция, три отверстия).
         if(set.error.isEmpty()) {
             const Fit result = fit(set);
+            const Fit axis = pointMode_ ? fitAxis(set, org) : result;
             if(result.error.isEmpty())
                 text = tr("%1 — symmetric").arg(text);
-            else if(pointMode_ && fitAxis(set, org).error.isEmpty())
+            else if(pointMode_ && axis.error.isEmpty())
                 text = tr("%1 — symmetric about the flip axis only").arg(text);
-            else if(result.symmetric)
+            else if(result.symmetric || axis.symmetric) // ромб: симметричен, но не под четыре булавки
                 text = tr("%1 — symmetric, but does not fit four pins").arg(text);
             else
                 text = tr("%1 — not symmetric").arg(text);

@@ -25,12 +25,12 @@
     </message>
     <message>
         <location filename="gi_point.cpp" line="613"/>
-        <source>Pin &amp;coordinates and snapping…</source>
+        <source>&amp;Pin coordinates and snapping…</source>
         <translation>&amp;Координаты и привязка булавок…</translation>
     </message>
     <message>
         <location filename="gi_point.cpp" line="618"/>
-        <source>Symmetry &amp;point</source>
+        <source>S&amp;ymmetry point</source>
         <translation>&amp;Точка симметрии</translation>
     </message>
     <message>
@@ -170,161 +170,166 @@ Select the tooling holes on the scene before opening this window.</source>
         <translation>Выделено круглых отверстий Excellon на сцене: %1. Чтобы поставить булавки на выделенные отверстия, выделите 3 или 4 из них.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="278"/>
+        <location filename="gi_pinsdialog.cpp" line="282"/>
         <source>The selected holes have different diameters: Ø%1 mm. The pins need 3 or 4 holes of one diameter.</source>
         <translation>У выделенных отверстий разные диаметры: Ø%1 мм. Булавкам нужны 3-4 отверстия одного диаметра.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="280"/>
-        <location filename="gi_pinsdialog.cpp" line="339"/>
-        <location filename="gi_pinsdialog.cpp" line="457"/>
-        <location filename="gi_pinsdialog.cpp" line="467"/>
-        <location filename="gi_pinsdialog.cpp" line="530"/>
+        <location filename="gi_pinsdialog.cpp" line="284"/>
+        <location filename="gi_pinsdialog.cpp" line="343"/>
+        <location filename="gi_pinsdialog.cpp" line="461"/>
+        <location filename="gi_pinsdialog.cpp" line="471"/>
+        <location filename="gi_pinsdialog.cpp" line="534"/>
         <source>The pins were not moved.</source>
         <translation>Булавки не сдвинуты.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="339"/>
+        <location filename="gi_pinsdialog.cpp" line="343"/>
         <source>The pins need 3 or 4 round holes of one diameter.</source>
         <translation>Булавкам нужны 3-4 круглых отверстия одного диаметра.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="448"/>
+        <location filename="gi_pinsdialog.cpp" line="452"/>
         <source>The hole X %1, Y %2 should lie on the flip axis X = %3 mm, but is %4 mm off it.</source>
         <translation>Отверстие X %1, Y %2 должно лежать на оси переворота X = %3 мм, но отстоит от неё на %4 мм.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="450"/>
-        <location filename="gi_pinsdialog.cpp" line="562"/>
+        <location filename="gi_pinsdialog.cpp" line="454"/>
+        <location filename="gi_pinsdialog.cpp" line="572"/>
         <source>The mirror image of the hole X %1, Y %2 about %3 misses the hole X %4, Y %5 by %6 mm.</source>
         <translation>Зеркальное отражение отверстия X %1, Y %2 относительно %3 промахивается мимо отверстия X %4, Y %5 на %6 мм.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="451"/>
+        <location filename="gi_pinsdialog.cpp" line="455"/>
         <source>the flip axis X = %1 mm</source>
         <translation>оси переворота X = %1 мм</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="454"/>
+        <location filename="gi_pinsdialog.cpp" line="458"/>
         <source>The holes are not symmetric about a vertical flip axis.</source>
         <translation>Отверстия несимметричны относительно вертикальной оси переворота.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="455"/>
-        <location filename="gi_pinsdialog.cpp" line="568"/>
+        <location filename="gi_pinsdialog.cpp" line="459"/>
+        <location filename="gi_pinsdialog.cpp" line="578"/>
         <source>The comparison is exact: only the rounding of the file coordinates (resolution %1 mm) is allowed for.</source>
         <translation>Сравнение точное: учитывается только округление координат в файле (разрешение %1 мм).</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="463"/>
+        <location filename="gi_pinsdialog.cpp" line="467"/>
         <source>The holes are symmetric about the flip axis X = %1 mm, but %2 of them lie on the axis itself. Four pins are two mirror pairs: a pair stands either on two mirror holes or on one hole on the axis, so the pins cannot take all of these holes.</source>
         <translation>Отверстия симметричны относительно оси переворота X = %1 мм, но %2 из них лежат на самой оси. Четыре булавки — это две зеркальные пары: пара встаёт либо на два зеркальных отверстия, либо на одно отверстие на оси, поэтому все эти отверстия булавкам не занять.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="509"/>
-        <location filename="gi_pinsdialog.cpp" line="511"/>
+        <location filename="gi_pinsdialog.cpp" line="513"/>
+        <location filename="gi_pinsdialog.cpp" line="515"/>
         <source>Pins %1 and %2 both stand on the hole on the flip axis.</source>
         <translation>Булавки %1 и %2 обе стоят на отверстии на оси переворота.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="525"/>
+        <location filename="gi_pinsdialog.cpp" line="529"/>
         <source>Symmetry about a point needs 4 holes at the corners of a rectangle with sides along X and Y.</source>
         <translation>Для симметрии относительно точки нужны 4 отверстия в углах прямоугольника со сторонами вдоль X и Y.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="529"/>
+        <location filename="gi_pinsdialog.cpp" line="533"/>
         <source>These holes are symmetric about a vertical flip axis: turn off &quot;Symmetry point&quot; to place the pins on them.</source>
         <translation>Эти отверстия симметричны относительно вертикальной оси переворота: снимите галочку «Точка симметрии», чтобы поставить на них булавки.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="535"/>
+        <location filename="gi_pinsdialog.cpp" line="539"/>
         <source>The set has only %1 holes, so one of the four pins would have no hole.</source>
         <translation>В наборе только %1 отверстия, и одной из четырёх булавок отверстия не хватит.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="560"/>
+        <location filename="gi_pinsdialog.cpp" line="564"/>
         <source>the vertical line X = %1 mm through the symmetry point</source>
         <translation>вертикали X = %1 мм через точку симметрии</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="561"/>
+        <location filename="gi_pinsdialog.cpp" line="565"/>
         <source>the horizontal line Y = %1 mm through the symmetry point</source>
         <translation>горизонтали Y = %1 мм через точку симметрии</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="627"/>
+        <location filename="gi_pinsdialog.cpp" line="569"/>
+        <source>The hole X %1, Y %2 lies on %3, so it cannot be a corner of the rectangle.</source>
+        <translation>Отверстие X %1, Y %2 лежит на %3, поэтому углом прямоугольника быть не может.</translation>
+    </message>
+    <message>
+        <location filename="gi_pinsdialog.cpp" line="637"/>
         <source>%1: %2 × Ø%3 mm, %4 × %5 mm</source>
         <translation>%1: %2 × Ø%3 мм, %4 × %5 мм</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="629"/>
+        <location filename="gi_pinsdialog.cpp" line="639"/>
         <source>Selected on the scene: %1 holes Ø%2 mm, %3 × %4 mm</source>
         <translation>Выделенные на сцене: %1 отв. Ø%2 мм, %3 × %4 мм</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="631"/>
+        <location filename="gi_pinsdialog.cpp" line="641"/>
         <source>Selected on the scene: %1 holes of different diameters</source>
         <translation>Выделенные на сцене: %1 отв. разных диаметров</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="637"/>
+        <location filename="gi_pinsdialog.cpp" line="648"/>
         <source>%1 — symmetric</source>
         <translation>%1 — симметричны</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="639"/>
+        <location filename="gi_pinsdialog.cpp" line="650"/>
         <source>%1 — symmetric about the flip axis only</source>
         <translation>%1 — симметричны только относительно оси переворота</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="641"/>
+        <location filename="gi_pinsdialog.cpp" line="652"/>
         <source>%1 — symmetric, but does not fit four pins</source>
         <translation>%1 — симметричны, но четырём булавкам не подходят</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="643"/>
+        <location filename="gi_pinsdialog.cpp" line="654"/>
         <source>%1 — not symmetric</source>
         <translation>%1 — несимметричны</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="662"/>
+        <location filename="gi_pinsdialog.cpp" line="673"/>
         <source>Flip axis X:</source>
         <translation>Ось переворота X:</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="662"/>
+        <location filename="gi_pinsdialog.cpp" line="673"/>
         <source>Symmetry point:</source>
         <translation>Точка симметрии:</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="664"/>
+        <location filename="gi_pinsdialog.cpp" line="675"/>
         <source>Vertical axis the board is flipped around for the bottom side.
 Changing it moves all pins together.</source>
         <translation>Вертикальная ось, вокруг которой заготовку переворачивают для нижней стороны.
 Её изменение сдвигает все булавки вместе.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="732"/>
+        <location filename="gi_pinsdialog.cpp" line="743"/>
         <source>The pins are on the holes Ø%1 mm. The largest offset of a pin from a hole centre is %2 mm: the rounding of the file coordinates (resolution %3 mm).</source>
         <translation>Булавки стоят на отверстиях Ø%1 мм. Наибольший уход булавки от центра отверстия — %2 мм: это округление координат в файле (разрешение %3 мм).</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="739"/>
+        <location filename="gi_pinsdialog.cpp" line="750"/>
         <source>Step and repeat: the flip axis is taken on the first board copy, where these holes are.</source>
         <translation>Размножение: ось переворота взята по первой копии платы — на ней эти отверстия.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="780"/>
+        <location filename="gi_pinsdialog.cpp" line="791"/>
         <source>Symmetry point: X = %1 mm, Y = %2 mm. The board is flipped around the vertical line through it.</source>
         <translation>Точка симметрии: X = %1 мм, Y = %2 мм. Заготовку переворачивают вокруг вертикали через неё.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="788"/>
+        <location filename="gi_pinsdialog.cpp" line="799"/>
         <source>Pin %1 is used, but its mirror partner, pin %2, is not: after flipping the board, there is no hole for pin %1.</source>
         <translation>Булавка %1 используется, а её зеркальная пара, булавка %2, — нет: после переворота заготовки под булавку %1 нет отверстия.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="800"/>
+        <location filename="gi_pinsdialog.cpp" line="811"/>
         <source>Some used pins have no used mirror partner: after flipping the board, there are no holes for them.
 
 Apply anyway?</source>
@@ -396,7 +401,7 @@ to snap the pins exactly to them.</source>
         <translation type="vanished">Ни одна булавка не используется: привязывать нечего.</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="784"/>
+        <location filename="gi_pinsdialog.cpp" line="795"/>
         <source>Flip axis: X = %1 mm</source>
         <translation>Ось переворота: X = %1 мм</translation>
     </message>
@@ -409,7 +414,7 @@ to snap the pins exactly to them.</source>
         <translation type="vanished">(булавка %1 не используется)</translation>
     </message>
     <message>
-        <location filename="gi_pinsdialog.cpp" line="786"/>
+        <location filename="gi_pinsdialog.cpp" line="797"/>
         <source>No pins are used.</source>
         <translation>Ни одна булавка не используется.</translation>
     </message>

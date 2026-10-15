@@ -610,12 +610,12 @@ void Pin::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     menu.setToolTipsVisible(true);
     // Одно окно на координаты и привязку к отверстиям: прежние два пункта
     // открывали один и тот же диалог.
-    action = menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("Pin &coordinates and snapping…"), [] {
+    action = menu.addAction(QIcon::fromTheme(u"document-edit"_s), tr("&Pin coordinates and snapping…"), [] {
         PinsDialog{App::grView.ptr()}.exec();
     });
     action->setEnabled(movable);
     action->setToolTip(fixedHint);
-    action = menu.addAction(tr("Symmetry &point"), [](bool point) { setPointSymmetry(point); });
+    action = menu.addAction(tr("S&ymmetry point"), [](bool point) { setPointSymmetry(point); });
     action->setCheckable(true);
     action->setChecked(pointSymmetry());
     action->setEnabled(movable);
