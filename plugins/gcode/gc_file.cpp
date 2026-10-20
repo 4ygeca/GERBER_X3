@@ -340,6 +340,16 @@ void File::regenerate(unsigned sections) {
     stale_ = sections != All;
 }
 
+std::vector<QString> File::sectionsText(unsigned sections) {
+    // Свой текст с его отметкой -- в сторону на время сборки: regenerate()
+    // пишет прямо в lines_ и отметку взводит (кусок -- не УП).
+    auto own = std::exchange(lines_, {});
+    const bool stale = stale_;
+    regenerate(sections);
+    stale_ = stale;
+    return std::exchange(lines_, std::move(own));
+}
+
 void File::copyToClipboard() {
     ensureGCodeLines({this});
     const Post& post = App::gcSettings().post();

@@ -971,7 +971,7 @@ void MainWindow::saveSelectedGCodeFiles() {
     }
 
     // Сначала -- все имена, потом -- вся запись. Запись пересобирает УП
-    // (File::save, regenerate), у больших -- секунды на каждую. Между
+    // (File::save, sectionsText), у больших -- секунды на каждую. Между
     // диалогами они замораживали окно, и закрытый диалог успевал отдать
     // активность чужим окнам. Теперь диалоги идут подряд, а пересчёт --
     // одним заходом под одним курсором ожидания. Отмена диалога прекращает
@@ -1021,14 +1021,15 @@ void MainWindow::saveSelectedGCodeFiles() {
         for(auto file: job.files)
             sl.push_back(GCode::File::comment(u"\t"_s + file->shortName()));
         // Шапка -- только у первого файла, концовка -- только у последнего:
-        // один станочный файл, а не склейка нескольких.
+        // один станочный файл, а не склейка нескольких. Части -- мимо lines_
+        // (sectionsText): кусок УП остался бы в нём и в окне просмотра, и в
+        // проекте.
         for(auto file: job.files) {
             file->itemGroup()->setVisible(false);
             unsigned sections = GCode::File::Body;
             if(file == job.files.front()) sections |= GCode::File::Header;
             if(file == job.files.back()) sections |= GCode::File::Footer;
-            file->regenerate(sections);
-            sl.append_range(file->gCodeText());
+            sl.append_range(file->sectionsText(sections));
         }
         QFile file{job.name};
         if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
