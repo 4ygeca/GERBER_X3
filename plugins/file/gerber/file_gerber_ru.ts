@@ -12,22 +12,22 @@
 <context>
     <name>Gerber::EtchDialog</name>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="101"/>
+        <location filename="gbr_etchdialog.cpp" line="107"/>
         <source>unknown error</source>
         <translation>неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="137"/>
+        <location filename="gbr_etchdialog.cpp" line="143"/>
         <source>Etch Compensation</source>
         <translation>Компенсация подтрава</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="168"/>
+        <location filename="gbr_etchdialog.cpp" line="174"/>
         <source> mm</source>
         <translation> мм</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="171"/>
+        <location filename="gbr_etchdialog.cpp" line="177"/>
         <source>Undercut compensation: every copper edge moves outward by this value.
 Tracks and pads grow by twice the offset, gaps between them shrink by twice the offset.
 KiCad&apos;s PostScript &quot;track width correction&quot; is the full width change, i.e. twice this value.
@@ -38,34 +38,34 @@ Applied in file coordinates, before the affine transform; 0 means no compensatio
 Применяется в координатах файла, до аффинного преобразования; 0 — без компенсации.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="177"/>
+        <location filename="gbr_etchdialog.cpp" line="183"/>
         <source>Unattributed objects are copper</source>
         <translation>Объекты без атрибутов — медь</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="179"/>
+        <location filename="gbr_etchdialog.cpp" line="185"/>
         <source>Dark objects without an X2 aperture function (%TA.AperFunction) and outside any net (%TO.N).
 Turn it off if text and logos share apertures with tracks, then pick copper classes in the table.</source>
         <translation>Тёмные объекты без X2-функции апертуры (%TA.AperFunction) и вне цепей (%TO.N).
 Выключите, если текст и логотипы нарисованы теми же апертурами, что и дорожки, и отметьте классы меди в таблице.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="183"/>
+        <location filename="gbr_etchdialog.cpp" line="189"/>
         <source>Auto</source>
         <translation>Авто</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="184"/>
+        <location filename="gbr_etchdialog.cpp" line="190"/>
         <source>Keep exact size</source>
         <translation>Сохранять размер</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="185"/>
+        <location filename="gbr_etchdialog.cpp" line="191"/>
         <source>Shrink with copper</source>
         <translation>Сужать вместе с медью</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="187"/>
+        <location filename="gbr_etchdialog.cpp" line="193"/>
         <source>Clear objects (%LPC) without an X2 aperture function.
 Auto: exact size if the file has X2 attributes (KiCad drill marks),
 otherwise they are voids in copper and shrink with it.</source>
@@ -74,81 +74,81 @@ otherwise they are voids in copper and shrink with it.</source>
 иначе это пустоты в меди, и они сужаются вместе с ней.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="192"/>
+        <location filename="gbr_etchdialog.cpp" line="198"/>
         <source>Keep aperture holes exact size</source>
         <translation>Не сужать отверстия апертур</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="194"/>
+        <location filename="gbr_etchdialog.cpp" line="200"/>
         <source>Holes of flashed apertures (e.g. %ADD10C,1.6X0.8*%) keep their size
 where nothing else covers them.</source>
         <translation>Отверстия вспышек апертур (например, %ADD10C,1.6X0.8*%) сохраняют размер
 там, где их ничто не накрывает.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="203"/>
+        <location filename="gbr_etchdialog.cpp" line="209"/>
         <source> (not a copper layer)</source>
         <translation> (не слой меди)</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="204"/>
+        <location filename="gbr_etchdialog.cpp" line="210"/>
         <source>&lt;b&gt;%1&lt;/b&gt;: X2 aperture functions: %2; nets: %3; file function: %4</source>
         <translation>&lt;b&gt;%1&lt;/b&gt;: X2-функции апертур: %2; цепей: %3; функция файла: %4</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="206"/>
+        <location filename="gbr_etchdialog.cpp" line="212"/>
         <source>yes</source>
         <translation>есть</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="206"/>
+        <location filename="gbr_etchdialog.cpp" line="212"/>
         <source>no</source>
         <translation>нет</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="218"/>
+        <location filename="gbr_etchdialog.cpp" line="224"/>
         <source>Class</source>
         <translation>Класс</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="218"/>
+        <location filename="gbr_etchdialog.cpp" line="224"/>
         <source>Function</source>
         <translation>Функция</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="218"/>
+        <location filename="gbr_etchdialog.cpp" line="224"/>
         <source>Objects</source>
         <translation>Объекты</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="218"/>
+        <location filename="gbr_etchdialog.cpp" line="224"/>
         <source>By rules</source>
         <translation>По правилам</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="226"/>
+        <location filename="gbr_etchdialog.cpp" line="232"/>
         <source>Checked classes are compensated as copper; for clear objects the void shrinks with the copper.
 Bold: chosen manually; the &quot;By rules&quot; column shows the automatic choice.</source>
         <translation>Отмеченные классы компенсируются как медь; у вырезов пустота сужается вместе с медью.
 Жирным — выбрано вручную; колонка «По правилам» показывает автоматический выбор.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="228"/>
+        <location filename="gbr_etchdialog.cpp" line="234"/>
         <source>Selected rows are highlighted on the scene, double click zooms to them.</source>
         <translation>Выбранные строки подсвечены на сцене, двойной щелчок — масштаб к ним.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="238"/>
+        <location filename="gbr_etchdialog.cpp" line="244"/>
         <source>Reset to rules</source>
         <translation>Сбросить к правилам</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="243"/>
+        <location filename="gbr_etchdialog.cpp" line="249"/>
         <source>Exclude selected</source>
         <translation>Исключить выделенное</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="244"/>
+        <location filename="gbr_etchdialog.cpp" line="250"/>
         <source>Objects lying in the copper bodies (Normal view) or on the aperture paths
 selected on the scene are never compensated, whatever their class says.
 Select them on the scene before opening this dialog.</source>
@@ -157,47 +157,47 @@ Select them on the scene before opening this dialog.</source>
 Выделите их на сцене до открытия этого диалога.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="250"/>
+        <location filename="gbr_etchdialog.cpp" line="256"/>
         <source>Clear exclusions</source>
         <translation>Снять исключения</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="251"/>
+        <location filename="gbr_etchdialog.cpp" line="257"/>
         <source>Excluded objects follow their classes again.</source>
         <translation>Исключённые объекты снова следуют своим классам.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="255"/>
+        <location filename="gbr_etchdialog.cpp" line="261"/>
         <source>Toolpaths created earlier are not recalculated.</source>
         <translation>Созданные ранее УП не пересчитываются.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="263"/>
+        <location filename="gbr_etchdialog.cpp" line="269"/>
         <source>Short circuits: %1</source>
         <translation>Замыканий: %1</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="265"/>
+        <location filename="gbr_etchdialog.cpp" line="271"/>
         <source>The files have no nets (X2 %TO.N): short circuits are not checked.</source>
         <translation>В файлах нет цепей (X2 %TO.N): замыкания не проверяются.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="275"/>
+        <location filename="gbr_etchdialog.cpp" line="281"/>
         <source>Offset per edge:</source>
         <translation>Смещение кромки:</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="277"/>
+        <location filename="gbr_etchdialog.cpp" line="283"/>
         <source>Clear objects without function:</source>
         <translation>Вырезы без функции:</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="337"/>
+        <location filename="gbr_etchdialog.cpp" line="343"/>
         <source>Regions</source>
         <translation>Области</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="342"/>
+        <location filename="gbr_etchdialog.cpp" line="348"/>
         <source>Regions without an aperture function in a file with X2 attributes:
 usually KiCad text in a TrueType font or knockout text,
 which KiCad plots without an aperture function.</source>
@@ -206,58 +206,58 @@ which KiCad plots without an aperture function.</source>
 которые KiCad выводит без функции апертуры.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="353"/>
+        <location filename="gbr_etchdialog.cpp" line="359"/>
         <source>%1 (%2 clear)</source>
         <translation>%1 (вырезов: %2)</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="362"/>
+        <location filename="gbr_etchdialog.cpp" line="368"/>
         <source>Excluded on scene</source>
         <translation>Исключены на сцене</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="363"/>
+        <location filename="gbr_etchdialog.cpp" line="369"/>
         <source>Objects excluded with &quot;Exclude selected&quot;: never compensated.</source>
         <translation>Объекты, исключённые кнопкой «Исключить выделенное»: не компенсируются никогда.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="391"/>
+        <location filename="gbr_etchdialog.cpp" line="397"/>
         <source>copper</source>
         <translation>медь</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="619"/>
+        <location filename="gbr_etchdialog.cpp" line="625"/>
         <source>Nothing to exclude: no objects of these files lie in the bodies or on the aperture paths selected on the scene.
 Select them on the scene before opening this dialog.</source>
         <translation>Исключать нечего: в выделенных на сцене телах и на осевых нет объектов этих файлов.
 Выделите их на сцене до открытия этого диалога.</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="364"/>
-        <location filename="gbr_etchdialog.cpp" line="392"/>
+        <location filename="gbr_etchdialog.cpp" line="370"/>
+        <location filename="gbr_etchdialog.cpp" line="398"/>
         <source>not copper</source>
         <translation>не медь</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="393"/>
+        <location filename="gbr_etchdialog.cpp" line="399"/>
         <source>mixed</source>
         <translation>смешанно</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="479"/>
-        <location filename="gbr_etchdialog.cpp" line="507"/>
+        <location filename="gbr_etchdialog.cpp" line="485"/>
+        <location filename="gbr_etchdialog.cpp" line="513"/>
         <source>Etch compensation failed:
 %1</source>
         <translation>Компенсация подтрава не удалась:
 %1</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="489"/>
+        <location filename="gbr_etchdialog.cpp" line="495"/>
         <source>Short circuits: %1 → %2</source>
         <translation>Замыканий: %1 → %2</translation>
     </message>
     <message>
-        <location filename="gbr_etchdialog.cpp" line="521"/>
+        <location filename="gbr_etchdialog.cpp" line="527"/>
         <source>Compensation adds short circuits: %1 → %2.
 Clearances between nets are closed. Keep it?</source>
         <translation>Компенсация добавляет замыкания: %1 → %2.
@@ -392,44 +392,54 @@ name</source>
         <translation>Компенсация подтрава…</translation>
     </message>
     <message>
-        <location filename="gbr_node.cpp" line="201"/>
+        <location filename="gbr_node.cpp" line="204"/>
+        <source>Board outline</source>
+        <translation>Контур платы</translation>
+    </message>
+    <message>
+        <location filename="gbr_node.cpp" line="210"/>
+        <source>The whole layer is the board outline: the HLDI raster outside ends at its innermost contour around the selected objects and never takes it as material.</source>
+        <translation>Весь слой — контур платы: растр HLDI снаружи кончается на его самом внутреннем контуре вокруг выделенных объектов и никогда не берёт его материалом.</translation>
+    </message>
+    <message>
+        <location filename="gbr_node.cpp" line="213"/>
         <source>&amp;Close</source>
         <translation>&amp;Закрыть</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="206"/>
+        <location filename="gbr_file.cpp" line="214"/>
         <source>Normal</source>
         <translation>Обычный</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="206"/>
+        <location filename="gbr_file.cpp" line="214"/>
         <source>Normal view</source>
         <translation>Обычный вид</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="207"/>
+        <location filename="gbr_file.cpp" line="215"/>
         <source>Aperture paths</source>
         <translation>Пути апертур</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="207"/>
+        <location filename="gbr_file.cpp" line="215"/>
         <source>Displays only aperture paths of copper
 without width and without contacts</source>
         <translation>Показывает только пути апертур меди,
 без ширины и без контактных площадок</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="208"/>
+        <location filename="gbr_file.cpp" line="216"/>
         <source>Components</source>
         <translation>Компоненты</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="208"/>
+        <location filename="gbr_file.cpp" line="216"/>
         <source>Show components</source>
         <translation>Показать компоненты</translation>
     </message>
     <message>
-        <location filename="gbr_file.cpp" line="767"/>
+        <location filename="gbr_file.cpp" line="844"/>
         <source>Short circuit:</source>
         <translation>Короткое замыкание:</translation>
     </message>
@@ -485,7 +495,7 @@ without width and without contacts</source>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="gbr_file.cpp" line="246"/>
+        <location filename="gbr_file.cpp" line="254"/>
         <source>, drill Ø%1mm</source>
         <translation>, сверло Ø%1 мм</translation>
     </message>

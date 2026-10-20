@@ -4,44 +4,44 @@
 <context>
     <name>Gi::Pin</name>
     <message>
-        <location filename="gi_point.cpp" line="550"/>
+        <location filename="gi_point.cpp" line="667"/>
         <source>&amp;Create path for Pins</source>
         <translation>&amp;Создать УП для булавок</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="574"/>
+        <location filename="gi_point.cpp" line="691"/>
         <source>Set Depth</source>
         <translation>Установить глубину</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="599"/>
+        <location filename="gi_point.cpp" line="716"/>
         <source>Pin_</source>
         <translation>Булавки_</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="609"/>
+        <location filename="gi_point.cpp" line="727"/>
         <source>Uncheck &quot;Fixed&quot; to edit the pins.</source>
         <translation>Снимите галочку «Фиксация», чтобы править булавки.</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="613"/>
+        <location filename="gi_point.cpp" line="731"/>
         <source>&amp;Pin coordinates and snapping…</source>
         <translation>&amp;Координаты и привязка булавок…</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="618"/>
+        <location filename="gi_point.cpp" line="736"/>
         <source>S&amp;ymmetry point</source>
         <translation>&amp;Точка симметрии</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="695"/>
+        <location filename="gi_point.cpp" line="813"/>
         <source>Drag: all four pins about the symmetry point
 Ctrl+drag: all pins together with the symmetry point</source>
         <translation>Перетаскивание: все четыре булавки относительно точки симметрии
 Ctrl+перетаскивание: все булавки вместе с точкой симметрии</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="697"/>
+        <location filename="gi_point.cpp" line="815"/>
         <source>Drag: the pin and its mirror partner (the flip axis stays)
 Ctrl+drag: all pins together with the flip axis</source>
         <translation>Перетаскивание: булавка и её зеркальная пара (ось переворота стоит)
@@ -56,12 +56,12 @@ Ctrl+перетаскивание: все булавки вместе с ось�
         <translation type="vanished">Привязать булавки к &amp;отверстиям…</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="625"/>
+        <location filename="gi_point.cpp" line="743"/>
         <source>Fixed</source>
         <translation>Фиксация</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="630"/>
+        <location filename="gi_point.cpp" line="748"/>
         <source>Used</source>
         <translation>Использовать в УП</translation>
     </message>
@@ -468,64 +468,64 @@ Apply anyway?</source>
         <translation>Инструмент %1, Ø%2 мм</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="43"/>
+        <location filename="gi_point.cpp" line="48"/>
         <source>There are no selected items to define the border.
 The old border will be used.</source>
         <translation>Нет выбранных элементов для определения границы.
 Будет использована предыдущая граница.</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="114"/>
+        <location filename="gi_point.cpp" line="157"/>
         <source>Board border</source>
         <translation>Граница платы</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="132"/>
+        <location filename="gi_point.cpp" line="224"/>
         <source>Shift+click on an aperture-path segment selects the whole connected outline.</source>
         <translation>Shift+щелчок по отрезку пути апертуры выделяет весь связный контур.</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="135"/>
+        <location filename="gi_point.cpp" line="227"/>
         <source>Select the closed board contour, e.g. the board outline layer shown as aperture paths.</source>
         <translation>Выделите замкнутый контур платы, например слой контура платы в виде путей апертур.</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="143"/>
+        <location filename="gi_point.cpp" line="248"/>
         <source>The selected objects do not form a closed contour.
 Gaps between the ends must not exceed the Glue setting (G-Code Properties): %1 mm.</source>
         <translation>Выделенные объекты не образуют замкнутого контура.
 Зазоры между концами не должны превышать «Клей» (Параметры G-кода): %1 мм.</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="158"/>
+        <location filename="gi_point.cpp" line="260"/>
         <source>The board border is also the step of the step-and-repeat layout (%1 × %2), so the copies will move.
 Set the border anyway?</source>
         <translation>Граница платы — ещё и шаг раскладки (%1 × %2): копии сдвинутся.
 Всё равно задать границу?</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="180"/>
+        <location filename="gi_point.cpp" line="297"/>
         <source>G-Code Home Point</source>
         <translation>Дом УП</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="185"/>
+        <location filename="gi_point.cpp" line="302"/>
         <source>G-Code Zero Point</source>
         <translation>Ноль УП</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="364"/>
+        <location filename="gi_point.cpp" line="481"/>
         <source>Fixed</source>
         <translation>Фиксация</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="370"/>
-        <location filename="gi_point.cpp" line="642"/>
+        <location filename="gi_point.cpp" line="487"/>
+        <location filename="gi_point.cpp" line="760"/>
         <source>&amp;Settings</source>
         <translation>&amp;Настройки</translation>
     </message>
     <message>
-        <location filename="gi_point.cpp" line="689"/>
+        <location filename="gi_point.cpp" line="807"/>
         <source>Pin %1
 X %2:Y %3</source>
         <translation>Булавка %1

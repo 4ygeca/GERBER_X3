@@ -22,12 +22,12 @@
 <context>
     <name>GCode</name>
     <message>
-        <location filename="gc_creator.cpp" line="185"/>
+        <location filename="gc_creator.cpp" line="196"/>
         <source>createGc</source>
         <translation>Создание УП</translation>
     </message>
     <message>
-        <location filename="gc_creator.cpp" line="342"/>
+        <location filename="gc_creator.cpp" line="353"/>
         <source>Check milling for errors</source>
         <translation>Проверка фрезерования на ошибки</translation>
     </message>
@@ -50,7 +50,7 @@
 <context>
     <name>GCode::Dialog</name>
     <message>
-        <location filename="gc_programdialog.cpp" line="210"/>
+        <location filename="gc_programdialog.cpp" line="212"/>
         <source>3D preview is unavailable.
 
 %1</source>
@@ -59,37 +59,37 @@
 %1</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="228"/>
+        <location filename="gc_programdialog.cpp" line="230"/>
         <source>Fit</source>
         <translation>Вписать</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="232"/>
+        <location filename="gc_programdialog.cpp" line="234"/>
         <source>Iso</source>
         <translation>Изо</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="233"/>
+        <location filename="gc_programdialog.cpp" line="235"/>
         <source>Top</source>
         <translation>Сверху</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="234"/>
+        <location filename="gc_programdialog.cpp" line="236"/>
         <source>Front</source>
         <translation>Спереди</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="235"/>
+        <location filename="gc_programdialog.cpp" line="237"/>
         <source>Left</source>
         <translation>Слева</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="237"/>
+        <location filename="gc_programdialog.cpp" line="239"/>
         <source>Rapids</source>
         <translation>Холостые ходы</translation>
     </message>
     <message>
-        <location filename="gc_programdialog.cpp" line="243"/>
+        <location filename="gc_programdialog.cpp" line="245"/>
         <source>Perspective</source>
         <translation>Перспектива</translation>
     </message>
@@ -103,8 +103,8 @@
     </message>
     <message>
         <location filename="gc_form.cpp" line="185"/>
-        <location filename="gc_form.cpp" line="436"/>
-        <location filename="gc_form.cpp" line="816"/>
+        <location filename="gc_form.cpp" line="448"/>
+        <location filename="gc_form.cpp" line="829"/>
         <source>Create</source>
         <translation>Создать</translation>
     </message>
@@ -130,73 +130,73 @@
     </message>
     <message>
         <location filename="gc_form.cpp" line="343"/>
-        <location filename="gc_form.cpp" line="585"/>
+        <location filename="gc_form.cpp" line="598"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="436"/>
-        <location filename="gc_form.cpp" line="816"/>
+        <location filename="gc_form.cpp" line="448"/>
+        <location filename="gc_form.cpp" line="829"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="585"/>
+        <location filename="gc_form.cpp" line="598"/>
         <source>No data for working...</source>
         <translation>Нет данных для работы...</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="636"/>
+        <location filename="gc_form.cpp" line="649"/>
         <source>Toolpath name</source>
         <translation>Имя УП</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="658"/>
+        <location filename="gc_form.cpp" line="671"/>
         <source>Toolpath &quot;%1&quot; is open for editing, but the name has been changed to &quot;%2&quot;.</source>
         <translation>УП «%1» открыта для правки, но имя изменено на «%2».</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="660"/>
+        <location filename="gc_form.cpp" line="673"/>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="660"/>
+        <location filename="gc_form.cpp" line="673"/>
         <source>Save as New</source>
         <translation>Сохранить как новую</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="675"/>
+        <location filename="gc_form.cpp" line="688"/>
         <source>Toolpath &quot;%1&quot; already exists in the project.</source>
         <translation>УП «%1» уже есть в проекте.</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="676"/>
+        <location filename="gc_form.cpp" line="689"/>
         <source>Replace</source>
         <translation>Заменить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="676"/>
+        <location filename="gc_form.cpp" line="689"/>
         <source>Add Number</source>
         <translation>Добавить номер</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="814"/>
+        <location filename="gc_form.cpp" line="827"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="105"/>
+        <location filename="gc_form.h" line="113"/>
         <source>Outside</source>
         <translation>Снаружи</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="106"/>
+        <location filename="gc_form.h" line="114"/>
         <source>Depth:</source>
         <translation>Глубина:</translation>
     </message>
     <message>
-        <location filename="gc_form.h" line="107"/>
+        <location filename="gc_form.h" line="115"/>
         <source>Tool:</source>
         <translation>Инструмент:</translation>
     </message>
@@ -245,17 +245,17 @@
         <translation>Траектории инструмента</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="56"/>
+        <location filename="gc_plugin.cpp" line="58"/>
         <source>&amp;Delete All Toolpaths</source>
         <translation>&amp;Удалить все траектории</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="57"/>
+        <location filename="gc_plugin.cpp" line="59"/>
         <source>Really?</source>
         <translation>Точно?</translation>
     </message>
     <message>
-        <location filename="gc_plugin.cpp" line="60"/>
+        <location filename="gc_plugin.cpp" line="62"/>
         <source>&amp;Save Selected Tool Paths...</source>
         <oldsource>&amp;Save Selected Tool PathsD...</oldsource>
         <translation>&amp;Сохранить выбранные траектории...</translation>
@@ -556,7 +556,7 @@
     </message>
     <message>
         <location filename="gc_node.cpp" line="196"/>
-        <location filename="gc_node.cpp" line="433"/>
+        <location filename="gc_node.cpp" line="435"/>
         <source>Group name:</source>
         <translation>Имя группы:</translation>
     </message>
@@ -581,37 +581,37 @@
         <translation>&amp;Убрать из группы</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="343"/>
+        <location filename="gc_node.cpp" line="342"/>
         <source>&amp;Save Toolpath</source>
         <translation>&amp;Сохранить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="347"/>
+        <location filename="gc_node.cpp" line="346"/>
         <source>&amp;Hide other</source>
         <translation>&amp;Скрыть остальные</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="351"/>
+        <location filename="gc_node.cpp" line="350"/>
         <source>&amp;Show source</source>
         <translation>&amp;Показать источник</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="356"/>
+        <location filename="gc_node.cpp" line="358"/>
         <source>&amp;Delete Toolpath</source>
         <translation>&amp;Удалить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="431"/>
+        <location filename="gc_node.cpp" line="433"/>
         <source>&amp;Rename Group...</source>
         <translation>П&amp;ереименовать группу...</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="433"/>
+        <location filename="gc_node.cpp" line="435"/>
         <source>Rename Group</source>
         <translation>Переименование группы</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="439"/>
+        <location filename="gc_node.cpp" line="441"/>
         <source>&amp;Ungroup</source>
         <translation>&amp;Разгруппировать</translation>
     </message>
@@ -630,57 +630,57 @@
         <translation type="vanished">;        Источник: %1 [%2]</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="310"/>
+        <location filename="gc_file.cpp" line="471"/>
         <source>	         Source: %1 [%2]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="311"/>
+        <location filename="gc_file.cpp" line="472"/>
         <source>#%1 (deleted)</source>
         <translation>#%1 (удалён)</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="317"/>
+        <location filename="gc_file.cpp" line="478"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="319"/>
+        <location filename="gc_file.cpp" line="481"/>
         <source>	           Name: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="321"/>
+        <location filename="gc_file.cpp" line="483"/>
         <source>	        Program: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="323"/>
+        <location filename="gc_file.cpp" line="485"/>
         <source>	           Tool: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="324"/>
+        <location filename="gc_file.cpp" line="486"/>
         <source>	  Tool Stepover: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="325"/>
+        <location filename="gc_file.cpp" line="487"/>
         <source>	 Feed Rate mm/s: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="326"/>
+        <location filename="gc_file.cpp" line="488"/>
         <source>	Tool Pass Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="327"/>
+        <location filename="gc_file.cpp" line="489"/>
         <source>	          Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="328"/>
+        <location filename="gc_file.cpp" line="490"/>
         <source>	           Side: %1</source>
         <translation type="unfinished"></translation>
     </message>
