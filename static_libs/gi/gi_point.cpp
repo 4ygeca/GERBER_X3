@@ -12,6 +12,7 @@
  ********************************************************************************/
 #include "gi_point.h"
 
+#include "abstract_file.h"
 #include "drill/drill_file.h"
 #include "gc_file.h"
 #include "gc_propertiesform.h"
@@ -29,8 +30,12 @@
 #include <QMessageBox>
 #include <QStyleOptionGraphicsItem>
 #include <QTimer>
+#include <QTransform>
 
+#include <algorithm>
 #include <cmath>
+#include <map>
+#include <optional>
 #include <set>
 
 bool updateRect() {
@@ -109,71 +114,136 @@ Geo::Polylines boardContours(Geo::Polylines curves) {
     return curves;
 }
 
+bool isBoardOutlineGi(const Gi::Item* gi) {
+    const AbstractFile* file = gi ? gi->file() : nullptr;
+    return file && (file->isBoardOutlineItem(gi) || App::project().isBoardOutlineFile(file->id()));
+}
+
+Geo::Polylines boardOutlineCurvesOf(const AbstractFile* file) {
+    if(!file) return {};
+    if(!App::project().isBoardOutlineFile(file->id())) return file->boardOutlineCurves();
+
+    // Слой, взятый пользователем за контур, -- контур целиком. Из объектов
+    // файла, как и boardOutlineCurves: элементы сцены есть только у видимого
+    // вида, а контур нужен при любом.
+    Geo::Polylines curves;
+    for(const GraphicObject* go: file->graphicObjects())
+        if(go && go->path.size() >= 2) curves.push_back(go->path); // вспышки пути не имеют
+    if(!curves.empty()) {
+        Geo::transform(curves, file->transform().toQTransform());
+        return uniqueCurves(std::move(curves));
+    }
+
+    // Объектов файл не отдаёт (DXF, SVG) -- элементы сцены всех его видов, в
+    // сцене трансформация уже применена. Штрихи, а нет их -- края заливок:
+    // то и другое сразу дало бы контур дважды, край заливки -- на полширины
+    // линии дальше осевой.
+    for(const Gi::Group* group: file->itemGroups())
+        if(group)
+            for(const auto& gi: *group)
+                if(gi->type() == Gi::Type::DataPath) curves.append_range(gi->curves());
+    if(curves.empty())
+        for(const Gi::Group* group: file->itemGroups())
+            if(group)
+                for(const auto& gi: *group)
+                    if(gi->type() == Gi::Type::DataSolid)
+                        for(const Geo::Polygon& body: gi->region())
+                            curves.push_back(body.outer());
+    return uniqueCurves(std::move(curves));
+}
+
 bool setBoardBorderFromSelection() {
     QWidget* const parent = App::grView().window();
     const QString title = QObject::tr("Board border");
+    Project& project = App::project();
 
-    Geo::Polylines curves;
+    // Кандидаты -- ярусами по старшинству, и берётся первый непустой:
+    //  0 -- элементы слоя контура платы (узнанного или помеченного);
+    //  1 -- пути апертур (Gi::DataPath, открытые штрихи): так контур и
+    //       выделяют, когда слой сам не узнаётся;
+    //  2 -- всё выделенное, как было всегда.
+    // «Выделить всё» вместе с маской иначе давало россыпь её контуров. Кривые
+    // -- по файлам: обрывкам разных слоёв срастаться незачем.
+    using BorderFileCurves = std::map<const AbstractFile*, Geo::Polylines>;
+    std::array<BorderFileCurves, 3> tiers;
+    BorderFileCurves outlineOf; // boardOutlineCurvesOf -- по разу на файл
     for(const Gi::Item* gi: App::grView().selectedItems<Gi::Item>()) {
         const int type = gi->type();
         // Отверстия и всё служебное (траектории УП, превью, ошибки) контуром
         // платы не бывают.
         if(type == Gi::Type::Drill || (type >= Gi::Type::Path_ && type < Gi::Type::ShapeBegin)) continue;
-        if(type == Gi::Type::DataSolid) {
-            // Заливка (слой в виде Normal) -- внешние края тел. У обводки
-            // контура это наружный край штриха, на полширины линии дальше
-            // настоящего края платы: точнее -- путями апертур.
+        const AbstractFile* file = gi->file();
+        if(isBoardOutlineGi(gi)) {
+            Geo::Polylines& curves = tiers[0][file];
+            if(type != Gi::Type::DataSolid) {
+                curves.append_range(gi->curves()); // в сцене: трансформация файла уже применена
+                continue;
+            }
+            // Заливка (слой в виде Normal) -- кольцо обводки, его края на
+            // полширины линии по обе стороны от настоящего края платы. Берутся
+            // осевые того же контура из самого файла -- лежащие в габарите
+            // кольца: соседний контур (заготовка вокруг платы) туда не влезет.
+            const auto [it, fresh] = outlineOf.try_emplace(file);
+            if(fresh) it->second = boardOutlineCurvesOf(file);
+            const Geo::Polygons region = gi->region();
+            const double tolerance = std::max(project.glue(), 1e-6);
+            const QRectF box = region.boundingRect().adjusted(-tolerance, -tolerance, tolerance, tolerance);
+            const size_t before = curves.size();
+            for(const Geo::Polyline& curve: it->second)
+                if(box.contains(curve.boundingRect())) curves.push_back(curve);
+            if(curves.size() == before) // осевых нет -- хотя бы внешние края тел
+                for(const Geo::Polygon& body: region)
+                    curves.push_back(body.outer());
+        } else if(type == Gi::Type::DataPath) {
+            tiers[1][file].append_range(gi->curves());
+        } else if(type == Gi::Type::DataSolid) {
+            // Внешние края тел. У обводки контура это наружный край штриха, на
+            // полширины линии дальше настоящего края платы: точнее -- путями
+            // апертур.
             for(const Geo::Polygon& body: gi->region())
-                curves.push_back(body.outer());
+                tiers[2][file].push_back(body.outer());
         } else
-            curves.append_range(gi->curves()); // в сцене: трансформация файла уже применена
+            tiers[2][file].append_range(gi->curves());
     }
 
+    size_t level = tiers.size();
+    for(size_t i{}; i < tiers.size() && level == tiers.size(); ++i)
+        if(r::any_of(tiers[i], [](const auto& entry) { return !entry.second.empty(); })) level = i;
+
     const QString hint = QObject::tr("Shift+click on an aperture-path segment selects the whole connected outline.");
-    if(curves.empty()) {
+    if(level == tiers.size()) {
         QMessageBox::information(parent, title,
             QObject::tr("Select the closed board contour, e.g. the board outline layer shown as aperture paths.")
                 + u"\n"_s + hint);
         return false;
     }
 
-    Geo::Polylines contours = boardContours(std::move(curves));
-    if(contours.empty()) {
+    // Граница -- ОДИН контур, самый большой по площади (с дугами). Выделяют
+    // обычно всё сразу или цепочку Shift+щелчком поверх выделенного, и туда
+    // попадают края площадок, реперов и вырезов -- все они внутри платы и
+    // меньше её.
+    struct BorderCandidate {
+        Geo::Polyline contour;
+        const AbstractFile* file;
+        double area;
+    };
+    std::optional<BorderCandidate> best;
+    for(auto& [file, curves]: tiers[level])
+        for(Geo::Polyline& contour: boardContours(std::move(curves)))
+            if(const double area = contour.area(); !best || area > best->area)
+                best = BorderCandidate{std::move(contour), file, area};
+    if(!best) {
         QMessageBox::warning(parent, title,
             QObject::tr("The selected objects do not form a closed contour.\n"
                         "Gaps between the ends must not exceed the Glue setting (G-Code Properties): %1 mm.")
-                    .arg(App::project().glue())
+                    .arg(project.glue())
                 + u"\n"_s + hint);
         return false;
     }
 
-    // Граница -- наружные контуры. Shift+щелчок добавляет цепочку контура к
-    // уже выделенному, и замкнутый край площадки или репера внутри платы попал
-    // бы в границу лишним пунктиром. Вложенный в другой контур -- долой (панель
-    // с платами внутри остаётся панелью).
-    {
-        std::vector<Geo::Polygon> bodies;
-        std::vector<QRectF> boxes;
-        for(const Geo::Polyline& contour: contours) {
-            bodies.emplace_back(contour);
-            boxes.push_back(contour.boundingRect());
-        }
-        std::vector<bool> nested(contours.size());
-        for(size_t i{}; i < contours.size(); ++i)
-            for(size_t j{}; j < contours.size() && !nested[i]; ++j)
-                nested[i] = j != i && boxes[j].contains(boxes[i]) && bodies[j].contains(contours[i].front());
-        Geo::Polylines outer;
-        for(size_t i{}; i < contours.size(); ++i)
-            if(!nested[i]) outer.push_back(std::move(contours[i]));
-        contours = std::move(outer);
-    }
-
     // Рамка проекта -- ещё и шаг раскладки (скрипт G-кода раскладывает УП по
     // workRect): сменится габарит -- уедут все копии на плате-панели.
-    QRectF rect;
-    for(const Geo::Polyline& contour: contours)
-        rect = rect.isNull() ? contour.boundingRect() : rect.united(contour.boundingRect());
-    Project& project = App::project();
+    const QRectF rect = best->contour.boundingRect();
     if(project.stepsX() * project.stepsY() > 1 && rect != project.worckRect()
         && QMessageBox::question(parent, title,
                QObject::tr("The board border is also the step of the step-and-repeat layout (%1 × %2), "
@@ -184,8 +254,18 @@ bool setBoardBorderFromSelection() {
             != QMessageBox::Yes)
         return false;
 
+    // Слой, из путей апертур которого взят контур, сам не узнаётся -- теперь
+    // он контур платы и для растра HLDI: там в нём ищется контур вокруг
+    // выделенного, и материалом он не идёт. Раньше границы: её смена
+    // пересчитывает надпись формы растра. Ярус 0 уже узнан или помечен, а
+    // ярус 2 -- что угодно (маска в виде Normal), и весь такой слой выпал бы
+    // из материала растра.
+    if(level == 1 && best->file) project.setBoardOutlineFile(best->file->id(), true);
+
     const QRectF oldRect = project.worckRect();
-    project.setBoardBorder(std::move(contours));
+    Geo::Polylines border;
+    border.push_back(std::move(best->contour));
+    project.setBoardBorder(std::move(border));
     // По рамке скрипты раскладывают копии мультипликации: сменился габарит --
     // пересобрать УП с новым шагом.
     if(project.worckRect() != oldRect)

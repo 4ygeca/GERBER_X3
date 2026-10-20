@@ -663,8 +663,10 @@ void MainWindow::createActionsService() {
         setBoardBorderFromSelection();
     }));
     action->setObjectName(u"actSetBoardBorder"_s);
-    action->setToolTip(tr("Board border (violet frame) from the selected closed contour,\n"
-                          "e.g. the board outline shown as aperture paths.\n"
+    action->setToolTip(tr("Board border (violet frame): the largest closed contour of the selection.\n"
+                          "Taken from the board outline layer, otherwise from aperture paths,\n"
+                          "otherwise from all selected objects.\n"
+                          "The layer whose aperture paths gave the contour becomes the board outline layer.\n"
                           "Shift+click on an aperture-path segment selects the whole connected outline.\n"
                           "Pins, zero and home are not moved."));
     // Separator
