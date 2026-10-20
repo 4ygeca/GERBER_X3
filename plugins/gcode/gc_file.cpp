@@ -39,6 +39,7 @@
 #include <QRegularExpression>
 #include <QTimer>
 #include <algorithm>
+#include <mutex>
 
 #undef emit
 #include <execution>
@@ -50,6 +51,12 @@ namespace {
 
 // Имена здесь -- с приставкой gcRegen: unity build склеивает .cpp цели
 // пачками, и безымянное пространство у них на всех одно.
+
+// Пост (Settings::post) со своим QJSEngine -- один на процесс, а regenerate()
+// зовут и GUI-поток (чтение устаревшего текста, сохранение), и поток расчёта
+// (конструкторы новых УП). QJSEngine не потокобезопасен: пересчёты -- по
+// одному. Рекурсивный -- на случай повторного входа из того же потока.
+std::recursive_mutex gcRegenMutex;
 
 // Отложенное обновление окон просмотра: каких УП оно ждёт.
 //
@@ -304,6 +311,7 @@ void File::initFrom(AbstractFile* file) {
 }
 
 void File::regenerate(unsigned sections) {
+    const std::lock_guard regenLock{gcRegenMutex};
     // Пост -- один раз на весь пересчёт: Settings::post() при каждом вызове
     // сверяет файл поста с диском (stat), а нужен пост на каждую дугу и
     // каждый комментарий.

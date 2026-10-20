@@ -188,10 +188,21 @@ bool setBoardBorderFromSelection() {
             const Geo::Polygons region = gi->region();
             const double tolerance = std::max(project.glue(), 1e-6);
             const QRectF box = region.boundingRect().adjusted(-tolerance, -tolerance, tolerance, tolerance);
-            const size_t before = curves.size();
+            // QRectF::contains(QRectF) отвергает вырожденный аргумент, а прямое
+            // ребро контура (отдельная пара D02/D01) -- отрезок с нулевой
+            // высотой или шириной габарита. Сравнение -- по замкнутым границам.
+            const auto inRing = [&box](const QRectF& r) {
+                return r.left() >= box.left() && r.right() <= box.right() && r.top() >= box.top() && r.bottom() <= box.bottom();
+            };
+            Geo::Polylines inner;
             for(const Geo::Polyline& curve: it->second)
-                if(box.contains(curve.boundingRect())) curves.push_back(curve);
-            if(curves.size() == before) // осевых нет -- хотя бы внешние края тел
+                if(inRing(curve.boundingRect())) inner.push_back(curve);
+            // Осевые не сошлись в замкнутый контур (или их нет) -- хотя бы
+            // внешние края тел: неполный набор осевых не должен вытеснить
+            // замкнутый край кольца.
+            if(!inner.empty() && !boardContours(inner).empty())
+                curves.append_range(std::move(inner));
+            else
                 for(const Geo::Polygon& body: region)
                     curves.push_back(body.outer());
         } else if(type == Gi::Type::DataPath) {
