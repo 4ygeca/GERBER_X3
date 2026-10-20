@@ -267,15 +267,14 @@ bool Node::setData(const QModelIndex& index, const QVariant& value, int role) {
             if(newSide == file->side()) return true; // холостой выбор той же стороны
 
             auto* gcFile = static_cast<File*>(file);
-            gcFile->setSide(newSide);
             // Текст УП стороной и задан: снизу он зеркальный (см.
-            // File::mirrorAndOffsetCurves), сверху идёт как есть. Пересобрать
-            // его надо ЗДЕСЬ -- иначе до следующего «Save Toolpath» файл
-            // остался бы с чужой стороной, а окно просмотра показывало бы её
-            // же. Сама геометрия на сцене не меняется: зеркалит вывод, а не
-            // чертёж.
-            gcFile->regenerate();
-            Dialog::programChanged(file->id(), gcFile->lines2(), file->name());
+            // File::mirrorAndOffsetCurves), сверху идёт как есть. setSide
+            // помечает его устаревшим -- пересоберёт первый, кто прочтёт
+            // (сохранение, «Показать исходник»), а открытое окно просмотра --
+            // сразу: иначе оно показывало бы чужую сторону. Сама геометрия на
+            // сцене не меняется: зеркалит вывод, а не чертёж.
+            gcFile->setSide(newSide);
+            refreshGCodeViewers({gcFile});
             // Подпись в дереве несёт сторону суффиксом (_TS/_BS), и её строка
             // тоже устарела.
             App::fileModel().updateNode(this);
@@ -349,6 +348,9 @@ void Node::menu(QMenu& menu, FileTree::View* tv) {
     // Реестр окон держит сам Dialog: одно окно на файл, оно же обновляется при
     // перегенерации и закрывается при удалении.
     menu.addAction(QIcon(), QObject::tr("&Show source"), [tv, this] {
+        // Текст -- актуальный: после правок параметров он мог остаться
+        // помеченным устаревшим (пересчёт ленивый).
+        ensureGCodeLines({gcodeFile()});
         Dialog::showFor(id(), file->lines2(), file->name(), tv);
     });
     addGroupActions(menu, tv, this);

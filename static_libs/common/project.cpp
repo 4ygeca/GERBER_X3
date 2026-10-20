@@ -23,6 +23,7 @@
 #include "reloadrequestdialog.h"
 #include "shapepluginin.h"
 
+#include <QApplication>
 #include <QElapsedTimer>
 #include <QFileDialog>
 #include <QIcon>
@@ -30,6 +31,17 @@
 #include <QMessageBox>
 
 const int isadfsdfg = qRegisterMetaType<AbstractFile*>("AbstractFile*");
+
+// Владелец окон сообщений проекта -- главное окно. Окно без владельца на
+// Windows при закрытии отдаёт активность следующему окну по Z-порядку, то
+// есть чаще всего чужой программе: с вопросом про булавки перед каждым
+// сохранением УП это и были «случайные» всплывающие свёрнутые и фоновые
+// окна. MainWindow здесь неполный тип, а сцена живёт в нём: её window() --
+// оно и есть. Без сцены (ещё не создана) -- активное окно приложения.
+static QWidget* projectMessageParent() {
+    if(QWidget* view = App::grView.ptr()) return view->window();
+    return QApplication::activeWindow();
+}
 
 Project::Project(QObject* parent)
     : QObject{parent}
@@ -235,7 +247,7 @@ bool Project::open(const QString& fileName) {
                                     "or is corrupted.");
             qWarning() << fileName << message;
             if(!App::isDebug()) // headless/отладочный прогон не блокировать модальным окном
-                QMessageBox::information(nullptr, tr("Project loading error"), message);
+                QMessageBox::information(projectMessageParent(), tr("Project loading error"), message);
             return false;
         }
 
@@ -704,7 +716,7 @@ bool Project::pinsPlacedMessage() {
                         "It is advisable to perform automatic placement of the pins\n"
                         "by selecting the necessary work items.\n\n"
                         "Continue saving?"),
-            QMessageBox::Yes | QMessageBox::No, nullptr);
+            QMessageBox::Yes | QMessageBox::No, projectMessageParent());
         {
             auto label(msgbx.findChild<QLabel*>());
             label->setPixmap(QIcon::fromTheme(u"snap-nodes-cusp"_s).pixmap(label->size()));

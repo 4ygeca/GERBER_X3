@@ -14,14 +14,16 @@
 #include "abstract_file.h"
 #include "app.h"
 #include "ft_model.h"
+#include "gc_file.h"
 #include "gc_form.h"
 #include "gc_node.h"
-#include "gc_programdialog.h"
+#include "project.h"
 
 #include <QAction>
 #include <QIcon>
 #include <QMenu>
 #include <QObject>
+#include <QTimer>
 #include <QToolBar>
 
 namespace GCode {
@@ -75,7 +77,17 @@ void Plugin::updateFileModel(AbstractFile* file) {
     node->setFile(file);
     App::fileModel().updateNode(node);
     // id прежний, объект новый: открытое окно просмотра держит текст старого.
-    Dialog::programChanged(file->id(), file->lines2(), file->name());
+    // Новый -- через пересборку, если устарел: initFrom помечает его так,
+    // когда сторона прежнего файла не та, для которой его собрал расчёт, а
+    // сверловка и резьба ставят сторону уже после конструктора. Но не здесь, а
+    // после возврата в цикл событий: сюда приходят из Project::reload под
+    // замком проекта (QMutex, нерекурсивный), а regenerate сам читает проект
+    // (addSourceInfo -> Project::file) -- поток ждал бы сам себя. По id, а не
+    // по указателю: к тому времени УП могли заменить снова или закрыть.
+    if(!dynamic_cast<File*>(file)) return;
+    QTimer::singleShot(0, App::project.ptr(), [id = file->id()] {
+        if(auto* gcFile = dynamic_cast<File*>(App::project().file(id))) refreshGCodeViewers({gcFile});
+    });
 }
 
 // AbstractFileSettings* Plugin::createSettingsTab(QWidget* parent) {
