@@ -199,6 +199,18 @@ public:
     // тоже: предупреждение «размеры платы могли измениться» остаётся в силе.
     void setBoardBorder(Geo::Polylines contours);
 
+    // Слои, которые пользователь сам взял за контур платы: «Задать границу
+    // платы» по путям апертур или пункт «Контур платы» в меню слоя. Сам такой
+    // слой не узнаётся (ни X2 Profile, ни Edge_Cuts/.gm1 в имени), а растру
+    // HLDI он нужен -- искать в нём контур вокруг выделенного и не брать его
+    // материалом. Контур -- вся геометрия слоя. Только для GUI-потока. В
+    // проекте -- свой ключ "boardOutlineFiles" рядом с "boardBorder", у старых
+    // проектов его нет. Закрыли файл -- его id уходит из списка: новый файл
+    // может получить тот же id, и пометка ему не положена.
+    const std::vector<int32_t>& boardOutlineFiles() const { return boardOutlineFiles_; }
+    bool isBoardOutlineFile(int32_t id) const;
+    void setBoardOutlineFile(int32_t id, bool outline);
+
     QPointF homePos() const;
     void setHomePos(const QPointF& pos);
 
@@ -225,6 +237,8 @@ signals:
     void pinsPosChanged(QPointF*);
     void worckRectChanged(const QRectF&);
     void layoutFrameUpdate(bool = false);
+    // Список boardOutlineFiles сменился (кнопка, меню слоя, открытие проекта).
+    void boardOutlineFilesChanged();
     // need for debuging
     void addFileDbg(GCode::File* file);
     // File Watcher
@@ -259,6 +273,7 @@ private:
     QPointF zero_;
     QRectF worckRect_;
     Geo::Polylines boardBorder_; // см. boardBorder()
+    std::vector<int32_t> boardOutlineFiles_; // см. boardOutlineFiles(); по возрастанию, без повторов
 
     double safeZ_{};
     double boardThickness_{};
