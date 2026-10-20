@@ -33,7 +33,8 @@ public:
     // из деструктора узла, и обоим неоткуда узнать про чужую статическую карту.
     static Dialog* showFor(int32_t fileId, const QString& text, const QString& windowTitle, QWidget* parent);
     // Открыто ли окно на файл. Спросить до programChanged: текст для него
-    // (lines2) у большой УП собирать недёшево, а без окна он не нужен.
+    // (lines2) у большой УП собирать недёшево, а без окна он не нужен. Как и
+    // сам пересчёт УП: без окна он ленивый (см. regenerateGCodeFiles).
     static bool isOpen(int32_t fileId);
     // Текст УП пересобран -- показать новый, сохранив позицию курсора.
     static void programChanged(int32_t fileId, const QString& text, const QString& windowTitle);

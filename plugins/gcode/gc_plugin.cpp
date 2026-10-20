@@ -14,9 +14,9 @@
 #include "abstract_file.h"
 #include "app.h"
 #include "ft_model.h"
+#include "gc_file.h"
 #include "gc_form.h"
 #include "gc_node.h"
-#include "gc_programdialog.h"
 
 #include <QAction>
 #include <QIcon>
@@ -75,7 +75,9 @@ void Plugin::updateFileModel(AbstractFile* file) {
     node->setFile(file);
     App::fileModel().updateNode(node);
     // id прежний, объект новый: открытое окно просмотра держит текст старого.
-    Dialog::programChanged(file->id(), file->lines2(), file->name());
+    // Новый -- через пересборку, если устарел: initFrom помечает его так,
+    // когда сторона прежнего файла не та, для которой его собрал расчёт.
+    if(auto* gcFile = dynamic_cast<File*>(file)) refreshGCodeViewers({gcFile});
 }
 
 // AbstractFileSettings* Plugin::createSettingsTab(QWidget* parent) {

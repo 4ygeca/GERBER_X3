@@ -51,29 +51,18 @@ namespace {
 // Имена здесь -- с приставкой gcRegen: unity build склеивает .cpp цели
 // пачками, и безымянное пространство у них на всех одно.
 
-// Пересобрать files. Курсор ожидания -- на всё время: секунды без отклика
-// иначе выглядят зависанием. Окно просмотра обновляется только открытое:
-// lines2() и подсветка с разбором для 3D у большой УП сами недёшевы.
-void gcRegenFiles(const std::vector<File*>& files) {
-    if(files.empty()) return;
-    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
-    for(File* file: files) {
-        file->regenerate();
-        if(Dialog::isOpen(file->id()))
-            Dialog::programChanged(file->id(), file->lines2(), file->name());
-    }
-    QGuiApplication::restoreOverrideCursor();
-}
-
-// Отложенный пересчёт: какие УП его ждут.
+// Отложенное обновление окон просмотра: каких УП оно ждёт.
 //
+// Ждут только УП с открытым окном: прочим пересчёт не нужен вовсе -- их текст
+// помечен устаревшим ещё при запросе и пересоберётся у того, кто его прочтёт.
 // УП запоминаются в момент запроса (только как адреса -- для сравнения, не
 // для обращения), а при срабатывании из них берутся только оставшиеся в
-// проекте. Удалённые так выпадают сами, а появившиеся после запроса (новый
-// расчёт, замена на месте, другой открытый проект) и так только что собраны.
-// Без этого пересобрался бы целиком следующий открытый проект: закрытие
-// текущего само шлёт запрос (hideEvent формы свойств откатывает поля,
-// Project::close сбрасывает шаги мультипликации -> LayoutFrames::updateRect).
+// проекте. Удалённые так выпадают сами (их окна закрывает programClosed), а
+// появившиеся после запроса (новый расчёт, замена на месте, другой открытый
+// проект) и так только что собраны. Без этого пересобирался бы следующий
+// открытый проект: закрытие текущего само шлёт запрос (hideEvent формы
+// свойств откатывает поля, Project::close сбрасывает шаги мультипликации ->
+// LayoutFrames::updateRect).
 std::vector<File*> gcRegenQueue;
 
 // Номер последнего взвода. Срабатывает только его таймер, прежние гаснут
@@ -115,7 +104,7 @@ void gcRegenFire() {
     if(!App::home.ptr() || !App::zero.ptr()) return;
     auto files = App::project().files<File>();
     std::erase_if(files, [&queued](File* file) { return !r::contains(queued, file); });
-    gcRegenFiles(files);
+    refreshGCodeViewers(std::move(files));
 }
 
 // Файл в пересчёт: всех сторон или только своей.
@@ -123,20 +112,48 @@ bool gcRegenSideOf(const File* file, Side side) { return side == NullSide || fil
 
 } // namespace
 
+void ensureGCodeLines(const std::vector<File*>& files) {
+    if(r::none_of(files, &File::isStale)) return;
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    for(File* file: files) file->ensureLines();
+    QGuiApplication::restoreOverrideCursor();
+}
+
+void refreshGCodeViewers(std::vector<File*> files) {
+    std::erase_if(files, [](const File* file) { return !Dialog::isOpen(file->id()); });
+    if(files.empty()) return;
+    // Курсор ожидания -- на всё время: секунды без отклика иначе выглядят
+    // зависанием. Под ним и само окно: setProgram с подсветкой и разбором для
+    // 3D у большой УП сам недёшев. Текст -- окну и тогда, когда файл уже
+    // свежий: его мог пересобрать читатель, окна не касаясь (буфер обмена), до
+    // срабатывания отложенного обновления, а при замене УП на месте
+    // (Plugin::updateFileModel) окно и вовсе держит текст прежнего объекта.
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    for(File* file: files) {
+        file->ensureLines();
+        Dialog::programChanged(file->id(), file->lines2(), file->name());
+    }
+    QGuiApplication::restoreOverrideCursor();
+}
+
 void regenerateGCodeFiles(Side side) {
     auto files = App::project().files<File>();
     std::erase_if(files, [side](File* file) { return !gcRegenSideOf(file, side); });
+    for(File* file: files) file->invalidate();
     // Отложенный запрос на эти же УП исполняется здесь -- повторять его незачем.
     std::erase_if(gcRegenQueue, [&files](File* file) { return r::contains(files, file); });
-    gcRegenFiles(files);
+    refreshGCodeViewers(std::move(files));
 }
 
 void scheduleRegenerateGCodeFiles(Side side) {
     if(!App::project.ptr()) return;
-    for(File* file: App::project().files<File>())
-        if(gcRegenSideOf(file, side) && !r::contains(gcRegenQueue, file))
+    for(File* file: App::project().files<File>()) {
+        if(!gcRegenSideOf(file, side)) continue;
+        file->invalidate();
+        if(Dialog::isOpen(file->id()) && !r::contains(gcRegenQueue, file))
             gcRegenQueue.push_back(file);
-    // Пересобирать нечего -- и таймер ни к чему.
+    }
+    // Окон нет -- обновлять нечего, и таймер ни к чему.
     if(!gcRegenQueue.empty()) gcRegenArm();
 }
 
@@ -268,13 +285,22 @@ void File::setLastDir(QString dirPath) {
 }
 
 void File::setSide(Side side) {
+    if(side != side_) stale_ = true;
     AbstractFile::setSide(side);
     gcp.params[Params::FileSide].setValue(side);
 }
 
 void File::initFrom(AbstractFile* file) {
+    const Side generated = side_;
     AbstractFile::initFrom(file);
     if(auto* prev = dynamic_cast<File*>(file)) group_ = prev->group_;
+    // Текст собран расчётом для его стороны, а в дереве остаётся сторона
+    // прежнего файла. Разошлись они -- текст чужой стороны (снизу он
+    // зеркальный): устарел.
+    if(side_ != generated) {
+        gcp.params[Params::FileSide].setValue(side_);
+        stale_ = true;
+    }
 }
 
 void File::regenerate(unsigned sections) {
@@ -309,9 +335,13 @@ void File::regenerate(unsigned sections) {
     // расчёта (конструкторы УП), и на каждый пересчёт всех УП. Текст новой УП
     // копирует форма (copyToClipboard).
     post_ = nullptr;
+    // Без шапки или концовки это не текст УП, а кусок: читать его как
+    // программу нельзя.
+    stale_ = sections != All;
 }
 
-void File::copyToClipboard() const {
+void File::copyToClipboard() {
+    ensureGCodeLines({this});
     const Post& post = App::gcSettings().post();
     QStringList text;
     text.reserve(qsizetype(lines_.size()));
@@ -323,10 +353,19 @@ void File::copyToClipboard() const {
 bool File::save(const QString& name) {
     if(name.isEmpty()) return false;
 
+    // Всегда заново, а не ensureLines: в файл на диске уходит текст по
+    // НЫНЕШНИМ посту, скрипту и настройкам, а их правка текст устаревшим не
+    // помечает. Курсор ожидания -- у вызывающего: он один на всю серию.
+    // Прежний текст нужен лишь для сравнения -- и лишь при открытом окне.
+    const bool viewed = Dialog::isOpen(id());
+    const auto before = viewed ? lines_ : std::vector<QString>{};
     regenerate();
 
     setLastDir(name);
     name_ = name;
+    // Открытое окно просмотра -- тот же текст, что ушёл на диск. Тот же, что
+    // был, -- не трогать: подсветка и 3D у большой УП сами недёшевы.
+    if(viewed && lines_ != before) Dialog::programChanged(id(), lines2(), name_);
     QFile file{name_};
     if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out{&file};
