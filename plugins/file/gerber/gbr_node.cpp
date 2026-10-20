@@ -197,6 +197,18 @@ void Node::menu(QMenu& menu, FileTree::View* tv) {
         EtchDialog dialog{std::move(files), tv};
         dialog.exec();
     });
+    // Контур платы: слой, который сам не узнаётся (ни X2 Profile, ни имени
+    // Edge_Cuts/.gm1), растр HLDI берёт границей только с этой пометкой. Её же
+    // ставит «Задать границу платы» по путям апертур -- здесь её видно и можно
+    // снять. Узнанный слой -- контур и так, снимать нечего.
+    QAction* outline = menu.addAction(GbrObj::tr("Board outline"), [id = file->id()](bool checked) {
+        App::project().setBoardOutlineFile(id, checked);
+    });
+    outline->setCheckable(true);
+    outline->setChecked(file->isBoardOutlineFile() || App::project().isBoardOutlineFile(file->id()));
+    outline->setEnabled(!file->isBoardOutlineFile());
+    outline->setToolTip(GbrObj::tr("The whole layer is the board outline: the HLDI raster outside ends at its "
+                                   "innermost contour around the selected objects and never takes it as material."));
     menu.addSeparator();
     menu.addAction(QIcon::fromTheme(u"document-close"_s), GbrObj::tr("&Close"), tv, &FileTree::View::closeFile);
 }

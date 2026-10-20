@@ -189,6 +189,12 @@ bool Project::save(const QString& fileName) {
             sb.append_raw(",\"boardBorder\":");
             Serial::write(sb, boardBorder_);
         }
+        // Слои контура платы, помеченные пользователем, -- тоже своим ключом и
+        // тоже только когда есть (см. Project::boardOutlineFiles).
+        if(!boardOutlineFiles_.empty()) {
+            sb.append_raw(",\"boardOutlineFiles\":");
+            Serial::write(sb, boardOutlineFiles_);
+        }
         sb.end_object();
 
         std::string_view view;
@@ -336,6 +342,20 @@ bool Project::open(const QString& fileName) {
                 boardBorder_.clear(); // разобрано не до конца -- лучше никак, чем наполовину
         }
 
+        // Слои контура, помеченные пользователем, -- после границы, как и
+        // пишутся. Остаются только id загруженных файлов: слой, чей плагин
+        // не нашёлся, не загрузился, а его id может достаться новому файлу.
+        boardOutlineFiles_.clear();
+        {
+            simdjson::ondemand::value value;
+            if(!root["boardOutlineFiles"].get(value) && Serial::read(value, boardOutlineFiles_))
+                boardOutlineFiles_.clear();
+            std::erase_if(boardOutlineFiles_, [this](int32_t id) { return !files_.contains(id); });
+            std::ranges::sort(boardOutlineFiles_);
+            const auto [first, last] = std::ranges::unique(boardOutlineFiles_);
+            boardOutlineFiles_.erase(first, last);
+        }
+
         for(const auto& [id, filePtr]: files_)
             App::fileModel().addFile(filePtr.get());
 
@@ -352,6 +372,7 @@ bool Project::open(const QString& fileName) {
         emit zeroPosChanged(zero_);
         emit pinsPosChanged(pins_);
         emit worckRectChanged(worckRect_);
+        emit boardOutlineFilesChanged();
 
         isModified_ = false;
 
@@ -373,6 +394,7 @@ void Project::close() {
     // (layoutFrameUpdate(true) -> Pin::resetPos), а их подсказка пишется уже
     // по текущему режиму.
     pinsPointSymmetry_ = false;
+    boardOutlineFiles_.clear();
     setWorckRect({});
     setStepsX(1);
     setStepsY(1);
@@ -391,6 +413,11 @@ void Project::deleteFile(int32_t id) {
     if(files_.contains(id)) {
         watcher.removePath(files_[id]->name());
         files_.erase(id);
+        // Id освободился и может достаться новому файлу -- пометка контура
+        // уходит вместе с файлом. Сигнал -- очередью: мьютекс занят, а форма
+        // растра по нему полезла бы в files() и встала бы на нём.
+        if(std::erase(boardOutlineFiles_, id))
+            QMetaObject::invokeMethod(this, &Project::boardOutlineFilesChanged, Qt::QueuedConnection);
         setChanged();
         // Данных стало меньше -- корневой прямоугольник BSP пора ужать.
         if(auto* view = App::grView.ptr()) view->scheduleSceneRectUpdate();
@@ -754,6 +781,20 @@ void Project::setBoardBorder(Geo::Polylines contours) {
     // Без true: LayoutFrames::updateRect(true) переставил бы булавки, ноль и
     // дом, а граница задаётся отдельно от них.
     emit layoutFrameUpdate();
+    setChanged();
+}
+
+bool Project::isBoardOutlineFile(int32_t id) const { return std::ranges::binary_search(boardOutlineFiles_, id); }
+
+void Project::setBoardOutlineFile(int32_t id, bool outline) {
+    const auto it = std::ranges::lower_bound(boardOutlineFiles_, id);
+    const bool marked = it != boardOutlineFiles_.end() && *it == id;
+    if(marked == outline) return;
+    if(outline)
+        boardOutlineFiles_.insert(it, id);
+    else
+        boardOutlineFiles_.erase(it);
+    emit boardOutlineFilesChanged();
     setChanged();
 }
 

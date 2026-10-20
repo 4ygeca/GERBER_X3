@@ -40,25 +40,40 @@ Geo::Polygons rasterBodiesOf(const Geo::Polylines& contours) {
     return Geo::Polygons{std::span<const Geo::Polygon>{bodies}};
 }
 
-struct RasterOutline {
-    Geo::Polygons bodies;
-    QStringList names;
+// Замкнутый контур слоя контура платы -- телом, без вырезов: растр снаружи
+// идёт до края, а что внутри платы, решает уже выделенное.
+struct RasterContour {
+    Geo::Polygon body;
+    QRectF box;
+    double area{};
+    QString file; // короткое имя слоя -- для надписи
 };
 
-// Слой контура платы -- со всех файлов проекта, видимых и скрытых, в любом
-// виде: файл отдаёт его своими объектами, а не элементами сцены. Склейка --
-// по файлу: обрывкам разных слоёв срастаться незачем.
-RasterOutline rasterOutlineLayer() {
-    RasterOutline outline;
-    Geo::Polylines contours;
-    for(AbstractFile* file: App::project().files()) {
-        Geo::Polylines closed = boardContours(file->boardOutlineCurves());
-        if(closed.empty()) continue;
-        outline.names.push_back(file->shortName());
-        contours.append_range(std::move(closed));
-    }
-    if(!contours.empty()) outline.bodies = rasterBodiesOf(contours);
-    return outline;
+// Контуры платы -- со всех файлов проекта, видимых и скрытых, в любом виде:
+// и узнанные слои контура, и взятые за контур пользователем
+// (boardOutlineCurvesOf). Склейка -- по файлу: обрывкам разных слоёв
+// срастаться незачем. Каждый контур -- отдельно, не объединением: заготовка с
+// техполями охватывает плату, и в объединении плата просто пропадала. По
+// возрастанию площади: первый, накрывший точку, -- самый внутренний.
+std::vector<RasterContour> rasterOutlineContours() {
+    std::vector<RasterContour> contours;
+    for(AbstractFile* file: App::project().files())
+        for(const Geo::Polyline& contour: boardContours(boardOutlineCurvesOf(file)))
+            if(Geo::Polygon body{contour}; !body.empty()) {
+                const QRectF box = body.boundingRect();
+                const double area = std::abs(body.area());
+                contours.push_back({std::move(body), box, area, file->shortName()});
+            }
+    r::stable_sort(contours, {}, &RasterContour::area);
+    return contours;
+}
+
+// Имена слоёв без повторов, в порядке контуров.
+QString rasterContourFiles(const std::vector<RasterContour>& contours, const std::vector<uint8_t>& used = {}) {
+    QStringList names;
+    for(size_t i{}; i < contours.size(); ++i)
+        if((used.empty() || used[i]) && !names.contains(contours[i].file)) names.push_back(contours[i].file);
+    return names.join(u", "_s);
 }
 
 // Граница платы, заданная кнопкой, -- точными контурами; иначе рамка проекта.
@@ -165,6 +180,8 @@ Form::Form(GCode::Plugin* plugin)
     connect(ui->cbxBorder, &QComboBox::currentIndexChanged, this, &Form::updateBorder);
     // Рамку задали кнопкой или авторасстановкой, открыли проект.
     connect(&App::project(), &Project::layoutFrameUpdate, this, &Form::updateBorder);
+    // Слой взяли за контур платы (кнопка, меню слоя) или сняли пометку.
+    connect(&App::project(), &Project::boardOutlineFilesChanged, this, &Form::updateBorder);
 
     connect(ui->toolHolder1, &ToolSelectorForm::updateName, this, &Form::updateName);
 
@@ -205,6 +222,9 @@ void Form::computePaths() {
     // и ни проекта, ни сцены ему не читать. Получит её готовой.
     if(borderEnabled()) {
         BorderChoice border = resolveBorder(&gcp);
+        // Какие контуры взяты для ЭТОГО выделенного -- видно только сейчас:
+        // без него надпись описывает лишь источник.
+        ui->lblBorder->setText(border.label);
         if(!border.question.isEmpty()
             && QMessageBox::question(this, tr("Raster border"), border.question,
                    QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes)
@@ -285,10 +305,10 @@ bool Form::borderEnabled() const { return side == GCode::Outer && ui->rbFast->is
 
 bool Form::skipGi(const Gi::Item* gi) const {
     // «По выделенному» -- прежнее поведение целиком, вместе с приёмом «кольцо
-    // контура в виде Normal плюс маска»: там кольцо как раз материал.
+    // контура в виде Normal плюс маска»: там кольцо как раз материал. В прочих
+    // режимах контур -- граница, и слой, взятый за контур пользователем, тоже.
     if(!borderEnabled() || borderMode() == Border::Selection) return false;
-    const AbstractFile* file = gi->file();
-    return file && file->isBoardOutlineItem(gi);
+    return isBoardOutlineGi(gi);
 }
 
 Form::BorderChoice Form::resolveBorder(const GCode::Params* selection) const {
@@ -316,24 +336,83 @@ Form::BorderChoice Form::resolveBorder(const GCode::Params* selection) const {
 
     bool outsideOutline{};
     if(mode == Border::Auto || mode == Border::Outline) {
-        const RasterOutline outline = rasterOutlineLayer();
-        if(!outline.bodies.empty()) {
-            const auto [width, height] = sizeOf(outline.bodies);
-            const QString label = tr("Outline layer: %1, %2 × %3 mm").arg(outline.names.join(u", "_s), width, height);
+        const std::vector<RasterContour> outline = rasterOutlineContours();
+        if(!outline.empty()) {
+            auto allBodies = [&outline] {
+                std::vector<Geo::Polygon> bodies;
+                for(const RasterContour& contour: outline) bodies.push_back(contour.body);
+                return Geo::Polygons{std::span<const Geo::Polygon>{bodies}};
+            };
+            // Выделенного ещё нет (надпись) -- что известно об источнике.
+            const QString source = tr("Board outline: %1, contours: %2. The raster ends at the innermost contour "
+                                      "around the selected objects.")
+                                       .arg(rasterContourFiles(outline), QString::number(outline.size()));
+            if(!selection) return {.label = source};
             // Без проб (ни одного годного тела) судить не о чем -- контур целиком.
-            if(!selection || probes.empty()) return {.region = outline.bodies, .label = label};
-            // Нескольким платам (техполя, панель) -- каждой свой контур:
-            // берутся те, в которых что-то выделено.
-            bool all{};
-            const std::vector<Geo::Polygon> kept = rasterCover(outline.bodies, probes, all);
-            if(all && !kept.empty())
-                return {.region = Geo::Polygons{std::span<const Geo::Polygon>{kept}}, .label = label};
-            if(mode == Border::Outline) {
-                Geo::Polygons region = kept.empty() ? outline.bodies : Geo::Polygons{std::span<const Geo::Polygon>{kept}};
-                if(!all) region |= legacyFrame();
-                return {.region = std::move(region), .label = label};
+            if(probes.empty()) return {.region = allBodies(), .label = source};
+
+            // Поиск ИЗНУТРИ: каждому выделенному -- самый внутренний контур
+            // вокруг него. Объединение всех контуров, как раньше, -- это
+            // заготовка с техполями вокруг платы, и растр выезжал на них.
+            // Нескольким платам на заготовке -- каждой свой контур, вырез
+            // внутри платы поглощается ею самой (тела без дырок).
+            std::vector<uint8_t> used(outline.size());
+            std::vector<QPointF> outside;
+            for(const QPointF& probe: probes) {
+                const auto inner = r::find_if(outline, [&probe](const RasterContour& contour) {
+                    return contour.box.contains(probe) && contour.body.contains(probe);
+                });
+                if(inner == outline.end())
+                    outside.push_back(probe);
+                else
+                    used[static_cast<size_t>(inner - outline.begin())] = 1;
             }
-            outsideOutline = true; // Auto: не всё внутри контура -- дальше рамка
+
+            const size_t usedCount = static_cast<size_t>(r::count(used, uint8_t{1}));
+            if(usedCount) {
+                std::vector<Geo::Polygon> kept;
+                for(size_t i{}; i < outline.size(); ++i)
+                    if(used[i]) kept.push_back(outline[i].body);
+                Geo::Polygons region{std::span<const Geo::Polygon>{kept}};
+                // Выделенное вне всех контуров (реперы, объекты на техполях без
+                // своего контура) не пропадает: рамка платы, если оно в ней,
+                // иначе прежний габарит выделенного.
+                QString beyond;
+                if(!outside.empty()) {
+                    const Geo::Polygons frame = mode == Border::Auto ? rasterFrameBodies() : Geo::Polygons{};
+                    bool inFrame{}, notInFrame{};
+                    for(const QPointF& probe: outside)
+                        (frame.contains(probe) ? inFrame : notInFrame) = true;
+                    if(inFrame) region |= frame;
+                    if(notInFrame) region |= legacyFrame();
+                    beyond = u"\n"_s
+                        + (notInFrame ? tr("Selected objects outside the outline: %1, there the raster ends about 1 mm "
+                                           "beyond the selected objects.")
+                                      : tr("Selected objects outside the outline: %1, there the raster goes up to the "
+                                           "board border (violet frame)."))
+                              .arg(outside.size());
+                }
+                const auto [width, height] = sizeOf(region);
+                const QString label = tr("Board outline: %1, innermost contour around the selection "
+                                         "(contours: %2 of %3), %4 × %5 mm")
+                                          .arg(rasterContourFiles(outline, used), QString::number(usedCount),
+                                              QString::number(outline.size()), width, height);
+                return {.region = std::move(region), .label = label + beyond};
+            }
+            // Ни одно выделенное не внутри контура. Слой контура об этом
+            // выделенном ничего не говорит, и всё объединением -- это опять
+            // заготовка с техполями: только прежний габарит выделенного.
+            if(mode == Border::Outline) {
+                Geo::Polygons region = legacyFrame();
+                const auto [width, height] = sizeOf(region);
+                return {
+                    .region = std::move(region),
+                    .label = tr("Board outline: %1, no contour encloses the selected objects: the raster ends about "
+                                "1 mm beyond them, %2 × %3 mm")
+                                 .arg(rasterContourFiles(outline), width, height),
+                };
+            }
+            outsideOutline = true; // Auto: контур не про это выделенное -- дальше рамка
         } else if(mode == Border::Outline) {
             return {
                 .label = tr("No board outline layer: the raster ends about 1 mm beyond the selected objects."),
