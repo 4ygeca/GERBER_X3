@@ -62,6 +62,25 @@ static QString toolBarActionKey(const QAction* action) {
     return action->text();
 }
 
+// Вернуть активность главному окну после диалогов сохранения и секунд
+// пересчёта УП -- если она потерялась внутри приложения. Сперва разобрать
+// накопившиеся события окон (ввод пользователя не трогая): пока пересчёт
+// держал поток, смена активного окна ждала в очереди, и состояние было ещё
+// на момент закрытия диалога. Затем -- только если приложение всё ещё
+// активно: ушёл человек за эти секунды в другую программу -- это его выбор,
+// и выдёргивать его обратно нельзя (Windows и не даст: вместо активации
+// мигнёт кнопка на панели задач). И только если активного окна у
+// приложения нет вовсе: своё активное (окно просмотра УП, другой диалог) --
+// тоже выбор человека. Активное же приложение без активного окна -- это
+// активность, которую закрытый диалог отдал не туда: клавиатура уходила бы
+// в никуда, а следующий диалог открывался бы позади всех.
+static void reactivateAfterSave(QWidget* window) {
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    if(QGuiApplication::applicationState() != Qt::ApplicationActive || QApplication::activeWindow()) return;
+    window->raise();
+    window->activateWindow();
+}
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow{parent}
     , recentFiles{this, u"recentFiles"_s}
@@ -912,6 +931,7 @@ void MainWindow::saveGCodeFile(int32_t id) {
     if(project_->pinsPlacedMessage())
         return;
     auto* file = project_->file<GCode::File>(id);
+    if(!file) return;
     QString name(QFileDialog::getSaveFileName(this, tr("Save GCode file"),
         GCode::File::getLastDir().append(file->shortName()),
         tr("GCode (*.%1)").arg(App::gcSettings().fileExtension())));
@@ -919,7 +939,11 @@ void MainWindow::saveGCodeFile(int32_t id) {
     if(name.isEmpty())
         return;
 
+    // Сохранение пересобирает УП (File::save) -- у большой это секунды.
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     file->save(name);
+    QApplication::restoreOverrideCursor();
+    reactivateAfterSave(this);
 }
 
 void MainWindow::saveGCodeFiles() { }
@@ -941,62 +965,81 @@ void MainWindow::saveSelectedGCodeFiles() {
     for(GCode::File* file: gcFiles)
         gcFilesMap[{file->tool().hash2(), file->side()}].append(file);
 
-    for(const auto& [key, files]: gcFilesMap) {
-        if(files.size() < 2) {
-            for(GCode::File* file: files) {
-                QString name(GCode::File::getLastDir().append(file->shortName()));
-                if(!name.endsWith(App::gcSettings().fileExtension()))
-                    name += QStringList({u"_TS"_s, u"_BS"_s})[file->side()];
-
-                name = QFileDialog::getSaveFileName(nullptr,
-                    QObject::tr("Save GCode file"),
-                    name,
-                    QObject::tr("GCode (*.%1)").arg(App::gcSettings().fileExtension()));
-
-                if(name.isEmpty())
-                    return;
-                file->save(name);
-                file->itemGroup()->setVisible(false);
-            }
-        } else {
-            QString name(GCode::File::getLastDir().append(files.first()->tool().nameEnc()));
-            if(!name.endsWith(App::gcSettings().fileExtension()))
-                name += QStringList({u"_TS"_s, u"_BS"_s})[files.first()->side()];
-
-            name = QFileDialog::getSaveFileName(nullptr,
-                QObject::tr("Save GCode file"),
-                name,
-                QObject::tr("GCode (*.%1)").arg(App::gcSettings().fileExtension()));
-
-            if(name.isEmpty())
-                return;
-            std::vector<QString> sl;
-
-            sl.emplace_back(GCode::File::comment(tr("\tContains files:")));
-            for(auto file: files)
-                sl.push_back(GCode::File::comment(u"\t"_s + file->shortName()));
-            // Шапка -- только у первого файла, концовка -- только у последнего:
-            // один станочный файл, а не склейка нескольких.
-            for(auto file: files) {
-                file->itemGroup()->setVisible(false);
-                unsigned sections = GCode::File::Body;
-                if(file == files.front()) sections |= GCode::File::Header;
-                if(file == files.back()) sections |= GCode::File::Footer;
-                file->regenerate(sections);
-                sl.append_range(file->gCodeText());
-            }
-            QFile file{name};
-            if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream out{&file};
-                out.setEncoding(QStringConverter::Utf8);
-                out << GCode::File::renderText(sl);
-            }
-            file.close();
-        }
+    if(gcFilesMap.empty()) {
+        QMessageBox::information(this, {}, QObject::tr("No selected toolpath files."));
+        return;
     }
 
-    if(gcFilesMap.empty())
-        QMessageBox::information(nullptr, {}, QObject::tr("No selected toolpath files."));
+    // Сначала -- все имена, потом -- вся запись. Запись пересобирает УП
+    // (File::save, regenerate), у больших -- секунды на каждую. Между
+    // диалогами они замораживали окно, и закрытый диалог успевал отдать
+    // активность чужим окнам. Теперь диалоги идут подряд, а пересчёт --
+    // одним заходом под одним курсором ожидания. Отмена диалога прекращает
+    // расспросы; что уже названо -- пишется, как и прежде писалось до отмены.
+    struct SaveJob {
+        QString name;
+        GcFiles files; // один -- своим файлом, несколько -- одним общим
+    };
+    std::vector<SaveJob> jobs;
+    for(const auto& [key, files]: gcFilesMap) {
+        // Один файл -- под своим именем, несколько с одним инструментом и
+        // стороной -- одним файлом под именем инструмента.
+        const GCode::File* first = files.first();
+        QString name(GCode::File::getLastDir().append(files.size() < 2 ? first->shortName() : first->tool().nameEnc()));
+        if(!name.endsWith(App::gcSettings().fileExtension()))
+            name += QStringList({u"_TS"_s, u"_BS"_s})[first->side()];
+
+        // Владелец -- главное окно. Диалог без владельца на Windows при
+        // закрытии отдаёт активность следующему окну по Z-порядку -- обычно
+        // чужой программе, свёрнутой или фоновой.
+        name = QFileDialog::getSaveFileName(this,
+            QObject::tr("Save GCode file"),
+            name,
+            QObject::tr("GCode (*.%1)").arg(App::gcSettings().fileExtension()));
+
+        if(name.isEmpty())
+            break;
+        // Следующий диалог -- в выбранной папке (раньше её запоминал save()
+        // перед следующим диалогом, а общий файл не запоминал вовсе).
+        GCode::File::setLastDir(name);
+        jobs.push_back({name, files});
+    }
+    if(jobs.empty())
+        return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    for(const SaveJob& job: jobs) {
+        if(job.files.size() < 2) {
+            GCode::File* file = job.files.first();
+            file->save(job.name);
+            file->itemGroup()->setVisible(false);
+            continue;
+        }
+        std::vector<QString> sl;
+
+        sl.emplace_back(GCode::File::comment(tr("\tContains files:")));
+        for(auto file: job.files)
+            sl.push_back(GCode::File::comment(u"\t"_s + file->shortName()));
+        // Шапка -- только у первого файла, концовка -- только у последнего:
+        // один станочный файл, а не склейка нескольких.
+        for(auto file: job.files) {
+            file->itemGroup()->setVisible(false);
+            unsigned sections = GCode::File::Body;
+            if(file == job.files.front()) sections |= GCode::File::Header;
+            if(file == job.files.back()) sections |= GCode::File::Footer;
+            file->regenerate(sections);
+            sl.append_range(file->gCodeText());
+        }
+        QFile file{job.name};
+        if(file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out{&file};
+            out.setEncoding(QStringConverter::Utf8);
+            out << GCode::File::renderText(sl);
+        }
+        file.close();
+    }
+    QApplication::restoreOverrideCursor();
+    reactivateAfterSave(this);
 }
 
 QString MainWindow::strippedName(const QString& fullFileName) {
