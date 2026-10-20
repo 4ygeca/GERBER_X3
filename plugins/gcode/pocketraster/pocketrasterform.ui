@@ -130,9 +130,10 @@
             </property>
             <property name="toolTip">
              <string>Where the HLDI raster outside ends.
-Auto: the board outline layer if it encloses the selected objects,
-otherwise the board border (violet frame),
-otherwise about 1 mm beyond the selected objects.</string>
+Auto: the innermost board outline contour around the selected objects;
+objects outside the outline: the board border (violet frame) if they lie in it,
+otherwise about 1 mm beyond the selected objects.
+Without the outline: the board border, otherwise about 1 mm beyond the selected objects.</string>
             </property>
             <property name="sizeAdjustPolicy">
              <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
