@@ -170,11 +170,21 @@ void Form::updateFiles() {
     disconnect(ui->cbxFile, &QComboBox::currentIndexChanged, this, &Form::on_cbxFileCurrentIndexChanged);
     ui->cbxFile->clear();
 
-    for(auto file: App::project().files()) {
-        auto gos = file->getDataForGC(criterias, GCType::Drill, true);
-        if(gos.size())
-            ui->cbxFile->addItem(file->icon(), file->shortName(), QVariant::fromValue(file));
-    }
+    // Первыми -- файлы сверловки Excellon (из них по умолчанию и сверлят),
+    // среди них металлизированные (PTH) раньше неметаллизированных (NPTH),
+    // дальше остальное (круглые объекты Gerber и т.п.). Раньше порядок был
+    // порядком загрузки, и по умолчанию выбирался первый попавшийся слой.
+    std::vector<AbstractFile*> files;
+    for(auto file: App::project().files())
+        if(!file->getDataForGC(criterias, GCType::Drill, true).empty())
+            files.push_back(file);
+    const auto rank = [](const AbstractFile* file) {
+        if(file->type() != "Excellon"_hash32) return 2;
+        return file->shortName().contains(u"NPTH"_s, Qt::CaseInsensitive) ? 1 : 0;
+    };
+    std::ranges::stable_sort(files, {}, rank);
+    for(auto file: files)
+        ui->cbxFile->addItem(file->icon(), file->shortName(), QVariant::fromValue(file));
 
     if(auto shapes = App::project().shapes(::Gi::Type::ShCircle); shapes.size()) {
         ui->cbxFile->addItem(shapes.front()->icon(), shapes.front()->name(), QVariant::fromValue(shapes));
