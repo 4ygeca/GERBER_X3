@@ -68,6 +68,8 @@ public:
     void setViewRectDeferred(QRectF rect);
 
     void setRuler(bool ruller);
+    // Ноль УП сдвинулся: от него идут сетка и отсчёт линеек.
+    void zeroMoved();
 
     double scaleFactor() const noexcept { return 1.0 / getScale(); }
     QPointF toScenePos(QMouseEvent* event);
@@ -159,6 +161,8 @@ private:
     bool ruler_{};
     int rulerCtr{};
     void updateRuler();
+    void syncRulerOrigin();
+    static QPointF gridOrigin();
     // Единая точка на смену трансформации: публикует масштаб в App и
     // подтягивает линейки.
     void onTransformChanged();

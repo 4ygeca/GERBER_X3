@@ -13,6 +13,7 @@
 #include "settings.h"
 #include "app.h"
 #include "graphicsview.h"
+#include "project.h"
 #include <QtWidgets>
 #include <cmath>
 #include <numbers>
@@ -108,11 +109,12 @@ bool AppSettings::isBanana() { return banana_; }
 double AppSettings::lenUnit() { return banana_ ? 25.4 : 1.0; }
 void AppSettings::setBanana(bool val) { banana_ = val; }
 
-QPointF AppSettings::getSnappedPos(QPointF pt, Qt::KeyboardModifiers mod) {
+QPointF AppSettings::getSnappedPos(QPointF pt, Qt::KeyboardModifiers mod, bool fromSceneOrigin) {
     if(bool(mod & Qt::ALT) ^ snap_) {
         const double scale = AppSettings::gridStep(App::grView().getScale());
-        const auto px = pt / scale;
-        return {scale * std::round(px.x()), scale * std::round(px.y())};
+        const QPointF origin = fromSceneOrigin || !App::project.ptr() ? QPointF{} : App::project().zeroPos();
+        const auto px = (pt - origin) / scale;
+        return origin + QPointF{scale * std::round(px.x()), scale * std::round(px.y())};
     }
     return pt;
 }

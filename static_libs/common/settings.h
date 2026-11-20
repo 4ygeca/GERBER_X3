@@ -202,7 +202,10 @@ public:
     bool isBanana();
     double lenUnit();
     void setBanana(bool val);
-    QPointF getSnappedPos(QPointF pt, Qt::KeyboardModifiers mod = {});
+    // Привязка к сетке. Сетка идёт от нуля УП (её рисует вид от него же);
+    // fromSceneOrigin -- от начала координат сцены: так привязывается сам ноль,
+    // иначе он подстраивался бы под сетку, которую сам и двигает.
+    QPointF getSnappedPos(QPointF pt, Qt::KeyboardModifiers mod = {}, bool fromSceneOrigin = false);
     void setSnap(bool val);
     bool snap();
 

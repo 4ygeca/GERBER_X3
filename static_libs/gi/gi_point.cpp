@@ -300,6 +300,9 @@ Marker::Marker(Type type)
         basePath_.arcTo(QRectF(QPointF(-3, -3), QSizeF(6, 6)), 90, 90);
         basePath_.arcTo(QRectF(QPointF(-3, -3), QSizeF(6, 6)), 360, -90);
         setToolTip(QObject::tr("G-Code Zero Point"));
+        // Ноль двигают отовсюду (мышь, поля формы, авторасстановка, открытие
+        // проекта) -- о сдвиге вид узнаёт через itemChange.
+        setFlag(ItemSendsGeometryChanges);
     }
     baseShape_.addEllipse(QRectF(QPointF(-3, -3), QSizeF(6, 6)));
     applyScaleMode();
@@ -440,11 +443,20 @@ namespace {
 QPointF markerPressPos;
 } // namespace
 
+QVariant Marker::itemChange(GraphicsItemChange change, const QVariant& value) {
+    // От нуля идут сетка вида и отсчёт линеек.
+    if(type_ == Zero && change == ItemPositionHasChanged && App::grView.ptr())
+        App::grView().zeroMoved();
+    return QGraphicsObject::itemChange(change, value);
+}
+
 void Marker::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     if(!moved) markerPressPos = pos(); // первое движение -- маркер ещё там, где нажали
     QGraphicsItem::mouseMoveEvent(event);
     moved = true;
-    setPos(App::settings().getSnappedPos(pos(), event->modifiers()));
+    // Ноль привязывается к сетке от начала координат сцены: от себя самого
+    // (сетка идёт от нуля) привязка была бы бессмысленной.
+    setPos(App::settings().getSnappedPos(pos(), event->modifiers(), type_ == Zero));
 
     updateGCPForm();
 }

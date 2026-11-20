@@ -508,12 +508,29 @@ void GraphicsView::onTransformChanged() {
     bandViewChanged();
 }
 
+// Начало сетки и линеек -- ноль УП: координаты на них те же, что уйдут в
+// G-код (и что в строке состояния «Zeroed»). Нуля ещё нет -- начало сцены.
+QPointF GraphicsView::gridOrigin() {
+    return App::zero.ptr() ? App::zero().pos() : QPointF{};
+}
+
+void GraphicsView::syncRulerOrigin() {
+    const QPoint p = QGraphicsView::mapFromScene(gridOrigin());
+    vRuler->setOrigin(p.y());
+    hRuler->setOrigin(p.x());
+}
+
+void GraphicsView::zeroMoved() {
+    // Сетка рисуется в drawForeground по всему виду -- сдвинулся ноль, и
+    // перерисовать надо весь вьюпорт, а не только место маркера.
+    viewport()->update();
+    syncRulerOrigin();
+}
+
 void GraphicsView::updateRuler() {
     // layout()->setContentsMargins(0, 0, 0, horizontalScrollBar()->isVisible() ? horizontalScrollBar()->height() : 0);
     updateSceneRect(QRectF{}); // actualize mapFromScene
-    QPoint p = QGraphicsView::mapFromScene(QPointF{});
-    vRuler->setOrigin(p.y());
-    hRuler->setOrigin(p.x());
+    syncRulerOrigin();
     vRuler->setRulerZoom(std::abs(transform().m22() * 0.1));
     hRuler->setRulerZoom(std::abs(transform().m11() * 0.1));
 }
@@ -1228,10 +1245,12 @@ void GraphicsView::drawForeground(QPainter* painter, const QRectF& rect) {
     const auto tickCountY = static_cast<size_t>(std::floor((rect.bottom() - rect.top()) / gridStep)) + 2;
     for(auto& l: lines) l.reserve(tickCountX + tickCountY);
 
-    forEachGridTick(0.0, rect.left(), rect.right(), gridStep, [&](int64_t index, double x) {
+    // Сетка -- от нуля УП: переставили ноль -- сетка ушла вместе с ним.
+    const QPointF origin = gridOrigin();
+    forEachGridTick(origin.x(), rect.left(), rect.right(), gridStep, [&](int64_t index, double x) {
         lines[gridTickLevel(index)].emplace_back(x, rect.top(), x, rect.bottom());
     });
-    forEachGridTick(0.0, rect.top(), rect.bottom(), gridStep, [&](int64_t index, double y) {
+    forEachGridTick(origin.y(), rect.top(), rect.bottom(), gridStep, [&](int64_t index, double y) {
         lines[gridTickLevel(index)].emplace_back(rect.left(), y, rect.right(), y);
     });
 
@@ -1254,8 +1273,8 @@ void GraphicsView::drawForeground(QPainter* painter, const QRectF& rect) {
         color.setRed(255);
         painter->setPen({color, penWidth});
         QLineF lines[2]{
-            {0,           rect.top(), 0,            rect.bottom()},
-            {rect.left(), 0,          rect.right(), 0            }
+            {origin.x(),  rect.top(), origin.x(),   rect.bottom()},
+            {rect.left(), origin.y(), rect.right(), origin.y()   }
         };
         painter->drawLines(lines, 2);
     }
