@@ -143,6 +143,10 @@ public:
     const Layer layer;
     const Side side;
     const Type type;
+    // Без него сторона меди (%TF.FileFunction,Copper,L2,Bot*%) читалась, но
+    // наружу не отдавалась: базовый side_() -- Null, и нижняя медь приходила
+    // верхним слоем. Маска, шелкография и паста отдавали её и раньше.
+    virtual Side side_() const override { return side; }
 };
 /////////////////////////////////////////////////////
 /// \brief The ArrayDrawing struct
