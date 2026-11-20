@@ -24,6 +24,7 @@ class DoubleSpinBox : public QDoubleSpinBox {
     mutable std::optional<double> value_;
     friend struct Validator;
     QJSEngine* const jsEngine;
+    bool selectOnRelease_{}; // фокус пришёл щелчком: на отпускании -- всё число
     void updateToolTip();
 
 public:

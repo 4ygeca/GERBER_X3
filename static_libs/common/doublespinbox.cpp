@@ -179,8 +179,17 @@ void DoubleSpinBox::flicker() {
 }
 
 bool DoubleSpinBox::eventFilter(QObject* watched, QEvent* event) {
-    if(lineEdit() == watched && event->type() == QEvent::MouseButtonRelease) {
-        lineEdit()->setSelection(0, lineEdit()->text().length() - suffix().length());
+    // Число целиком выделяется только щелчком, которым в поле пришли: так его
+    // сразу можно набрать заново. Раньше выделение ставилось на каждое
+    // отпускание мыши -- и выделить мышью две-три цифры было нельзя, его тут же
+    // сбрасывало на всё число. Протянули выделение уже первым щелчком -- оно
+    // остаётся как есть; в поле с фокусом мышь работает как в любом редакторе.
+    if((watched == this || watched == lineEdit()) && event->type() == QEvent::FocusIn) {
+        if(static_cast<QFocusEvent*>(event)->reason() == Qt::MouseFocusReason)
+            selectOnRelease_ = true;
+    } else if(lineEdit() == watched && event->type() == QEvent::MouseButtonRelease) {
+        if(std::exchange(selectOnRelease_, false) && !lineEdit()->hasSelectedText())
+            lineEdit()->setSelection(0, lineEdit()->text().length() - suffix().length());
     } else if(this == watched && (event->type() == QEvent::KeyRelease || event->type() == QEvent::KeyPress)) {
         auto key = static_cast<QKeyEvent*>(event)->key();
         if((key == Qt::Key_Delete /*|| key == Qt::Key_Backspace*/)
