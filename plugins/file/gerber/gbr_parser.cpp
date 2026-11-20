@@ -25,8 +25,11 @@
 
 #include "utils.h"
 #include <QElapsedTimer>
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <algorithm>
 #include <ctre.hpp>
+#include <optional>
 // #include <st acktrace>
 #include <boost/stacktrace.hpp>
 
@@ -56,6 +59,34 @@ Internal Plane Layer1,2,...,16  .GP1, .GP2, ... , .GP16
 namespace Gerber {
 
 namespace {
+
+// Сторона слоя по имени файла, когда X2 о ней молчит (KiCad без атрибутов,
+// Altium/Protel, Eagle, EasyEDA, DipTrace). true -- низ, false -- явно верх,
+// пусто -- по имени не понять (тогда верх, как и раньше).
+std::optional<bool> gerberBottomByName(const QString& fileName) {
+    const QString name = QFileInfo{fileName}.fileName();
+    const QString ext = QFileInfo{fileName}.suffix().toLower();
+    // KiCad: <проект>-F_Cu.gbr / -B_Mask.gbs ..., старые версии -- B.Cu.
+    static const QRegularExpression kicad{
+        uR"((?:^|[^A-Za-z0-9])([FB])[._](Cu|Mask|Silks?|Silkscreen|Paste|Fab|CrtYd|Courtyard|Adhes|Adhesive)(?:[^A-Za-z]|$))"_s,
+        QRegularExpression::CaseInsensitiveOption};
+    if(const auto m = kicad.match(name); m.hasMatch())
+        return m.captured(1).compare(u"B"_s, Qt::CaseInsensitive) == 0;
+    // Protel/Altium: .GTL/.GTS/.GTO/.GTP -- верх, .GBL/.GBS/.GBO/.GBP -- низ.
+    // Eagle: .cmp/.stc/.plc/.crc -- сторона компонентов, .sol/.sts/.pls/.crs -- пайки.
+    static const QStringList topExt{u"gtl"_s, u"gts"_s, u"gto"_s, u"gtp"_s, u"gta"_s, u"cmp"_s, u"stc"_s, u"plc"_s, u"crc"_s};
+    static const QStringList botExt{u"gbl"_s, u"gbs"_s, u"gbo"_s, u"gbp"_s, u"gba"_s, u"sol"_s, u"sts"_s, u"pls"_s, u"crs"_s};
+    if(topExt.contains(ext)) return false;
+    if(botExt.contains(ext)) return true;
+    // Словом: Bottom/bot (EasyEDA «Gerber_BottomLayer», DipTrace «BottomMask»)
+    // и Top -- с границей слова в начале, чтобы «robot» не стал низом.
+    static const QRegularExpression bottomWord{uR"((?:^|[^A-Za-z])bot(?:tom)?)"_s, QRegularExpression::CaseInsensitiveOption};
+    static const QRegularExpression topWord{uR"((?:^|[^A-Za-z])top)"_s, QRegularExpression::CaseInsensitiveOption};
+    const bool bottom = bottomWord.match(name).hasMatch();
+    const bool top = topWord.match(name).hasMatch();
+    if(bottom != top) return bottom;
+    return std::nullopt;
+}
 
 // Точки контура: дуги дробятся на хорды. Нужно лишь для следа ПРЯМОУГОЛЬНОЙ
 // апертуры -- у круглой след строится точно, суммой Минковского с диском
@@ -239,12 +270,15 @@ void Parser::parseLines(const QString& gerberLines, const QString& fileName) {
             delete file;
         } else {
 
+            // Сторона: из X2 (%TF.FileFunction,...,Bot/Top% или тот же атрибут
+            // комментарием G04 #@!), иначе по имени файла. Прежде низом
+            // считались лишь «bot» в имени и .gb* -- и B_Cu из KiCad без X2
+            // приходил верхним слоем.
             if(attFile.function_ && attFile.function_->side_() == Attr::AbstrFileFunc::Side::Bot)
                 file->setSide(Bottom);
-            else if(file->shortName().contains(u"bot"_s, Qt::CaseInsensitive))
-                file->setSide(Bottom);
-            else if(file->shortName().contains(u".gb"_s, Qt::CaseInsensitive)
-                && !file->shortName().endsWith(u".gbr"_s, Qt::CaseInsensitive))
+            else if(attFile.function_ && attFile.function_->side_() == Attr::AbstrFileFunc::Side::Top)
+                file->setSide(Top);
+            else if(gerberBottomByName(file->name()).value_or(false))
                 file->setSide(Bottom);
 
             if(attFile.function_ && attFile.function_->function == Attr::File::Profile)
