@@ -19,7 +19,9 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -32,6 +34,22 @@ namespace GCode {
 
 QString PluginTab::defaultScriptPath(const QString& gcName) {
     return QCoreApplication::applicationDirPath() + u"/scripts/"_s + gcName.toLower() + u".js"_s;
+}
+
+// Записанный путь -- встроенный скрипт ДРУГОЙ установки GGEasy: тот же файл в
+// папке scripts, рядом с которой лежит программа. Это «по умолчанию» прежней
+// версии (распакованной в другую папку), а не свой скрипт пользователя: с ним
+// новая версия молча работала бы на старых скриптах. Пути, которого больше
+// нет на диске, -- тоже «по умолчанию»: иначе УП выходили бы с ошибкой.
+static bool isStaleDefaultScript(const QString& path, const QString& gcName) {
+    const QFileInfo info{path};
+    if(!info.exists()) return true;
+    const QFileInfo exe{QCoreApplication::applicationFilePath()};
+    const QDir scriptsDir = info.absoluteDir();
+    return info.fileName() == gcName.toLower() + u".js"_s
+        && scriptsDir.dirName() == u"scripts"_s
+        && QFileInfo::exists(scriptsDir.absoluteFilePath(u"../"_s + exe.fileName()))
+        && QDir::cleanPath(scriptsDir.absoluteFilePath(u".."_s)) != QDir::cleanPath(exe.absolutePath());
 }
 
 PluginTab::PluginTab(Plugin* plugin, QWidget* parent)
@@ -77,15 +95,19 @@ void PluginTab::readSettings(MySettings& settings) {
     settings.beginGroup(u"ScriptPaths"_s);
     QString path = settings.value(leScript_->objectName(), QString{}).toString();
     settings.endGroup();
-    if(path.isEmpty()) path = defaultScriptPath(gcName_);
+    if(path.isEmpty() || isStaleDefaultScript(path, gcName_)) path = defaultScriptPath(gcName_);
     leScript_->setText(path);
     App::gcSettings().scriptPaths_[gcName_] = path;
     if(inner_) inner_->readSettings(settings);
 }
 
 void PluginTab::writeSettings(MySettings& settings) {
+    // Путь по умолчанию не записывается: он -- от папки программы, и записанный
+    // увёл бы новую версию к скриптам прежней (см. isStaleDefaultScript).
+    QString path = leScript_->text().trimmed();
+    if(QDir::cleanPath(path) == QDir::cleanPath(defaultScriptPath(gcName_))) path.clear();
     settings.beginGroup(u"ScriptPaths"_s);
-    QString path = settings.setValue(leScript_);
+    settings.QSettings::setValue(leScript_->objectName(), path);
     settings.endGroup();
     if(path.isEmpty()) path = defaultScriptPath(gcName_);
     App::gcSettings().scriptPaths_[gcName_] = path;
