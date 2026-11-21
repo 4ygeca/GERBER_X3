@@ -29,6 +29,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
+#include <QSettings>
 
 const int isadfsdfg = qRegisterMetaType<AbstractFile*>("AbstractFile*");
 
@@ -43,9 +44,15 @@ static QWidget* projectMessageParent() {
     return QApplication::activeWindow();
 }
 
+// Материал, выбранный в свойствах последним: с ним начинается новый проект,
+// чтобы режимы, заведённые под FR4, подхватывались без лишнего шага.
+// Открытый проект ставит свой (у старых проектов -- «не задан»).
+static const auto projectLastMaterialKey = u"Project/lastMaterial"_s;
+
 Project::Project(QObject* parent)
     : QObject{parent}
-    , watcher(this) {
+    , watcher(this)
+    , material_{QSettings{}.value(projectLastMaterialKey).toString()} {
     connect(&watcher, &QFileSystemWatcher::fileChanged, this, [this](const QString& path) {
         if(!reloadPaths.emplace(path).second) return;
         // Проверка id ДО обращения к files_: contains() отдаёт -1 для файла не
@@ -411,7 +418,8 @@ void Project::close() {
     pinsPointSymmetry_ = false;
     boardOutlineFiles_.clear();
     // Формы, что берут материал проекта, пересчитают свои снимки инструмента.
-    material_.clear();
+    // Новый проект -- с последним выбранным материалом (см. projectLastMaterialKey).
+    material_ = QSettings{}.value(projectLastMaterialKey).toString();
     emit materialChanged(material_);
     setWorckRect({});
     setStepsX(1);
@@ -853,6 +861,7 @@ QString Project::material() const { return material_; }
 void Project::setMaterial(const QString& uid) {
     if(material_ == uid) return;
     material_ = uid;
+    QSettings{}.setValue(projectLastMaterialKey, uid);
     emit materialChanged(material_);
     setChanged();
 }
