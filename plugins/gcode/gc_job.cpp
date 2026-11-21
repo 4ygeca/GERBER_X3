@@ -269,6 +269,9 @@ std::vector<QString> Job::text(const QString& name) const {
     // Ключевые слова не переводятся: их разбирает плагин отправителя
     // (грамматика -- scripts/posts/README.md, «Jobs»).
     std::vector<QString> info;
+    // Версия формата -- первой строкой: по ней плагин отправителя узнаёт, что
+    // за файл, и замечает, если грамматика ниже когда-нибудь сменится.
+    info.push_back(File::comment(u"FORMAT GGEASY-JOB 1"_s));
     info.push_back(File::comment(u"JOB "_s + name));
     info.push_back(File::comment(side == Bottom ? u"SIDE BOTTOM"_s : u"SIDE TOP"_s));
     const QString material = App::toolHolder().materialName(App::project().material());

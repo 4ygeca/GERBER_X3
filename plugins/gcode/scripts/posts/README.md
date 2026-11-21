@@ -165,7 +165,8 @@ the two sides of the board.
 ```
 G21 G17 G90                       header of the first program, ctx.job = true:
 G94                               no spindle start
-;JOB board_TS                     job info and tool table (comments, see below)
+;FORMAT GGEASY-JOB 1              job info and tool table (comments, see below)
+;JOB board_TS
 ;...
 G0Z20                             the safe height, as after every header
 G0Z20                             before the first step of every tool: up to safeZ,
@@ -250,6 +251,7 @@ Every line is a comment of the post (`;text` or `(text)`). Strip the comment
 delimiters and the surrounding whitespace, then the lines are, in this order:
 
 ```
+FORMAT GGEASY-JOB <version>                   the format of these lines; now 1
 JOB <name>                                    the job (the file name without extension)
 SIDE TOP | SIDE BOTTOM
 MATERIAL <name>                               the project material, "-" when not set
@@ -260,6 +262,8 @@ T<n> <code> D=<diameter> <type>[ HITS=<holes>]   one per tool, in the order of f
 WARNING <text>                                optional (tool numbers wrapped)
 ```
 
+- `FORMAT` comes first; `<version>` grows only when these lines change in a
+  way an old reader would misread (new optional lines do not change it).
 - `<k>`, `<n>`, `<count>`, `<holes>` -- decimal integers, `<n>` from 1.
 - `<code>` -- `[A-Za-z0-9._-]{1,20}`, the tool code of the tool database
   (the automatic code such as `D0.8x9`, `E1`, `V0.1A30`, `L0.05`, `T1x6`
