@@ -376,6 +376,9 @@ private:
     void saveGCodeFile(int32_t id);
     void saveGCodeFiles();
     void saveSelectedGCodeFiles();
+    // Задание: УП ids одним файлом одной стороны со сменами инструмента
+    // (GCode::saveJob, владелец диалогов -- это окно).
+    void saveGCodeJob(const std::vector<int32_t>& ids);
 
     QString strippedName(const QString& fullFileName);
 

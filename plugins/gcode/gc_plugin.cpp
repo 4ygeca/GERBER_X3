@@ -61,6 +61,11 @@ void Plugin::createMainMenu(QMenu& menu, FileTree::View* tv) {
     });
     menu.addAction(QIcon::fromTheme(u"document-save-all"_s), tr("&Save Selected Tool Paths..."),
         tv, &FileTree::View::saveSelectedGCodeFiles);
+    // Задание -- из выделенных в дереве УП (их выбирает пользователь), а не из
+    // видимых, как у «Сохранить выбранные».
+    menu.addAction(QIcon::fromTheme(u"document-save-all"_s), tr("Save Selected as &Job..."), [tv] {
+        emit tv->saveGCodeJob(selectedProgramIds(tv));
+    });
 }
 
 void Plugin::editFile(File* file) {
