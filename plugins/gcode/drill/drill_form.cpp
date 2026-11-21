@@ -1180,6 +1180,19 @@ void Form::editFile(GCode::File* file_) {
             model->setCreate(static_cast<int>(i), mine && it->second->useForCalc);
         }
         header->onChecked();
+
+        // «Обновить» заменяет эту самую УП, а не кладёт рядом копию: свои УП
+        // форма помнит по ключу (createdFileIds_), а на правку из дерева
+        // открывается с чистой памятью (showEvent). Ключ -- тот, что
+        // computePaths() даст её строкам. Только если в форме -- её файл: на
+        // чужом (свой закрыт) строки с теми же именами -- другие отверстия.
+        const int32_t srcFileId = file ? file->id() : -1;
+        if(mode == Mode::Drilling && srcFileId == drillFile->srcFileId())
+            for(const Row& row: rows)
+                if(row.toolId > Tool::ID::Null && byName.contains(row.name.join(u'|'))) {
+                    createdFileIds_[{srcFileId, Mode::Drilling, params.slotPaths(), toolKeyOf(row)}] = drillFile->id();
+                    break;
+                }
     }
 
     GCode::Form::editFile(file_);
