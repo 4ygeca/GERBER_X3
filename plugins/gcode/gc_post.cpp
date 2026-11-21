@@ -97,7 +97,6 @@ void Post::resetDefaults() {
     // Циклов у generic нет: сверловка разворачивается в G0/G1, как и прежде.
     cycles_.reset();
     dwellUnit_ = DwellUnit::Seconds;
-    maxToolNumber_ = 0;
     post_ = QJSValue{};
 }
 
@@ -184,10 +183,6 @@ void Post::readFields() {
     // G82). Записанная внутри cycles тоже годится.
     const QString dwellUnit = strOr(post_, u"dwellUnit"_s, strOr(post_.property(u"cycles"_s), u"dwellUnit"_s, u"s"_s));
     dwellUnit_ = dwellUnit.trimmed().toLower() == u"ms"_s ? DwellUnit::Milliseconds : DwellUnit::Seconds;
-
-    // Предел номеров T: только целое больше нуля, всё прочее -- предела нет.
-    if(auto v = post_.property(u"maxToolNumber"_s); v.isNumber() && v.toInt() > 0)
-        maxToolNumber_ = v.toInt();
 
     auto ln = post_.property(u"lineNumbers"_s);
     if(ln.isObject()) {

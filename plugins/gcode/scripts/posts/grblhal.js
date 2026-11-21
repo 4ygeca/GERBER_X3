@@ -34,8 +34,7 @@ var post = {
 
     // Jobs (several programs in one file, see README): manual tool change of
     // grblHAL ($341): M6 stops, the sender runs the change and the touch-off.
-    maxToolNumber: 8, // N_TOOLS: T9 is an error
-    spinUp: 0,        // s: G4 P after M3 of a tool change (spindle spin-up); 0 -- none
+    spinUp: 0, // s: G4 P after M3 of a tool change (spindle spin-up); 0 -- none
 
     header: function(ctx) {
         var lines = ["G21 G17 G90", "G94"];

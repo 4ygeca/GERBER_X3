@@ -16,6 +16,7 @@
 
 class QLabel;
 class QPushButton;
+class QSpinBox;
 class QTableWidget;
 class QTableWidgetItem;
 
@@ -68,6 +69,7 @@ private:
     QLabel* warnings_{};
     QPushButton* pbUp_{};
     QPushButton* pbDown_{};
+    QSpinBox* sbxMaxTool_{};
 };
 
 } // namespace GCode

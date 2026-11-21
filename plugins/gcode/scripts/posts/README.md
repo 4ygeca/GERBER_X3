@@ -71,7 +71,6 @@ var post = {
     dwell:      function(ctx, seconds) { return "G4 F" + seconds; },
 
     // Jobs -- several programs in one file with tool changes (see "Jobs").
-    maxToolNumber: 8,                  // highest T the controller takes; absent -- no limit
     message:    function(text) { return "(MSG, " + text + ")"; },  // absent -- a comment
     toolChange: function(ctx) {        // absent -- M5, message, T<n> M6, M3 S
         return ["M5", ctx.message, "T" + ctx.toolNumber + " M6", "M3 S" + ctx.spindleSpeed];
@@ -192,10 +191,14 @@ M2
   a board outline (a layer marked as the board outline, Edge.Cuts, X2
   Profile) is found as the cutout automatically; the dialog has a checkbox
   per step.
-- T numbers are local to the job: T1..Tn in the order of first use. With
-  `maxToolNumber` (grblHAL: 8) the numbers beyond it wrap (T9 is T1 again):
-  the dialog warns and the file gets a `WARNING` comment. The tool CODE
-  identifies the tool for the sender, not the number.
+- T numbers are local to the job: T1..Tn in the order of first use, without
+  a limit by default. The limit is a setting of the job dialog («Tool numbers
+  up to T», remembered; 0 -- no limit): it is needed only when the controller
+  keeps the tool table itself (grblHAL N_TOOLS = 8, T9 is an error); a sender
+  with its own tool library (an ncSender plugin) needs none. Beyond the limit
+  the numbers wrap (T9 is T1 again): the dialog warns and the file gets a
+  `WARNING` comment. The tool CODE identifies the tool for the sender, not
+  the number.
 - A tool change block comes before the first step and before every step
   whose tool differs from the previous step's (a tool used again later is
   changed in again under its number). The core writes `G0 Z<safeZ>` before
@@ -226,12 +229,13 @@ M2
 An empty array writes no tool change commands at all. Without `toolChange`
 the core writes `spindleOff`, the message, `T<n> M6` and `spindleOn`.
 `message(text)` returns the operator message line for `text` (without it --
-a comment); `maxToolNumber` is the highest T number the controller accepts
-(without it -- no limit).
+a comment). The highest T number is not a post property: it depends on how
+the tools are kept (the controller's table or the sender's library) and is
+set in the job dialog.
 
 | Post | Tool change |
 |------|-------------|
-| grblHAL | `M61 Q0` (first change, and when a wrapped number repeats the previous one -- grblHAL skips `T1 M6` when tool 1 is current), `M5`, `(MSG, …)`, `T<n> M6`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0; `maxToolNumber: 8` |
+| grblHAL | `M61 Q0` (first change, and when a wrapped number repeats the previous one -- grblHAL skips `T1 M6` when tool 1 is current), `M5`, `(MSG, …)`, `T<n> M6`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0 |
 | LinuxCNC | `M5`, `(MSG, …)`, `T<n> M6`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0 |
 | Generic, Mach3, Mach4, UCCNC, PlanetCNC, Fanuc, Haas, Sinumerik, Heidenhain ISO | `M5`, comment, `T<n> M6`, spindle on |
 | grbl 1.1, FluidNC (no M6) | `M5`, comment, `M0`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0 |

@@ -21,6 +21,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -68,6 +69,23 @@ JobDialog::JobDialog(Job job, QWidget* parent)
     buttons->addWidget(pbDown_);
     buttons->addWidget(pbDefault);
     buttons->addStretch();
+    // Предел номеров T -- здесь, где сразу видно, как он перенумерует шаги.
+    // Нужен только при таблице инструментов в самом контроллере (grblHAL
+    // N_TOOLS = 8); с библиотекой инструментов у отправителя -- без предела.
+    auto* lblMaxTool = new QLabel{tr("Tool numbers up to T:"), this};
+    sbxMaxTool_ = new QSpinBox{this};
+    sbxMaxTool_->setRange(0, 999);
+    sbxMaxTool_->setSpecialValueText(tr("no limit"));
+    sbxMaxTool_->setValue(job_.laser ? 0 : jobMaxToolNumber());
+    sbxMaxTool_->setEnabled(!job_.laser);
+    const QString maxToolHint = tr("The highest tool number the controller takes: only when the controller keeps the tool table "
+                                   "itself (grblHAL N_TOOLS = 8). Beyond it the numbers repeat, the tool code tells the tools apart.\n"
+                                   "A sender with its own tool library (an ncSender plugin) needs no limit.");
+    lblMaxTool->setToolTip(maxToolHint);
+    sbxMaxTool_->setToolTip(maxToolHint);
+    lblMaxTool->setBuddy(sbxMaxTool_);
+    buttons->addWidget(lblMaxTool);
+    buttons->addWidget(sbxMaxTool_);
     layout->addLayout(buttons);
 
     summary_ = new QLabel{this};
@@ -89,6 +107,13 @@ JobDialog::JobDialog(Job job, QWidget* parent)
     connect(pbUp_, &QPushButton::clicked, this, [this] { moveStep(-1); });
     connect(pbDown_, &QPushButton::clicked, this, [this] { moveStep(+1); });
     connect(pbDefault, &QPushButton::clicked, this, &JobDialog::defaultOrder);
+    connect(sbxMaxTool_, &QSpinBox::valueChanged, this, [this](int value) {
+        job_.maxToolNumber = value;
+        setJobMaxToolNumber(value);
+        const int32_t current = rowStep(currentRow()); // выделение -- через пересборку таблицы
+        fill();
+        if(current >= 0) selectStep(current);
+    });
     connect(table_, &QTableWidget::itemChanged, this, &JobDialog::cutoutToggled);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &JobDialog::updateButtons);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &JobDialog::accept);

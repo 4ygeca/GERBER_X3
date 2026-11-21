@@ -26,7 +26,7 @@ namespace GCode {
 // имя, расширение, стиль комментариев, способ записи дуг, формат слов для
 // линейных строк, дуг и циклов сверления, шапка/концовка, коды
 // шпинделя/лазера, циклы сверления контроллера, единица выдержки P и смена
-// инструмента в задании (toolChange, message, maxToolNumber).
+// инструмента в задании (toolChange, message).
 //
 // Диалект -- это ТОЛЬКО текст. Что и когда писать (G0 на безопасную высоту,
 // врезание, переезд домой) решает C++/скрипт плагина; пост лишь говорит,
@@ -156,9 +156,6 @@ public:
     // до заданий) -- ISO-смена: spindleOff, ctx.message, «T<n> M6», spindleOn.
     // Длин, G43/G49/G10 и касаний здесь нет и не будет: это дело отправителя.
     QStringList toolChange(const Context& ctx);
-    // Наибольший номер T, который примет контроллер (post.maxToolNumber; у
-    // grblHAL N_TOOLS = 8, T9 -- ошибка); 0 -- предела нет.
-    int maxToolNumber() const { return maxToolNumber_; }
 
     // Итоговый текст файла: строки + нумерация N по посту.
     QString renderText(const std::vector<QString>& lines) const;
@@ -182,7 +179,6 @@ private:
     LineNumbers lineNumbers_;
     std::optional<Cycles> cycles_;
     DwellUnit dwellUnit_{DwellUnit::Seconds};
-    int maxToolNumber_{};
 };
 
 } // namespace GCode

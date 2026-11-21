@@ -26,6 +26,7 @@
 #include <QGuiApplication>
 #include <QMessageBox>
 #include <QSaveFile>
+#include <QSettings>
 #include <QTextStream>
 #include <set>
 
@@ -209,11 +210,16 @@ std::optional<Job> Job::fromPrograms(const std::vector<int32_t>& ids, QString& e
     job.side = sides[Bottom] ? Bottom : Top;
     job.laser = lasers > 0;
     // Номера T у лазера станку не уходят (смен нет) -- и предел им ни к чему.
-    job.maxToolNumber = job.laser ? 0 : App::gcSettings().post().maxToolNumber();
+    job.maxToolNumber = job.laser ? 0 : jobMaxToolNumber();
     job.applyDefaultOrder();
     return job;
 }
 
+static const auto jobMaxToolNumberKey = u"GCode/JobMaxToolNumber"_s;
+
+int jobMaxToolNumber() { return std::max(0, QSettings{}.value(jobMaxToolNumberKey, 0).toInt()); }
+
+void setJobMaxToolNumber(int maxToolNumber) { QSettings{}.setValue(jobMaxToolNumberKey, std::max(0, maxToolNumber)); }
 void Job::applyDefaultOrder() {
     // Равные по правилу шаги -- в порядке дерева, как бы их ни переставили.
     r::stable_sort(steps, {}, &JobStep::treeIndex);
