@@ -20,6 +20,7 @@
 #include <QJSEngine>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <cmath>
 
 namespace GCode {
 
@@ -60,6 +61,33 @@ QJSValue GcFileProxy::properties() const { return propertiesValue(*engine_); }
 bool GcFileProxy::notTile() const { return file_->gcp.params.contains(Params::NotTile); }
 QString GcFileProxy::name() const { return file_->shortName(); }
 QString GcFileProxy::programName() const { return file_->programName_; }
+bool GcFileProxy::slotPaths() const { return file_->gcp.slotPaths(); }
+
+QJSValue GcFileProxy::cycles() const {
+    // Пост живёт на своём движке: объект собирается заново на движке скрипта.
+    const auto& cycles = file_->currentPost().cycles();
+    if(!cycles) return QJSValue{QJSValue::UndefinedValue};
+    QJSValue obj = engine_->newObject();
+    auto setCode = [&obj](const QString& key, const QString& code) {
+        if(!code.isEmpty()) obj.setProperty(key, code);
+    };
+    setCode(u"drill"_s, cycles->drill);
+    setCode(u"dwell"_s, cycles->dwell);
+    setCode(u"peck"_s, cycles->peck);
+    setCode(u"chipBreak"_s, cycles->chipBreak);
+    setCode(u"cancel"_s, cycles->cancel);
+    // Пустой код отвода -- пустая строка, а не дыра: скрипт проверяет его так
+    // же, как код цикла.
+    QJSValue retract = engine_->newObject();
+    retract.setProperty(u"initial"_s, cycles->retractInitial);
+    retract.setProperty(u"r"_s, cycles->retractR);
+    obj.setProperty(u"retract"_s, retract);
+    return obj;
+}
+
+QString GcFileProxy::dwellUnit() const {
+    return file_->currentPost().dwellUnit() == Post::DwellUnit::Milliseconds ? u"ms"_s : u"s"_s;
+}
 
 namespace {
 
@@ -170,6 +198,11 @@ QString GcFileProxy::spindleOff() { return App::gcSettings().post().spindleOff(f
 QString GcFileProxy::laserOn(bool dynamic) { return App::gcSettings().post().laserOn(file_->postContext(), dynamic); }
 QString GcFileProxy::laserOff() { return App::gcSettings().post().laserOff(file_->postContext()); }
 
+QString GcFileProxy::dwell(double seconds) {
+    if(auto text = file_->currentPost().dwell(file_->postContext(), seconds)) return *text;
+    return u"G4 "_s + fmtDwell(seconds);
+}
+
 QJSValue GcFileProxy::savePathLines(int pi, int ci, bool rev, double perimeter, double depth) {
     if(pi < 0 || pi >= static_cast<int>(cachedPathss_.size())) return {};
     const Geo::Polylines& paths = cachedPathss_[static_cast<size_t>(pi)];
@@ -196,6 +229,8 @@ QString GcFileProxy::formatted(const QJSValue& parts) {
     return file_->formatedText(data);
 }
 
+void GcFileProxy::forceWords(const QString& letters) { file_->forceWords(letters); }
+
 QString GcFileProxy::g0() { return file_->g0(); }
 QString GcFileProxy::g1() { return file_->g1(); }
 QString GcFileProxy::g2() { return file_->g2(); }
@@ -208,5 +243,16 @@ QString GcFileProxy::fmtI(double v) { return File::i(v); }
 QString GcFileProxy::fmtJ(double v) { return File::j(v); }
 QString GcFileProxy::fmtS(int v) { return File::speed(static_cast<double>(v)); }
 QString GcFileProxy::fmtF(double v) { return u'F' + File::formatValue(v); }
+QString GcFileProxy::fmtR(double v) { return File::rad(v); }
+QString GcFileProxy::fmtQ(double v) { return File::q(v); }
+QString GcFileProxy::fmtP(double v) { return u'P' + File::formatValue(v); }
+
+QString GcFileProxy::fmtDwell(double seconds) {
+    // Миллисекунды -- целым и без точки: у Fanuc и Haas P с точкой -- уже
+    // секунды, а без неё -- миллисекунды.
+    if(file_->currentPost().dwellUnit() == Post::DwellUnit::Milliseconds)
+        return u'P' + QString::number(std::llround(seconds * 1000.0));
+    return fmtP(seconds);
+}
 
 } // namespace GCode

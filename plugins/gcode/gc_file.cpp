@@ -37,6 +37,7 @@
 #include <QJSEngine>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QTimer>
 #include <algorithm>
 #include <mutex>
@@ -247,19 +248,38 @@ void File::ensureDefaultScripts() {
     const QString scriptsDirPath = QCoreApplication::applicationDirPath() + u"/scripts"_s;
     QDir{}.mkpath(scriptsDirPath);
 
-    // Extract all embedded script resources to disk if they are missing
-    // (скрипты плагинов -- в scripts/, посты -- в scripts/posts/).
+    // Встроенные скрипты -- на диск (скрипты плагинов -- в scripts/, посты --
+    // в scripts/posts/). Источник истины -- встроенная версия: файл, которого
+    // нет, пишется, а отличающийся заменяется, прежний -- в <имя>.bak (старый
+    // .bak затирается). Иначе обновлённый GGEasy, поставленный поверх старого,
+    // так и работал бы со старыми скриптами и постами -- раньше на диск
+    // писалось лишь недостающее. Свои скрипты и посты пользователя (имён,
+    // которых среди встроенных нет) не трогаются вовсе.
     auto extract = [](const QString& resPrefix, const QString& dirPath) {
         QDir{}.mkpath(dirPath);
         const QDir resDir{resPrefix};
         for(const QString& fileName: resDir.entryList(QDir::Files)) {
+            QFile src{resPrefix + u'/' + fileName};
+            if(!src.open(QIODevice::ReadOnly)) continue;
+            const QByteArray embedded = src.readAll();
             const QString destPath = dirPath + u'/' + fileName;
-            if(!QFile::exists(destPath)) {
-                QFile src{resPrefix + u'/' + fileName};
-                QFile dst{destPath};
-                if(src.open(QIODevice::ReadOnly) && dst.open(QIODevice::WriteOnly | QIODevice::Truncate))
-                    dst.write(src.readAll());
-            }
+            if(QFile disk{destPath}; disk.exists()) {
+                if(disk.open(QIODevice::ReadOnly) && disk.readAll() == embedded) continue;
+                disk.close();
+                const QString bakPath = destPath + u".bak"_s;
+                QFile::remove(bakPath);
+                // Не убрался в .bak -- не трогать и сам файл: перезапись
+                // оставила бы пользователя без его копии.
+                if(!QFile::rename(destPath, bakPath)) {
+                    qWarning() << "GCode scripts: cannot back up" << destPath << "to" << bakPath;
+                    continue;
+                }
+                qInfo() << "GCode scripts:" << destPath << "differs from the bundled version, replaced; previous copy:" << bakPath;
+            } else
+                qInfo() << "GCode scripts: extracted" << destPath;
+            QSaveFile dst{destPath};
+            if(!dst.open(QIODevice::WriteOnly) || dst.write(embedded) != embedded.size() || !dst.commit())
+                qWarning() << "GCode scripts: cannot write" << destPath << dst.errorString();
         }
     };
     extract(u":/gcode/scripts"_s, scriptsDirPath);
@@ -439,12 +459,14 @@ void File::initSave() {
     const bool laser = gcp.tool().type() == Tool::Laser;
     parseFormat(post.formatLinear(laser), formatFlags[Linear]);
     parseFormat(post.formatArc(laser), formatFlags[Arc]);
+    parseFormat(post.formatCycle(), formatFlags[Cycle]);
 
     for(QString& str: lastValues)
         str.clear();
     for(bool& written: lastWritten)
         written = false;
     gCode_ = GNull;
+    cycle_ = false;
 }
 
 void File::writeHeader() {
@@ -563,12 +585,25 @@ std::vector<double> File::getDepths() {
     if(gDepth < tool.passDepth() || qFuzzyCompare(gDepth, tool.passDepth()))
         return {-gDepth - tool.getDepth()};
 
-    const int count = static_cast<int>(ceil(gDepth / tool.passDepth()));
-    const double depth = gDepth / count;
+    // Проходы -- ровными шагами не глубже passDepth на ВСЮ глубину, с конусом
+    // сверла (getDepth(); у прочих инструментов он 0 -- у них всё как было).
+    // Дно -- то же, что у одного прохода. Было tool.depth() -- статический
+    // Tool::depth_, который никто не задаёт: клевками сверло недобирало длину
+    // конуса, и смена шага меняла глубину отверстия. Шаг же клевков G83/G73
+    // (Q) -- первый из этих проходов: развёртка и цикл клюют одним шагом.
+    const double total = gDepth + tool.getDepth();
+    // Число проходов -- с пределом. Конус сверла с углом 0 (не задан, старый
+    // tools.json) -- это tan(90°), около 1e16: без предела проходов вышли бы
+    // миллиарды, а их приведение к int -- неопределённое поведение. Нулевой
+    // шаг (бесконечность) и NaN -- туда же.
+    int count = 1;
+    if(const double passes = std::ceil(total / tool.passDepth()); passes > 1.0)
+        count = passes < 10000.0 ? static_cast<int>(passes) : 10000;
+    const double depth = total / count;
     std::vector<double> depths(count);
     for(int i{}; i < count; ++i)
         depths[i] = (i + 1) * -depth;
-    depths.back() = -gDepth - tool.depth();
+    depths.back() = -total;
     return depths;
 }
 
@@ -703,14 +738,39 @@ QString File::formatedText(const std::vector<QString>& data) {
     return formated(words);
 }
 
+void File::forceWords(QStringView letters) {
+    for(QChar letter: letters) {
+        const auto index = CMD_LIST.indexOf(letter, 0, Qt::CaseInsensitive);
+        if(index == -1) continue;
+        lastWritten[index] = false;
+        lastValues[index].clear();
+    }
+}
+
 QString File::formated(const std::vector<Word>& data) {
-    // Диалект строки -- по её слову G: дуги пишутся своим набором флагов.
-    // Строка без G наследует последний записанный код.
+    // Диалект строки -- по её слову G: дуги и циклы сверления пишутся своими
+    // наборами флагов. Строка без G наследует последний записанный код: «X..
+    // Y..» внутри цикла -- тоже строка цикла.
     FormatKind kind = (gCode_ == G02 || gCode_ == G03) ? Arc : Linear;
+    if(cycle_) kind = Cycle;
     for(const Word& word: data)
         if(!word.text.isEmpty() && (word.text.front() == u'G' || word.text.front() == u'g')) {
             const QStringView num = QStringView{word.text}.sliced(1);
-            kind = (num == u"2" || num == u"02" || num == u"3" || num == u"03") ? Arc : Linear;
+            bool isNumber{};
+            // Десятые -- в счёт: G90.1 и G91.1 -- не G90/G91 и не циклы.
+            const int code = qRound(num.toDouble(&isNumber) * 10);
+            if(!isNumber)
+                kind = Linear;
+            else if(code == 20 || code == 30)
+                kind = Arc, cycle_ = false;
+            else if(code == 730 || (810 <= code && code <= 890 && code % 10 == 0))
+                kind = Cycle, cycle_ = true;
+            else {
+                // G0/G1 и G80 цикл завершают; прочие G (G4, G17, G90...) его не
+                // трогают, а строку пишут линейным форматом, как и прежде.
+                kind = Linear;
+                if(code == 0 || code == 10 || code == 800) cycle_ = false;
+            }
             break;
         }
     const bool (&flags)[Size] = formatFlags[kind];

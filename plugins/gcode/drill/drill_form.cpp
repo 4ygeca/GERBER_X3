@@ -672,8 +672,11 @@ void Form::computePaths() {
                 data.toolsApertures.push_back(i);
                 for(auto& item: row.items) {
                     if(!item->isUsed()) continue;
+                    // Паз шире фрезы -- обход контура, отстоящего от осевой на
+                    // ПОЛОВИНУ разницы ширин: тогда край реза ляжет ровно в край
+                    // паза. Было на всю разницу -- паз выходил шире на неё же.
                     if(item->fit(dsbxDepth->value()))
-                        for(Geo::Polyline& path: offset(item->paths().front(), item->sourceDiameter() - item->tool().diameter()))
+                        for(Geo::Polyline& path: offset(item->paths().front(), (item->sourceDiameter() - item->tool().diameter()) * 0.5))
                             data.paths.push_back(path);
                     else
                         data.paths.push_back(item->paths().front());
@@ -684,13 +687,12 @@ void Form::computePaths() {
 
         for(auto& [key, data]: pathsMap) {
             if(data.paths.size()) {
-                auto* gcode = new File{
-                    GCode::Params{
-                                  data.tool,
-                                  dsbxDepth->value(),
-                                  std::move(data.paths),
-                                  }
-                };
+                GCode::Params slotGcp{data.tool, dsbxDepth->value(), std::move(data.paths)};
+                // Пути -- пазы: drilling.js фрезерует их вдоль, а не сверлит по
+                // вершинам (раньше он брал лишь вершины ПЕРВОГО пути, прочие
+                // пазы терялись). Ключ -- до конструктора: тот сразу пишет текст.
+                slotGcp.params[GCode::Params::SlotPaths] = 1;
+                auto* gcode = new File{std::move(slotGcp)};
                 gcode->setRows(rowRefs(data.toolsApertures));
                 gcode->setWorckType(static_cast<int>(worckType));
                 gcode->setSrcFileId(file ? file->id() : -1);

@@ -26,4 +26,7 @@ var post = {
     spindleOff: "M5",
     laserOn:    function(ctx, dynamic) { return dynamic ? "M4" : "M3"; },
     laserOff:   "M5",
+    // Siemens dwell is G4 F<seconds>, not G4 P. No ISO canned cycles here
+    // (Sinumerik drills with CYCLE81/CYCLE83), so drilling is expanded.
+    dwell:      function(ctx, seconds) { return "G4 F" + Number(seconds.toFixed(3)); },
 };

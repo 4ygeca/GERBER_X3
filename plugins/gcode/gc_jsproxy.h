@@ -26,7 +26,9 @@ class GcFileProxy : public QObject {
     // Инструмент целиком, полями как они лежат в Tool: name, note, angle,
     // diameter, feedRate, oneTurnCut, passDepth, plungeRate, spindleSpeed,
     // stepover, lenght, id, type, autoName. Список берётся рефлексией, так что
-    // новое поле у Tool появляется здесь само.
+    // новое поле у Tool появляется здесь само (так приходят и поля сверловки
+    // drillCycle, dwell, retractToR; drilling.js читает их с умолчаниями --
+    // у инструмента без них их нет).
     //
     // Это СЫРЫЕ поля, и они не заменяют свойства ниже: toolDiameter -- это
     // эффективный диаметр на глубине (у гравера конус), а threadPitch и
@@ -68,6 +70,17 @@ class GcFileProxy : public QObject {
     Q_PROPERTY(QString name READ name CONSTANT)
     Q_PROPERTY(QString programName READ programName CONSTANT)
 
+    // Циклы сверления текущего поста (post.cycles, см. Post::Cycles): {drill,
+    // dwell, peck, chipBreak, cancel, retract: {initial, r}} -- коды G81, G82,
+    // G83, G73, G80, G98/G99. Цикла, которого у контроллера нет, в объекте
+    // нет; у поста без циклов -- undefined (скрипт разворачивает их сам).
+    Q_PROPERTY(QJSValue cycles READ cycles CONSTANT)
+    // Единица слова P выдержки (G4 и G82) у поста: "s" или "ms".
+    Q_PROPERTY(QString dwellUnit READ dwellUnit CONSTANT)
+    // Пути УП -- пазы формы сверловки (Params::SlotPaths): осевые линии или
+    // контуры, по которым фрезеруют, а не точки сверловки.
+    Q_PROPERTY(bool slotPaths READ slotPaths CONSTANT)
+
     // Current depth (updated by savePath spiral logic)
     Q_PROPERTY(double z READ zVal WRITE setZ)
 
@@ -98,6 +111,9 @@ public:
     bool notTile() const;
     QString name() const;
     QString programName() const;
+    QJSValue cycles() const;
+    QString dwellUnit() const;
+    bool slotPaths() const;
     double zVal() const;
     void setZ(double z);
 
@@ -124,6 +140,9 @@ public:
     Q_INVOKABLE QString spindleOff();
     Q_INVOKABLE QString laserOn(bool dynamic);
     Q_INVOKABLE QString laserOff();
+    // Пауза на seconds в диалекте поста: post.dwell(ctx, seconds), а без неё
+    // «G4 P» в единицах поста (fmtDwell).
+    Q_INVOKABLE QString dwell(double seconds);
 
     // Generate gcode lines for one curve from the last getToolPaths() result.
     // pathssIdx / pathIdx select the Geo::Polygons[i][j] curve.
@@ -134,7 +153,11 @@ public:
 
     // Format a list of gcode tokens, suppressing unchanged values per format flags.
     // parts: JS array of strings such as [g0(), fmtX(1.0), fmtY(2.0)].
+    // Letters written: G X Y Z I J R S F Q P L (any other word is dropped).
     Q_INVOKABLE QString formatted(const QJSValue& parts);
+    // Следующий formatted() напишет слова этих букв, даже неизменившиеся
+    // (например "GXYZRQPF" перед первой строкой цикла сверления).
+    Q_INVOKABLE void forceWords(const QString& letters);
 
     Q_INVOKABLE QString g0();
     Q_INVOKABLE QString g1();
@@ -147,6 +170,13 @@ public:
     Q_INVOKABLE QString fmtJ(double v);
     Q_INVOKABLE QString fmtS(int v);
     Q_INVOKABLE QString fmtF(double v);
+    // Слова циклов сверления: R -- плоскость отвода, Q -- шаг клевка (оба
+    // длины, на сетке вывода, как X/Y/Z), P -- число как есть (без пересчёта
+    // единиц), fmtDwell -- P выдержки seconds в единицах поста (dwellUnit).
+    Q_INVOKABLE QString fmtR(double v);
+    Q_INVOKABLE QString fmtQ(double v);
+    Q_INVOKABLE QString fmtP(double v);
+    Q_INVOKABLE QString fmtDwell(double seconds);
 
     // Для расширений (file.ext): траектории последнего getToolPaths(), его
     // смещение тайла и вывод произвольной полилинии тем же savePath.

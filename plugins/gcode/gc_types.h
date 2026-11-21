@@ -200,6 +200,11 @@ public:
     // Спиральное врезание. Ключ общий, а не плагинный: читает его
     // File::saveMillingProfile, который живёт здесь же, в общем слое.
     static inline const QString SpiralRamp = u"SpiralRamp"_s;
+    // Пазы формы сверловки: toolPathss -- осевые линии или контуры пазов, их
+    // фрезеруют вдоль (drilling.js), а не сверлят по вершинам. Без ключа --
+    // точки сверловки одной полилинией. Ключ общий: его читает и прокси
+    // скрипта (file.slotPaths), а там плагина сверловки не видно.
+    static inline const QString SlotPaths = u"SlotPaths"_s;
 
     Params() {
         if(!params.contains(MultiToolIndex)) params[MultiToolIndex] = 0;
@@ -255,6 +260,7 @@ public:
     // Отсутствие ключа == спираль включена: проекты, сохранённые до её
     // появления, ведут себя как раньше.
     bool spiralRamp() const { return !params.contains(SpiralRamp) || params.at(SpiralRamp).toBool(); }
+    bool slotPaths() const { return params.contains(SlotPaths); }
 
     // Надо ли развернуть контур, пришедший из точного домена, чтобы обход стал
     // тем, что просит пользователь.

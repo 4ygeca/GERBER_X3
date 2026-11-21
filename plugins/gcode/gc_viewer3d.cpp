@@ -61,7 +61,8 @@ constexpr GcvArcPlane gcvArcPlanes[]{
 };
 
 // Индексы слов с координатами; смещения дуги I/J/K лежат сразу за X/Y/Z,
-// поэтому смещение по оси ax — это gcvWords[GcvI + ax].
+// поэтому смещение по оси ax — это gcvWords[GcvI + ax]. Q и L — слова циклов
+// сверления: шаг клевка и число повторов.
 enum GcvWord {
     GcvX,
     GcvY,
@@ -70,8 +71,73 @@ enum GcvWord {
     GcvJ,
     GcvK,
     GcvR,
+    GcvQ,
+    GcvL,
     GcvWordCount
 };
+
+// Модальное состояние цикла сверления: блоки «X.. Y..» после первого его
+// повторяют, R, дно и Q запомнены.
+struct GcvCanned {
+    double r{};      // плоскость отвода — координата по оси сверления
+    double bottom{}; // дно отверстия
+    double q{};      // шаг клевка G73/G83
+};
+
+// Отскок G73 после клевка, мм: у grblHAL это $28, по умолчанию 0.1.
+constexpr float gcvChipBreakRetract = 0.1f;
+
+// Код цикла сверления (G73, G81..G86, G89) — модальный «код движения».
+bool gcvIsCannedCycle(int motion) {
+    return motion == 73 || (81 <= motion && motion <= 86) || motion == 89;
+}
+
+// Одно отверстие цикла — ходами, как их делает станок. Порядок — ровно
+// mc_canned_drill grblHAL: ниже R — сначала быстро на R; над отверстием —
+// быстро, на текущей высоте (она же исходный уровень G98); вниз до R —
+// быстро; клевки на подаче, после каждого — вывод: у G83 на исходный уровень
+// (G98) или на R (G99), и следующий клевок снова идёт на подаче оттуда; у G73
+// — отскок на gcvChipBreakRetract, со дна — полный вывод. G81/G82/G86 —
+// одно врезание и быстрый вывод, G84/G85/G89 выводят на подаче. Повторы L в
+// G91 сдвигаются на приращение XY (step), в G90 сверлят то же место.
+void gcvCannedDrill(std::vector<PathMove>& out, QVector3D& pos, const QVector3D& target, const QVector3D& step,
+    int lin, int motion, const GcvCanned& canned, bool retractToR, int repeats, int lineNo) {
+    auto move = [&out, &pos, lineNo](const QVector3D& to, bool rapid) {
+        if(to == pos) return;
+        PathMove m{};
+        m.from = pos;
+        m.to = to;
+        m.lineNo = lineNo;
+        m.rapid = rapid;
+        out.push_back(m);
+        pos = to;
+    };
+    auto atHeight = [lin](QVector3D pt, double height) {
+        pt[lin] = float(height);
+        return pt;
+    };
+
+    if(pos[lin] < canned.r) move(atHeight(pos, canned.r), true);
+    const double retractTo = retractToR ? canned.r : pos[lin];
+    move(atHeight(target, pos[lin]), true);
+
+    // G81 и прочие без клевков — одним врезанием от R до дна.
+    const bool peck = motion == 73 || motion == 83;
+    const double delta = peck && canned.q > 0. ? canned.q : canned.r - canned.bottom;
+    const bool rapidOut = !(motion == 84 || motion == 85 || motion == 89);
+    for(int rep{}; rep < repeats; ++rep) {
+        if(pos[lin] > canned.r) move(atHeight(pos, canned.r), true);
+        double level = pos[lin];
+        // Предел клевков: Q, ничтожный против глубины, дал бы миллионы ходов.
+        for(int n{}; level > canned.bottom && n < 10000; ++n) {
+            level = std::max(level - delta, canned.bottom);
+            move(atHeight(pos, level), false);
+            const bool chipBreak = motion == 73 && level > canned.bottom;
+            move(atHeight(pos, chipBreak ? level + gcvChipBreakRetract : retractTo), rapidOut);
+        }
+        if(rep + 1 < repeats && step != QVector3D{}) move(atHeight(pos + step, pos[lin]), true);
+    }
+}
 
 // Число хорд, при котором прогиб дуги не превышает допуска, мм.
 int gcvArcSteps(const PathMove& move, double tolerance) {
@@ -143,18 +209,23 @@ void gcvAppendArc(std::vector<PathMove>& out, const QVector3D& from, const QVect
     }
 }
 
-// Разбор текста УП. Поддерживаются G0..G3, G17..G19, G20/G21, G90/G91 и
-// G90.1/G91.1; строки без слов перемещения отрезков не дают.
+// Разбор текста УП. Поддерживаются G0..G3, G17..G19, G20/G21, G90/G91,
+// G90.1/G91.1 и циклы сверления G73, G81..G86, G89 с G98/G99 и G80 (их
+// ходами, как у grblHAL); строки без слов перемещения отрезков не дают.
 std::vector<PathMove> gcvParseProgram(const QString& text) {
     static constexpr ctll::fixed_string wordPattern{R"(([A-Za-z])[ \t]*([\+\-]?(?:\d+\.?\d*|\.\d+)))"};
 
     std::vector<PathMove> result;
     QVector3D pos{};
-    int motion{-1}; // модальный код перемещения: 0..3, -1 — ещё не задан
+    int motion{-1}; // модальный код перемещения: 0..3 или цикл (73, 81..89), -1 — не задан / G80
     int plane{};
     bool absolute{true};
     bool absoluteArcCenter{};
     double unit{1.}; // G20 — дюймы
+    // Цикл: отвод на R (G99) или на исходный уровень (G98, по умолчанию).
+    // grblHAL возвращает G98 на G80 и на любом G1/G2/G3 — так и здесь.
+    bool retractToR{};
+    GcvCanned canned;
 
     const auto lines = text.split(u'\n');
     for(int lineNo{}; lineNo < lines.size(); ++lineNo) {
@@ -170,6 +241,7 @@ std::vector<PathMove> gcvParseProgram(const QString& text) {
 
         std::optional<double> word[GcvWordCount];
         bool hasMotionWord{};
+        bool cycleWord{}; // в строке есть код цикла: цикл исполняется и без осей
 
         std::u16string_view data{line};
         for(auto [whole, letter, number]: ctre::search_all<wordPattern>(data)) {
@@ -189,10 +261,21 @@ std::vector<PathMove> gcvParseProgram(const QString& text) {
                 case 190: plane = 2; break;
                 case 200: unit = 25.4; break;
                 case 210: unit = 1.; break;
+                case 730:
+                case 810:
+                case 820:
+                case 830:
+                case 840:
+                case 850:
+                case 860:
+                case 890: motion = qRound(value), cycleWord = true; break;
+                case 800: motion = -1, retractToR = false; break;
                 case 900: absolute = true; break;
                 case 901: absoluteArcCenter = true; break;
                 case 910: absolute = false; break;
                 case 911: absoluteArcCenter = false; break;
+                case 980: retractToR = false; break;
+                case 990: retractToR = true; break;
                 }
                 break;
             case u'X': set(GcvX); break;
@@ -202,11 +285,40 @@ std::vector<PathMove> gcvParseProgram(const QString& text) {
             case u'J': set(GcvJ); break;
             case u'K': set(GcvK); break;
             case u'R': set(GcvR); break;
-            default  : break; // F, S, M, N, T — на геометрию не влияют
+            case u'Q': word[GcvQ] = value; break;
+            case u'L': word[GcvL] = value; break;
+            default  : break; // F, S, M, N, T, P — на геометрию не влияют
             }
         }
 
+        if(gcvIsCannedCycle(motion)) {
+            // Блок цикла — со словом цикла или с осью; R, Q, L сами по себе
+            // отверстия не дают (grblHAL так же).
+            if(!cycleWord && !word[GcvX] && !word[GcvY] && !word[GcvZ]) continue;
+            const auto& pl = gcvArcPlanes[plane];
+            const int lin = pl.an; // ось сверления — нормаль плоскости, Z при G17
+            // R и дно модальны. В G91 R отсчитывается от текущей высоты, а дно
+            // от R — как в grblHAL.
+            if(word[GcvR]) canned.r = *word[GcvR] * unit + (absolute ? 0. : pos[lin]);
+            if(word[lin]) canned.bottom = absolute ? *word[lin] * unit : canned.r + *word[lin] * unit;
+            if(word[GcvQ]) canned.q = std::abs(*word[GcvQ]) * unit;
+            // R ниже дна — станок цикл отвергнет, рисовать нечего.
+            if(canned.r < canned.bottom) continue;
+            QVector3D target = pos;
+            QVector3D step{};
+            for(int axis: {pl.a0, pl.a1}) {
+                if(!word[axis]) continue;
+                const double value = *word[axis] * unit;
+                target[axis] = float(absolute ? value : pos[axis] + value);
+                if(!absolute) step[axis] = float(value);
+            }
+            const int repeats = word[GcvL] ? std::clamp(int(*word[GcvL]), 1, 1000) : 1;
+            gcvCannedDrill(result, pos, target, step, lin, motion, canned, retractToR, repeats, lineNo);
+            continue;
+        }
+
         if(motion < 0 || !hasMotionWord) continue;
+        if(motion > 0) retractToR = false; // G1/G2/G3: grblHAL возвращает G98
 
         QVector3D target = pos;
         for(int axis{}; axis < 3; ++axis)

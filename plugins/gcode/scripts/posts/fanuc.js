@@ -11,8 +11,23 @@ var post = {
     format: {
         milling: { linear: "G?X?Y?Z?F?S?", arc: "G?X?Y?I+J+Z?F?S?" },
         laser:   { linear: "G?X?Y?Z?F?S?", arc: "G?X?Y?I+J+Z?F?S?" },
+        cycle:   "G?X?Y?Z?R?Q?P?F?",
     },
     lineNumbers: { start: 10, step: 10 },
+
+    // Canned drilling cycles (G73 G81 G82 G83, G98/G99, G80). The G73 back-off
+    // and the G83 re-entry clearance are machine parameters. Whole numbers are
+    // written without a decimal point (X10, Q1): a control without decimal
+    // point programming reads them in least input increments -- check first.
+    cycles: {
+        drill:     "G81",
+        dwell:     "G82",
+        peck:      "G83",
+        chipBreak: "G73",
+        cancel:    "G80",
+        retract:   { initial: "G98", r: "G99" },
+    },
+    dwellUnit: "ms", // P of G4/G82 in milliseconds, written without a decimal point
 
     header: function(ctx) {
         var lines = ["%", "O0001 (" + (ctx.programName || ctx.name).replace(/[()]/g, "") + ")",

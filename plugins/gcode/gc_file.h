@@ -230,6 +230,8 @@ protected:
 
     [[= Serial::skip]] std::vector<QSharedPointer<QColor>> debugColor;
 
+    // Порядок букв -- как в CMD_LIST: индекс буквы в нём и есть смещение от
+    // AlwaysG/SpaceG.
     enum {
         AlwaysG,
         AlwaysX,
@@ -240,6 +242,9 @@ protected:
         AlwaysR,
         AlwaysS,
         AlwaysF,
+        AlwaysQ,
+        AlwaysP,
+        AlwaysL,
 
         SpaceG,
         SpaceX,
@@ -250,15 +255,20 @@ protected:
         SpaceR,
         SpaceS,
         SpaceF,
+        SpaceQ,
+        SpaceP,
+        SpaceL,
 
         Size
     };
 
-    // У линейных строк (G0/G1) и у дуг (G2/G3) свой диалект: пост задаёт два
-    // формата слов, formated() выбирает набор по слову G строки.
+    // У линейных строк (G0/G1), у дуг (G2/G3) и у циклов сверления (G73,
+    // G81..G89) свой диалект: пост задаёт по формату слов на каждый вид,
+    // formated() выбирает набор по слову G строки.
     enum FormatKind {
         Linear,
         Arc,
+        Cycle,
         KindCount
     };
 
@@ -279,14 +289,22 @@ protected:
 
     static inline QString lastDir;
     static inline bool redirected;
-    static inline constexpr auto CMD_LIST = u"GXYZIJRSF"_sv;
+    // Буквы, которые форматтер пишет; слово с другой буквой молча выпадает.
+    // Q -- шаг клевка G83/G73, P -- выдержка G82/G4 (или иное число -- как
+    // есть), L -- число повторов цикла.
+    static inline constexpr auto CMD_LIST = u"GXYZIJRSFQPL"_sv;
     // Из них координатные -- те, что живут на сетке вывода (GCode::Units).
-    static inline constexpr auto COORD_LIST = u"XYZIJR"_sv;
+    // R -- и радиус дуги, и плоскость отвода цикла: оба длины.
+    static inline constexpr auto COORD_LIST = u"XYZIJRQ"_sv;
 
     std::vector<double> getDepths();
 
     [[= Serial::skip]] bool formatFlags[KindCount][Size]{};
     [[= Serial::skip]] Code gCode_ = GNull;
+    // Модальный цикл сверления активен (последнее слово движения -- G73/G8x,
+    // а не G0..G3/G80): строки без G внутри цикла («X.. Y..» следующих
+    // отверстий) пишутся по формату цикла.
+    [[= Serial::skip]] bool cycle_{};
     [[= Serial::skip]] QString jsError_; // последняя ошибка скрипта, для комментария в УП
     static void parseFormat(const QString& format, bool (&flags)[Size]);
 
@@ -319,12 +337,18 @@ protected:
     // и печатаются заново -- чтобы вывод скрипта шёл по той же сетке и с тем
     // же подавлением повторов, что и вывод C++.
     QString formatedText(const std::vector<QString>& data);
+    // Следующая строка напишет слова этих букв, даже если они не менялись:
+    // первая строка цикла сверления обязана нести Z, R, F (и Q/P) -- grblHAL
+    // без них цикл не начнёт, а подавление повторов их бы выкинуло. Нужно и
+    // после цикла: где инструмент по Z, форматтер не знает (цикл отводит его
+    // сам).
+    void forceWords(QStringView letters);
 
     struct Coord {
         QChar c;
         Word operator()(double mm) const { return {c, toUnits(mm)}; }
         operator Word() const { return {c, Units{}}; }
-    } static constexpr i{u'I'}, j{u'J'}, rad{u'R'}, x{u'X'}, y{u'Y'}, z{u'Z'};
+    } static constexpr i{u'I'}, j{u'J'}, rad{u'R'}, x{u'X'}, y{u'Y'}, z{u'Z'}, q{u'Q'};
 
     // Обороты шпинделя длиной не являются -- своя запись, не по сетке вывода.
     struct {
