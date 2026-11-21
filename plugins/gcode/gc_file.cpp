@@ -416,7 +416,18 @@ std::vector<QString> File::toolChangeText(const ToolChange& change) {
 
     const double safeZ = App::project().safeZ();
     lines_.emplace_back(formated({g0(), z(safeZ)}));
-    lines_.append_range(post.toolChange(ctx));
+    const QStringList block = post.toolChange(ctx);
+    lines_.append_range(block);
+    // Шапка задания шпиндель не пускает (ctx.job) -- пускает блок смены.
+    // Свой пост, в чьём блоке пуска нет (пустой toolChange), оставил бы
+    // шпиндель стоящим, и фреза пошла бы в плату: пуск -- за ним.
+    if(!ctx.laser) {
+        static const QRegularExpression spindleStart{uR"((^|[^A-Z0-9.])M0*[34]([^0-9]|$))"_s, QRegularExpression::CaseInsensitiveOption};
+        const bool started = r::any_of(block, [&post](const QString& line) {
+            return !post.isComment(line) && spindleStart.match(line).hasMatch();
+        });
+        if(!started) lines_.emplace_back(post.spindleOn(ctx));
+    }
     // Та же строка ещё раз: форматтер выкинул бы её как неизменившуюся, а
     // станок после касания стоит не там, где её писали.
     forceWords(u"GZ");
@@ -653,6 +664,11 @@ std::vector<double> File::getDepths() {
     // конуса, и смена шага меняла глубину отверстия. Шаг же клевков G83/G73
     // (Q) -- первый из этих проходов: развёртка и цикл клюют одним шагом.
     const double total = gDepth + tool.getDepth();
+    // Шаг не задан (0, меньше нуля, NaN: инструмент или набор режимов без
+    // значения) -- один проход, как при шаге не меньше глубины. Иначе ниже
+    // вышла бы бесконечность проходов, то есть все 10000 по пределу.
+    if(!(tool.passDepth() > 0.0))
+        return {-total};
     // Число проходов -- с пределом. Конус сверла с углом 0 (не задан, старый
     // tools.json) -- это tan(90°), около 1e16: без предела проходов вышли бы
     // миллиарды, а их приведение к int -- неопределённое поведение. Нулевой
