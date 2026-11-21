@@ -64,7 +64,7 @@ void Plugin::createMainMenu(QMenu& menu, FileTree::View* tv) {
     // Задание -- из выделенных в дереве УП (их выбирает пользователь), а не из
     // видимых, как у «Сохранить выбранные».
     menu.addAction(QIcon::fromTheme(u"document-save-all"_s), tr("Save Selected as &Job..."), [tv] {
-        emit tv->saveGCodeJob(selectedProgramIds(tv));
+        emit tv->saveGCodeJob(jobProgramIds(tv));
     });
 }
 

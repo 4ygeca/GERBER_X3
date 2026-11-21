@@ -590,7 +590,7 @@ void MainWindow::createActionsFile() {
     // Задание -- из выделенных в дереве УП: какие УП идут одним файлом
     // (до металлизации, после неё), решает пользователь.
     action = fileMenu->addAction(QIcon::fromTheme(u"document-save-all"_s), tr("Save as &Job..."), this,
-        [this] { saveGCodeJob(GCode::selectedProgramIds(ui.treeView)); });
+        [this] { saveGCodeJob(GCode::jobProgramIds(ui.treeView)); });
     action->setStatusTip(tr("Save the tool paths selected in the tree as one job file of one side, with tool changes"));
 
     // Экспорт и печать -- одно окно: SVG, DXF, PDF и принтер в точном масштабе.

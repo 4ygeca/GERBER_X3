@@ -102,5 +102,8 @@ std::vector<GroupState> groupStates();
 // программы -- вся программа) -- для «Сохранить как задание...» из меню
 // «Файл». Прочие выделенные файлы не в счёт.
 std::vector<int32_t> selectedProgramIds(FileTree::View* tv);
+// УП задания: выделенные в дереве, если их две и больше, иначе -- отмеченные
+// галочкой (видимые); нет отмеченных -- выделенная. В порядке дерева.
+std::vector<int32_t> jobProgramIds(FileTree::View* tv);
 
 } // namespace GCode

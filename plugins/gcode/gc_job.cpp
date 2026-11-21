@@ -170,7 +170,7 @@ int jobPartRank(const File* file) { return isCutoutProgram(file) ? 3 : jobOperat
 std::optional<Job> Job::fromPrograms(const std::vector<int32_t>& ids, QString& error) {
     if(ids.empty()) {
         error = QObject::tr("No tool paths are selected.\n"
-                            "Select the tool paths of the job in the tree: several with Ctrl or Shift, or a whole group.");
+                            "Mark the tool paths of the job with their checkboxes in the tree, or select several with Ctrl or Shift, or a whole group.");
         return std::nullopt;
     }
 

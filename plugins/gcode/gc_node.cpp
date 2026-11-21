@@ -201,11 +201,27 @@ std::vector<int32_t> inTreeOrder(std::vector<int32_t> ids) {
     return ids;
 }
 
-// «Сохранить как задание...» в меню УП, подпапки программы и группы: УП под
-// действием меню -- одним файлом со сменами инструмента (gc_job.h). Записывает
-// главное окно (FileTree::View::saveGCodeJob): оно владелец диалогов.
+// УП задания по выбору: picked -- выделенные (или та, по которой щёлкнули).
+// Выделено две и больше (или группа целиком) -- задание собрано выделением.
+// Иначе -- отмеченные галочкой (видимые), как у «Сохранить выбранные»:
+// галочками набор и отбирают, а щёлкают потом по одной из них. Нет
+// отмеченных -- то, что выделено.
+static std::vector<int32_t> jobIdsOf(std::vector<int32_t> picked) {
+    if(picked.size() >= 2) return inTreeOrder(std::move(picked));
+    std::vector<Node*> nodes;
+    if(FileTree::Node* root = programRoot()) collectProgramNodes(root, nodes);
+    std::vector<int32_t> checked;
+    for(Node* node: nodes)
+        if(const File* file = node->gcodeFile(); file && file->itemGroup()->isVisible() && !r::contains(checked, node->id()))
+            checked.push_back(node->id());
+    return checked.empty() ? inTreeOrder(std::move(picked)) : checked;
+}
+
+// «Сохранить как задание...» в меню УП, подпапки программы и группы: УП
+// задания (jobIdsOf) -- одним файлом со сменами инструмента (gc_job.h).
+// Записывает главное окно (FileTree::View::saveGCodeJob): оно владелец диалогов.
 void addJobAction(QMenu& menu, FileTree::View* tv, FileTree::Node* clicked) {
-    const std::vector<int32_t> ids = inTreeOrder(menuProgramIds(tv, clicked));
+    const std::vector<int32_t> ids = jobIdsOf(menuProgramIds(tv, clicked));
     if(ids.empty()) return;
     menu.addAction(QIcon::fromTheme(u"document-save-all"_s), QObject::tr("Save as &Job..."), [tv, ids] {
         emit tv->saveGCodeJob(ids);
@@ -574,6 +590,10 @@ std::vector<GroupState> groupStates() {
 
 std::vector<int32_t> selectedProgramIds(FileTree::View* tv) {
     return tv ? inTreeOrder(programIdsOf(selectedNodes(tv))) : std::vector<int32_t>{};
+}
+
+std::vector<int32_t> jobProgramIds(FileTree::View* tv) {
+    return jobIdsOf(tv ? programIdsOf(selectedNodes(tv)) : std::vector<int32_t>{});
 }
 
 } // namespace GCode
