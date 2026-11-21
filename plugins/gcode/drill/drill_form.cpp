@@ -857,6 +857,9 @@ void Form::computePaths() {
     // Строка идёт в расчёт: инструмент есть, галка стоит. Что из неё считать --
     // по её режиму.
     auto computed = [](const Row& row) { return row.toolId > Tool::ID::Null && row.useForCalc; };
+    // Файл сверловки строк -- в ключе УП: УП другого файла тем же инструментом
+    // эти не заменят.
+    const int32_t srcFileId = file ? file->id() : -1;
 
     { // Сверловка, пазы: фрезеруются вдоль путей (drilling.js)
         // Инструмент -- копией в самих данных: у правленной строки он не из
@@ -906,7 +909,7 @@ void Form::computePaths() {
                     + u"_T"_s + indexes(data.toolsApertures));
                 if(file) gcode->setSide(file->side());
                 gcode->setGroup(drillGroup(file));
-                place({Mode::Drilling, true, key}, gcode, data.toolsApertures);
+                place({srcFileId, Mode::Drilling, true, key}, gcode, data.toolsApertures);
             }
         }
     }
@@ -956,7 +959,7 @@ void Form::computePaths() {
                 gcode->setFileName(programTag(val.tool, key) + /*type_ +*/ indexes(val.toolsApertures));
                 if(file) gcode->setSide(file->side());
                 gcode->setGroup(drillGroup(file));
-                place({Mode::Drilling, false, key}, gcode, val.toolsApertures);
+                place({srcFileId, Mode::Drilling, false, key}, gcode, val.toolsApertures);
             }
         }
     }
@@ -992,7 +995,7 @@ void Form::computePaths() {
             if(data.paths.empty())
                 continue;
             const auto& [mode, key] = modeKey;
-            const ProgramKey programKey{mode, false, key};
+            const ProgramKey programKey{srcFileId, mode, false, key};
             std::vector<int32_t> replaced;
             if(auto it = createdFileIds_.find(programKey); it != createdFileIds_.end() && App::project().file(it->second))
                 replaced = {it->second};
@@ -1004,7 +1007,7 @@ void Form::computePaths() {
             runGcp.params[GCode::Params::Depth] = dsbxDepth->value();
             runGcp.closedCurves = Geo::Polygons{data.paths};
             pendingRuns_.push_back({rowRefs(data.toolsApertures), programKey, programTag(data.tool, key) + modeTag(mode),
-                std::move(replaced), std::move(runGcp), file ? file->id() : -1});
+                std::move(replaced), std::move(runGcp)});
         }
     }
 
@@ -1095,22 +1098,23 @@ void Form::fileHandler(GCode::File* file_) {
     if(accepted)
         uncheckRows(run.rows);
 
+    const int32_t srcFileId = run.key.srcFileId;
     if(auto* drillFile = dynamic_cast<File*>(file_); drillFile) {
         drillFile->setRows(std::move(run.rows));
         drillFile->setWorckType(static_cast<int>(isPocket(run.key.mode) ? GCType::Pocket : GCType::Profile));
-        drillFile->setSrcFileId(run.srcFileId);
+        drillFile->setSrcFileId(srcFileId);
     }
     // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
     // и пазам. Разложит и покажет база, в конце прогона. Файл -- прогона, а не
     // выбранный в форме сейчас: пока прогон ждал очереди, выбрать могли другой.
-    if(file_) file_->setGroup(drillGroup(run.srcFileId > -1 ? App::project().file(run.srcFileId) : nullptr));
+    if(file_) file_->setGroup(drillGroup(srcFileId > -1 ? App::project().file(srcFileId) : nullptr));
 
     GCode::Form::fileHandler(file_);
 
     if(isAsyncRun && accepted) {
         createdFileIds_[run.key] = file_->id();
-        if(run.srcFileId > -1) {
-            auto& programs = srcPrograms_[run.srcFileId];
+        if(srcFileId > -1) {
+            auto& programs = srcPrograms_[srcFileId];
             std::pair<int32_t, QString> entry{file_->id(), file_->programName()};
             if(std::find(programs.begin(), programs.end(), entry) == programs.end()) // замена на месте -- тот же id
                 programs.push_back(std::move(entry));
