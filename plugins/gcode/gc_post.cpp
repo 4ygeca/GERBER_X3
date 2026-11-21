@@ -97,6 +97,7 @@ void Post::resetDefaults() {
     // Циклов у generic нет: сверловка разворачивается в G0/G1, как и прежде.
     cycles_.reset();
     dwellUnit_ = DwellUnit::Seconds;
+    maxToolNumber_ = 0;
     post_ = QJSValue{};
 }
 
@@ -184,6 +185,10 @@ void Post::readFields() {
     const QString dwellUnit = strOr(post_, u"dwellUnit"_s, strOr(post_.property(u"cycles"_s), u"dwellUnit"_s, u"s"_s));
     dwellUnit_ = dwellUnit.trimmed().toLower() == u"ms"_s ? DwellUnit::Milliseconds : DwellUnit::Seconds;
 
+    // Предел номеров T: только целое больше нуля, всё прочее -- предела нет.
+    if(auto v = post_.property(u"maxToolNumber"_s); v.isNumber() && v.toInt() > 0)
+        maxToolNumber_ = v.toInt();
+
     auto ln = post_.property(u"lineNumbers"_s);
     if(ln.isObject()) {
         lineNumbers_.enabled = true;
@@ -209,6 +214,7 @@ bool Post::isComment(const QString& line) const {
 QJSValue Post::makeCtx(const Context& ctx) {
     QJSValue obj = engine_->newObject();
     obj.setProperty(u"laser"_s, ctx.laser);
+    obj.setProperty(u"job"_s, ctx.job);
     obj.setProperty(u"name"_s, ctx.name);
     obj.setProperty(u"programName"_s, ctx.programName);
     obj.setProperty(u"spindleSpeed"_s, ctx.spindleSpeed);
@@ -216,6 +222,11 @@ QJSValue Post::makeCtx(const Context& ctx) {
     obj.setProperty(u"plungeRate"_s, ctx.plungeRate);
     obj.setProperty(u"tool"_s, ctx.tool);
     obj.setProperty(u"properties"_s, ctx.properties);
+    obj.setProperty(u"toolNumber"_s, ctx.toolNumber);
+    obj.setProperty(u"previousToolNumber"_s, ctx.previousToolNumber);
+    obj.setProperty(u"first"_s, ctx.first);
+    obj.setProperty(u"message"_s, ctx.message);
+    obj.setProperty(u"messageText"_s, ctx.messageText);
     return obj;
 }
 
@@ -227,7 +238,9 @@ QStringList Post::callLines(const QString& field, const QJSValue& ctx, const QJS
     if(value.isCallable()) {
         QJSValueList args{ctx};
         if(!extra.isUndefined()) args.push_back(extra);
-        value = value.call(args);
+        // this -- сам пост: функция поля берёт свои настройки (post.spinUp)
+        // и через this, как метод объекта.
+        value = value.callWithInstance(post_, args);
         if(value.isError()) {
             qWarning() << "GCode post" << id_ << field << "error line"
                        << value.property(u"lineNumber"_s).toInt() << ":" << value.toString();
@@ -245,9 +258,9 @@ QStringList Post::callLines(const QString& field, const QJSValue& ctx, const QJS
 }
 
 QStringList Post::header(const Context& ctx) {
-    if(!post_.isObject()) // дефолт generic
-        return ctx.laser ? QStringList{u"G21 G17 G90"_s}
-                         : QStringList{u"G21 G17 G90"_s, u"M3 S"_s + QString::number(ctx.spindleSpeed)};
+    if(!post_.isObject()) // дефолт generic; шапка задания шпиндель не пускает
+        return ctx.laser || ctx.job ? QStringList{u"G21 G17 G90"_s}
+                                    : QStringList{u"G21 G17 G90"_s, u"M3 S"_s + QString::number(ctx.spindleSpeed)};
     return callLines(u"header"_s, makeCtx(ctx));
 }
 
@@ -282,6 +295,26 @@ std::optional<QString> Post::dwell(const Context& ctx, double seconds) {
     // на каждый вызов.
     if(!post_.isObject() || !post_.property(u"dwell"_s).isCallable()) return std::nullopt;
     return callLines(u"dwell"_s, makeCtx(ctx), QJSValue{seconds}).join(u'\n');
+}
+
+QString Post::message(const QString& text) {
+    // Только функция, как у dwell: текст у сообщения свой на каждую смену.
+    if(post_.isObject())
+        if(QJSValue fn = post_.property(u"message"_s); fn.isCallable()) {
+            const QJSValue line = fn.callWithInstance(post_, {text});
+            if(!line.isError()) return line.toString();
+            qWarning() << "GCode post" << id_ << "message error line"
+                       << line.property(u"lineNumber"_s).toInt() << ":" << line.toString();
+        }
+    return comment(text);
+}
+
+QStringList Post::toolChange(const Context& ctx) {
+    // Своё поле -- как написано, даже пустое: пустой массив значит «смену
+    // не писать вовсе», это выбор поста.
+    if(post_.isObject() && !post_.property(u"toolChange"_s).isUndefined())
+        return callLines(u"toolChange"_s, makeCtx(ctx));
+    return {spindleOff(ctx), ctx.message, u"T%1 M6"_s.arg(ctx.toolNumber), spindleOn(ctx)};
 }
 
 QString Post::renderText(const std::vector<QString>& lines) const {

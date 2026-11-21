@@ -28,9 +28,22 @@ var post = {
     },
     dwellUnit: "s", // P of G4/G82 in seconds
 
+    // Jobs: T<n> M6 with the machine's own tool change; T1..Tn of the job
+    // must be in the tool table. The tool length offset is the machine's
+    // business (no G43 here).
+    spinUp: 0, // s: G4 P after M3 of a tool change (spindle spin-up); 0 -- none
+
     header: function(ctx) {
         var lines = ["G21 G17 G90 G40 G94", "G64 P0.01"];
-        if (!ctx.laser) lines.push("M3 S" + ctx.spindleSpeed);
+        // A job starts the spindle in its first tool change, not here.
+        if (!ctx.laser && !ctx.job) lines.push("M3 S" + ctx.spindleSpeed);
+        return lines;
+    },
+    // (MSG, ...) -- shown to the operator by the GUI.
+    message: function(text) { return "(MSG, " + text + ")"; },
+    toolChange: function(ctx) {
+        var lines = ["M5", ctx.message, "T" + ctx.toolNumber + " M6", "M3 S" + ctx.spindleSpeed];
+        if (post.spinUp > 0) lines.push("G4 P" + post.spinUp);
         return lines;
     },
     footer: function(ctx) {

@@ -16,8 +16,13 @@ var post = {
 
     header: function(ctx) {
         var lines = ["G21 G17 G90"];
-        if (!ctx.laser) lines.push("M3 S" + ctx.spindleSpeed);
+        // A job starts the spindle in its first tool change, not here.
+        if (!ctx.laser && !ctx.job) lines.push("M3 S" + ctx.spindleSpeed);
         return lines;
+    },
+    // Jobs: the ISO tool change; the message is a comment.
+    toolChange: function(ctx) {
+        return ["M5", ctx.message, "T" + ctx.toolNumber + " M6", "M3 S" + ctx.spindleSpeed];
     },
     footer: function(ctx) {
         return ctx.laser ? ["M30"] : ["M5", "M30"];

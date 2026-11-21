@@ -32,9 +32,26 @@ var post = {
     },
     dwellUnit: "s", // P of G4/G82 in seconds
 
+    // Jobs (several programs in one file, see README): manual tool change of
+    // grblHAL ($341): M6 stops, the sender runs the change and the touch-off.
+    maxToolNumber: 8, // N_TOOLS: T9 is an error
+    spinUp: 0,        // s: G4 P after M3 of a tool change (spindle spin-up); 0 -- none
+
     header: function(ctx) {
         var lines = ["G21 G17 G90", "G94"];
-        if (ctx.laser) lines.push("M5 S0"); else lines.push("M3 S" + ctx.spindleSpeed);
+        // A job starts the spindle in its first tool change, not here.
+        if (ctx.laser) lines.push("M5 S0"); else if (!ctx.job) lines.push("M3 S" + ctx.spindleSpeed);
+        return lines;
+    },
+    // (MSG, ...) -- grblHAL reports it to the sender ([MSG:...]).
+    message: function(text) { return "(MSG, " + text + ")"; },
+    toolChange: function(ctx) {
+        var lines = [];
+        // grblHAL skips "T1 M6" when tool 1 is already current: M61 Q0 (no tool)
+        // first -- and again when wrapped numbers repeat the previous one.
+        if (ctx.first || ctx.previousToolNumber === ctx.toolNumber) lines.push("M61 Q0");
+        lines.push("M5", ctx.message, "T" + ctx.toolNumber + " M6", "M3 S" + ctx.spindleSpeed);
+        if (post.spinUp > 0) lines.push("G4 P" + post.spinUp);
         return lines;
     },
     footer: function(ctx) {

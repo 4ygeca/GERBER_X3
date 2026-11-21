@@ -17,8 +17,13 @@ var post = {
     header: function(ctx) {
         var pgm = (ctx.programName || ctx.name).replace(/[^A-Za-z0-9]+/g, "_").toUpperCase();
         var lines = ["%" + pgm + " G71 *", "G30 G17 X+0 Y+0 Z-20 *", "G31 G90 X+100 Y+100 Z+0 *", "G17 G90 G94"];
-        if (!ctx.laser) lines.push("S" + ctx.spindleSpeed + " M3");
+        // A job starts the spindle in its first tool change, not here.
+        if (!ctx.laser && !ctx.job) lines.push("S" + ctx.spindleSpeed + " M3");
         return lines;
+    },
+    // Jobs: the ISO tool change T<n> M6; the message is a comment.
+    toolChange: function(ctx) {
+        return ["M5", ctx.message, "T" + ctx.toolNumber + " M6", "S" + ctx.spindleSpeed + " M3"];
     },
     footer: function(ctx) {
         return ["M5", "M30", "N99999 %" + (ctx.programName || ctx.name).replace(/[^A-Za-z0-9]+/g, "_").toUpperCase() + " G71 *"];
