@@ -1,14 +1,14 @@
 <RCC>
     <qresource prefix="/gcode/scripts">
-        <file>scripts/common_gcode.js</file>
-        <file>scripts/crosshatch.js</file>
-        <file>scripts/drilling.js</file>
-        <file>scripts/pocketoffset.js</file>
-        <file>scripts/pocketraster.js</file>
-        <file>scripts/profile.js</file>
-        <file>scripts/thermal.js</file>
-        <file>scripts/threading.js</file>
-        <file>scripts/voronoi.js</file>
+        <file alias="common_gcode.js">scripts/common_gcode.js</file>
+        <file alias="crosshatch.js">scripts/crosshatch.js</file>
+        <file alias="drilling.js">scripts/drilling.js</file>
+        <file alias="pocketoffset.js">scripts/pocketoffset.js</file>
+        <file alias="pocketraster.js">scripts/pocketraster.js</file>
+        <file alias="profile.js">scripts/profile.js</file>
+        <file alias="thermal.js">scripts/thermal.js</file>
+        <file alias="threading.js">scripts/threading.js</file>
+        <file alias="voronoi.js">scripts/voronoi.js</file>
     </qresource>
     <qresource prefix="/gcode/scripts/posts">
         <file alias="fanuc.js">scripts/posts/fanuc.js</file>
