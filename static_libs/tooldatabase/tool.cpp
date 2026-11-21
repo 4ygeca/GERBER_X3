@@ -140,7 +140,10 @@ void Tool::setCuttingData(const CuttingPreset& preset) {
 
 std::vector<Tool::Operation> Tool::operations(Type type) {
     switch(type) {
-    case Drill     : return {Operation::Drilling, Operation::Milling};
+    // Сверло только сверлит: режимов фрезеровки у него не бывает. Такие наборы
+    // из прежнего tools.json readTools пропускает (недопустимая операция), и
+    // при следующем сохранении базы их в файле уже нет.
+    case Drill     : return {Operation::Drilling};
     case EndMill   : return {Operation::Milling, Operation::Drilling};
     case Engraver  : return {Operation::Milling};
     case Laser     : return {Operation::Laser};
