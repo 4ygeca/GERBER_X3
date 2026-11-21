@@ -974,12 +974,21 @@ void MainWindow::saveSelectedGCodeFiles() {
         if(!gcFiles[i]->itemGroup()->isVisible())
             gcFiles.erase(gcFiles.begin() + i--);
 
-    using Key = std::pair<size_t, Side>;
+    // Один файл -- один физический инструмент одной стороны
+    // (Tool::identityKey): сверловка и фрезеровка той же фрезой с разными
+    // режимами -- тоже один файл, станку менять нечего. Было по hash2() --
+    // геометрии с шагом и глубиной прохода: режимы под операцию разводили
+    // один инструмент по разным файлам.
+    using Key = std::pair<QString, Side>;
     using GcFiles = QList<GCode::File*>;
 
     std::map<Key, GcFiles> gcFilesMap;
     for(GCode::File* file: gcFiles)
-        gcFilesMap[{file->tool().hash2(), file->side()}].append(file);
+        gcFilesMap[{file->tool().identityKey(), file->side()}].append(file);
+    // Части файла -- как шаги одного инструмента в задании: сверловка,
+    // фрезеровка, вырезка заготовки последней.
+    for(auto& [key, files]: gcFilesMap)
+        std::ranges::stable_sort(files, {}, GCode::jobPartRank);
 
     if(gcFilesMap.empty()) {
         QMessageBox::information(this, {}, QObject::tr("No selected toolpath files."));
