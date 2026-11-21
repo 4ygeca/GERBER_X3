@@ -172,7 +172,12 @@ double Tool::getDiameter(double depth) const {
 
 double Tool::getDepth() const {
     switch(data.type) {
-    case Tool::Drill   : return data.diameter * 0.5 * tan(qDegreesToRadians((180.0 - data.angle) * 0.5));
+    case Tool::Drill:
+        // Угол вершины вне (0, 180) -- не задан (0 у инструмента без угла) или
+        // плоский торец: конуса нет. Иначе при 0 выходил бы tan(90°), и глубина
+        // сверления -- порядка 1e16 мм.
+        if(!(data.angle > 0.0 && data.angle < 180.0)) return 0.0;
+        return data.diameter * 0.5 * tan(qDegreesToRadians((180.0 - data.angle) * 0.5));
     case Tool::EndMill :
     case Tool::Engraver:
     default            : return 0.0;
