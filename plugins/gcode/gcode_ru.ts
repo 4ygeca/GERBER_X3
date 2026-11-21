@@ -262,6 +262,14 @@
     </message>
 </context>
 <context>
+    <name>GCode::PropertiesForm</name>
+    <message>
+        <location filename="gc_propertiesform.cpp" line="219"/>
+        <source>(not set)</source>
+        <translation>(не задан)</translation>
+    </message>
+</context>
+<context>
     <name>GCodePropertiesForm</name>
     <message>
         <source>Form</source>
@@ -279,109 +287,121 @@
     </message>
     <message>
         <location filename="gcodepropertiesform.ui" line="75"/>
+        <source>Material:</source>
+        <translation>Материал заготовки:</translation>
+    </message>
+    <message>
+        <location filename="gcodepropertiesform.ui" line="85"/>
+        <source>Workpiece material: the toolpath forms take the cutting data of this material from the tool database.
+Already calculated toolpaths keep their cutting data.</source>
+        <translation>Материал заготовки: формы УП берут из базы инструментов режимы резания для этого материала.
+Уже рассчитанные УП сохраняют свои режимы.</translation>
+    </message>
+    <message>
+        <location filename="gcodepropertiesform.ui" line="93"/>
         <source>Board Thickness</source>
         <translation>Толщина платы</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="85"/>
-        <location filename="gcodepropertiesform.ui" line="108"/>
-        <location filename="gcodepropertiesform.ui" line="158"/>
-        <location filename="gcodepropertiesform.ui" line="181"/>
-        <location filename="gcodepropertiesform.ui" line="207"/>
-        <location filename="gcodepropertiesform.ui" line="274"/>
-        <location filename="gcodepropertiesform.ui" line="290"/>
-        <location filename="gcodepropertiesform.ui" line="316"/>
-        <location filename="gcodepropertiesform.ui" line="332"/>
-        <location filename="gcodepropertiesform.ui" line="426"/>
-        <location filename="gcodepropertiesform.ui" line="465"/>
-        <location filename="gcodepropertiesform.ui" line="511"/>
+        <location filename="gcodepropertiesform.ui" line="103"/>
+        <location filename="gcodepropertiesform.ui" line="126"/>
+        <location filename="gcodepropertiesform.ui" line="176"/>
+        <location filename="gcodepropertiesform.ui" line="199"/>
+        <location filename="gcodepropertiesform.ui" line="225"/>
+        <location filename="gcodepropertiesform.ui" line="292"/>
+        <location filename="gcodepropertiesform.ui" line="308"/>
+        <location filename="gcodepropertiesform.ui" line="334"/>
+        <location filename="gcodepropertiesform.ui" line="350"/>
+        <location filename="gcodepropertiesform.ui" line="444"/>
+        <location filename="gcodepropertiesform.ui" line="483"/>
+        <location filename="gcodepropertiesform.ui" line="529"/>
         <source> mm</source>
         <translation> мм</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="101"/>
+        <location filename="gcodepropertiesform.ui" line="119"/>
         <source>Copper Thickness</source>
         <translation>Толщина меди</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="127"/>
+        <location filename="gcodepropertiesform.ui" line="145"/>
         <source>G0 Properties</source>
         <translation>Свойства G0</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="148"/>
+        <location filename="gcodepropertiesform.ui" line="166"/>
         <source>Clearence Z</source>
         <translation>Безопасная высота Z</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="171"/>
+        <location filename="gcodepropertiesform.ui" line="189"/>
         <source>Plunge Z</source>
         <translation>Высота погружения Z</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="197"/>
+        <location filename="gcodepropertiesform.ui" line="215"/>
         <source>Safe Z</source>
         <translation>Безопасная Z</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="226"/>
+        <location filename="gcodepropertiesform.ui" line="244"/>
         <source>Markers Position</source>
         <translation>Позиция маркеров</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="244"/>
+        <location filename="gcodepropertiesform.ui" line="262"/>
         <source>Home</source>
         <translation>Дом</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="254"/>
+        <location filename="gcodepropertiesform.ui" line="272"/>
         <source>Zero</source>
         <translation>Ноль</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="264"/>
+        <location filename="gcodepropertiesform.ui" line="282"/>
         <source>X</source>
         <translation>X</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="306"/>
-        <location filename="gcodepropertiesform.ui" line="445"/>
+        <location filename="gcodepropertiesform.ui" line="324"/>
+        <location filename="gcodepropertiesform.ui" line="463"/>
         <source>Y</source>
         <translation>Y</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="348"/>
-        <location filename="gcodepropertiesform.ui" line="355"/>
+        <location filename="gcodepropertiesform.ui" line="366"/>
+        <location filename="gcodepropertiesform.ui" line="373"/>
         <source>0</source>
         <translation>0</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="368"/>
+        <location filename="gcodepropertiesform.ui" line="386"/>
         <source>Layout</source>
         <translation>Раскладка</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="386"/>
+        <location filename="gcodepropertiesform.ui" line="404"/>
         <source>Steps</source>
         <translation>Шаги</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="396"/>
+        <location filename="gcodepropertiesform.ui" line="414"/>
         <source>Space</source>
         <translation>Шаг</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="406"/>
+        <location filename="gcodepropertiesform.ui" line="424"/>
         <source>X </source>
         <translation>X </translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="495"/>
+        <location filename="gcodepropertiesform.ui" line="513"/>
         <source>Glue</source>
         <translation>Клей</translation>
     </message>
     <message>
-        <location filename="gcodepropertiesform.ui" line="535"/>
+        <location filename="gcodepropertiesform.ui" line="553"/>
         <source>Ok</source>
         <translation>Ок</translation>
     </message>
@@ -630,57 +650,57 @@
         <translation type="vanished">;        Источник: %1 [%2]</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="471"/>
+        <location filename="gc_file.cpp" line="493"/>
         <source>	         Source: %1 [%2]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="472"/>
+        <location filename="gc_file.cpp" line="494"/>
         <source>#%1 (deleted)</source>
         <translation>#%1 (удалён)</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="478"/>
+        <location filename="gc_file.cpp" line="500"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="481"/>
+        <location filename="gc_file.cpp" line="503"/>
         <source>	           Name: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="483"/>
+        <location filename="gc_file.cpp" line="505"/>
         <source>	        Program: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="485"/>
+        <location filename="gc_file.cpp" line="507"/>
         <source>	           Tool: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="486"/>
+        <location filename="gc_file.cpp" line="508"/>
         <source>	  Tool Stepover: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="487"/>
+        <location filename="gc_file.cpp" line="509"/>
         <source>	 Feed Rate mm/s: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="488"/>
+        <location filename="gc_file.cpp" line="510"/>
         <source>	Tool Pass Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="489"/>
+        <location filename="gc_file.cpp" line="511"/>
         <source>	          Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="490"/>
+        <location filename="gc_file.cpp" line="512"/>
         <source>	           Side: %1</source>
         <translation type="unfinished"></translation>
     </message>
