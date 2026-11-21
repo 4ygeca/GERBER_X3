@@ -230,6 +230,14 @@ public:
     bool pinsPointSymmetry() const;
     void setPinsPointSymmetry(bool point);
 
+    // Материал заготовки -- uid из списка материалов базы инструментов. По нему
+    // формы УП берут наборы режимов резания (ToolHolder::resolve). Пусто --
+    // материал не задан (старые проекты): наборы «любой материал», иначе
+    // собственные значения инструмента. Уже рассчитанные УП не пересчитываются:
+    // у них свой снимок инструмента, как и после правки базы.
+    QString material() const;
+    void setMaterial(const QString& uid);
+
 signals:
     void changed();
     void homePosChanged(const QPointF&);
@@ -239,6 +247,8 @@ signals:
     void layoutFrameUpdate(bool = false);
     // Список boardOutlineFiles сменился (кнопка, меню слоя, открытие проекта).
     void boardOutlineFilesChanged();
+    // Материал заготовки сменился (свойства G-кода, открытие и закрытие проекта).
+    void materialChanged(const QString& uid);
     // need for debuging
     void addFileDbg(GCode::File* file);
     // File Watcher
@@ -268,6 +278,7 @@ private:
     bool isPinsPlaced_{};
     bool pinsUsed_[4]{true, true, true, true};
     bool pinsPointSymmetry_{};
+    QString material_; // см. material()
     QPointF pins_[4];
     QPointF home_;
     QPointF zero_;
@@ -311,6 +322,10 @@ private:
         // порядке объявления. У старых проектов ключа нет -- остаётся ось,
         // как и было.
         bool pinsPointSymmetry{};
+        // Материал заготовки (uid) -- после всех, по той же причине. У старых
+        // проектов ключа нет -- материал не задан. Скрипту уходит как
+        // file.properties.material.
+        QString material;
     };
     void applyHeader(const Header&); // применить всё, кроме viewRect
 

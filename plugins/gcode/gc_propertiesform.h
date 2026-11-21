@@ -57,6 +57,10 @@ private:
     // Поля Home/Zero пишет сама форма (updatePosDsbxs) -- это не правка
     // пользователя, и пересчёта УП она не просит.
     bool syncingPos_ = false;
+    // Список материалов строит сама форма -- проекту это не выбор пользователя.
+    bool fillingMaterials_ = false;
+    // Материал проекту ставит сама панель (выбор в списке, откат снимка).
+    bool choosingMaterial_ = false;
     // Поле с фокусом правят (набор, стрелки, колесо): УП пересоберутся, когда
     // правка закончится (editingFinished), а не на каждое промежуточное значение.
     bool editing_ = false;
@@ -67,9 +71,13 @@ private:
         double spaceX{}, spaceY{};
         int stepsX{}, stepsY{};
         double homeX{}, homeY{}, zeroX{}, zeroY{};
+        QString material; // uid материала заготовки проекта
     } snapshot_;
 
     void applySnapshot(const Snapshot& s);
+    // Список материалов из базы инструментов, выбран материал проекта.
+    // Незнакомый uid (проект с другого ПК) -- отдельной строкой «unknown (uid)».
+    void updateMaterials();
 };
 
 } // namespace GCode

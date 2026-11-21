@@ -112,6 +112,7 @@ Project::Header Project::header() const {
         .glue = glue_,
         .viewRect = App::grView().getViewRect(),
         .pinsPointSymmetry = pinsPointSymmetry_,
+        .material = material_,
     };
     std::ranges::copy(pins_, h.pins);
     std::ranges::copy(pinsUsed_, h.pinsUsed);
@@ -133,6 +134,7 @@ void Project::applyHeader(const Header& h) {
     std::ranges::copy(h.pins, pins_);
     std::ranges::copy(h.pinsUsed, pinsUsed_);
     pinsPointSymmetry_ = h.pinsPointSymmetry;
+    material_ = h.material;
 }
 
 bool Project::save(const QString& fileName) {
@@ -385,6 +387,7 @@ bool Project::open(const QString& fileName) {
         emit pinsPosChanged(pins_);
         emit worckRectChanged(worckRect_);
         emit boardOutlineFilesChanged();
+        emit materialChanged(material_);
 
         isModified_ = false;
 
@@ -407,6 +410,9 @@ void Project::close() {
     // по текущему режиму.
     pinsPointSymmetry_ = false;
     boardOutlineFiles_.clear();
+    // Формы, что берут материал проекта, пересчитают свои снимки инструмента.
+    material_.clear();
+    emit materialChanged(material_);
     setWorckRect({});
     setStepsX(1);
     setStepsY(1);
@@ -841,6 +847,14 @@ bool Project::pinsPointSymmetry() const { return pinsPointSymmetry_; }
 void Project::setPinsPointSymmetry(bool point) {
     if(std::exchange(pinsPointSymmetry_, point) != point)
         setChanged();
+}
+
+QString Project::material() const { return material_; }
+void Project::setMaterial(const QString& uid) {
+    if(material_ == uid) return;
+    material_ = uid;
+    emit materialChanged(material_);
+    setChanged();
 }
 
 double Project::safeZ() const { return safeZ_; }

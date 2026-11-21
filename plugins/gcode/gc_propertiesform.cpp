@@ -99,6 +99,22 @@ PropertiesForm::PropertiesForm(QWidget* parent)
 
     connect(ui->dsbxCopperThickness, &QDoubleSpinBox::valueChanged, App::project.ptr(), &Project::setCopperThickness);
 
+    // Материал заготовки -- проекту: тот помечается изменённым и сообщает
+    // формам УП (ToolSelectorForm берёт по нему наборы режимов). Список
+    // строит сама форма (updateMaterials) -- это не выбор пользователя.
+    connect(ui->cbxMaterial, &QComboBox::currentIndexChanged, this, [this] {
+        if(fillingMaterials_ || !App::project.ptr()) return;
+        const QScopedValueRollback choosing{choosingMaterial_, true};
+        App::project().setMaterial(ui->cbxMaterial->currentData().toString());
+    });
+    connect(App::project.ptr(), &Project::materialChanged, this, [this](const QString& uid) {
+        // Сменили не здесь (открыли или закрыли проект) -- это не правка в
+        // панели, и закрытие панели без OK откатывать её не должно.
+        if(!choosingMaterial_) snapshot_.material = uid;
+        updateMaterials();
+    });
+    updateMaterials();
+
     connect(ui->dsbxSafeZ, &QDoubleSpinBox::valueChanged, [this](double value) {
         ui->dsbxSafeZ->setValue(value);
         ui->dsbxSafeZ->setValue(value);
@@ -160,7 +176,10 @@ void PropertiesForm::showEvent(QShowEvent* event) {
         .homeY = ui->dsbxHomeY->value(),
         .zeroX = ui->dsbxZeroX->value(),
         .zeroY = ui->dsbxZeroY->value(),
+        .material = App::project.ptr() ? App::project().material() : QString{},
     };
+    // Список материалов могли править в базе инструментов, пока панель была закрыта.
+    updateMaterials();
 }
 
 void PropertiesForm::hideEvent(QHideEvent* event) {
@@ -189,6 +208,23 @@ void PropertiesForm::applySnapshot(const Snapshot& s) {
     ui->dsbxSafeZ->setValue(s.safeZ);
     ui->dsbxClearence->setValue(s.clearence);
     ui->dsbxPlunge->setValue(s.plunge);
+    // Откат бывает и на выходе из программы, когда проекта уже нет.
+    if(App::project.ptr()) App::project().setMaterial(s.material); // список обновит materialChanged
+}
+
+void PropertiesForm::updateMaterials() {
+    const QScopedValueRollback filling{fillingMaterials_, true};
+    const QString current = App::project.ptr() ? App::project().material() : QString{};
+    ui->cbxMaterial->clear();
+    ui->cbxMaterial->addItem(tr("(not set)"), QString{});
+    for(const auto& material: App::toolHolder().materials())
+        ui->cbxMaterial->addItem(material.name, material.uid);
+    int index = ui->cbxMaterial->findData(current);
+    if(index < 0) { // проект с другого ПК: материала нет в здешнем списке
+        ui->cbxMaterial->addItem(App::toolHolder().materialName(current), current);
+        index = ui->cbxMaterial->count() - 1;
+    }
+    ui->cbxMaterial->setCurrentIndex(index);
 }
 
 void PropertiesForm::updatePosDsbxs() {
