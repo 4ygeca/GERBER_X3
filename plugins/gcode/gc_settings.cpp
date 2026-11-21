@@ -39,11 +39,14 @@ QString PluginTab::defaultScriptPath(const QString& gcName) {
 // Записанный путь -- встроенный скрипт ДРУГОЙ установки GGEasy: тот же файл в
 // папке scripts, рядом с которой лежит программа. Это «по умолчанию» прежней
 // версии (распакованной в другую папку), а не свой скрипт пользователя: с ним
-// новая версия молча работала бы на старых скриптах. Пути, которого больше
-// нет на диске, -- тоже «по умолчанию»: иначе УП выходили бы с ошибкой.
+// новая версия молча работала бы на старых скриптах. Такой же путь, которого
+// больше нет на диске (прежнюю версию удалили), -- тоже «по умолчанию». Свой
+// скрипт по пропавшему пути (сетевой диск не подключён) не трогаем: ошибка
+// видна в УП, а записанный путь не теряется.
 static bool isStaleDefaultScript(const QString& path, const QString& gcName) {
     const QFileInfo info{path};
-    if(!info.exists()) return true;
+    if(!info.exists())
+        return info.fileName() == gcName.toLower() + u".js"_s && info.absoluteDir().dirName() == u"scripts"_s;
     const QFileInfo exe{QCoreApplication::applicationFilePath()};
     const QDir scriptsDir = info.absoluteDir();
     return info.fileName() == gcName.toLower() + u".js"_s
