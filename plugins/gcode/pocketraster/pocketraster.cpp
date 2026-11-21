@@ -27,16 +27,21 @@
 namespace PocketRaster {
 
 void Creator::create() {
+    int pass = gcp.params[Pass].toInt();
+    // Лазер обводит контур только ПОСЛЕ растра (галка формы пишет Last). Так
+    // считались и старые УП с «First»: оба растра ставили обводку последней.
+    if(gcp.tools.front().type() == Tool::Laser && pass != NoProfilePass)
+        pass = Last;
     if(gcp.params[Fast].toBool())
         createRasterAccLaser(gcp.tools.front(),
             gcp.params[GCode::Params::Depth].toDouble(),
             gcp.params[UseAngle].toDouble(),
-            gcp.params[Pass].toInt());
+            pass);
     else
         createRaster(gcp.tools.front(),
             gcp.params[GCode::Params::Depth].toDouble(),
             gcp.params[UseAngle].toDouble(),
-            gcp.params[Pass].toInt());
+            pass);
 }
 
 uint32_t Creator::type() { return POCKET_RASTER; }

@@ -165,6 +165,9 @@ Form::Form(GCode::Plugin* plugin)
     settings.getValue(ui->rbNormal);
     settings.getValue(ui->rbOutside);
     settings.getValue(ui->cbxBorder);
+    // Галка обводки у лазера своя. Впервые -- по прежнему проходу профиля:
+    // им лазерный растр и обводили.
+    settings.getValue(ui->chbxOutline, ui->cbxPass->currentIndex() != Creator::NoProfilePass);
     settings.endGroup();
 
     rb_clicked();
@@ -204,6 +207,7 @@ Form::~Form() {
     settings.setValue(ui->rbNormal);
     settings.setValue(ui->rbOutside);
     settings.setValue(ui->cbxBorder);
+    settings.setValue(ui->chbxOutline);
     settings.endGroup();
     delete ui;
 }
@@ -240,7 +244,12 @@ void Form::computePaths() {
 
     gcp.params[Creator::UseAngle] = ui->dsbxAngle->value();
     gcp.params[GCode::Params::Depth] = dsbxDepth->value();
-    gcp.params[Creator::Pass] = ui->cbxPass->currentIndex();
+    // Лазер -- галка обводки, она всегда после растра (Last; старые версии
+    // читают её так же). Фреза -- проход профиля, как выбран.
+    if(tool.type() == Tool::Laser)
+        gcp.params[Creator::Pass] = ui->chbxOutline->isChecked() ? int{Creator::Last} : int{Creator::NoProfilePass};
+    else
+        gcp.params[Creator::Pass] = ui->cbxPass->currentIndex();
     if(ui->rbFast->isChecked()) {
         gcp.params[Creator::Fast] = true;
         gcp.params[Creator::AccDistance] = (tool.feedRate_mmPerSec() * tool.feedRate_mmPerSec()) / (2 * ui->dsbxAcc->value());
@@ -252,9 +261,15 @@ void Form::computePaths() {
 
 void Form::updateName() {
     const auto& tool{ui->toolHolder1->tool()};
-    if(tool.type() != Tool::Laser)
+    const bool laser = tool.type() == Tool::Laser;
+    if(!laser)
         ui->rbNormal->setChecked(true);
-    ui->rbFast->setEnabled(tool.type() == Tool::Laser);
+    ui->rbFast->setEnabled(laser);
+    // Лазеру -- галка «обвести контур после растра» (в обоих растрах лазера
+    // обводка идёт только после него), фрезе -- прежний выбор прохода профиля.
+    ui->labelPass->setVisible(!laser);
+    ui->cbxPass->setVisible(!laser);
+    ui->chbxOutline->setVisible(laser);
 
     leName->setText(names[side]);
     // HLDI могло только что погаснуть (не лазер) -- setChecked сигнала clicked
@@ -481,7 +496,15 @@ void Form::editFile(GCode::File* file) {
     (fast ? ui->rbFast : ui->rbNormal)->setChecked(true);
 
     if(params.params.contains(Creator::UseAngle)) ui->dsbxAngle->setValue(value(Creator::UseAngle).toDouble());
-    if(params.params.contains(Creator::Pass)) ui->cbxPass->setCurrentIndex(value(Creator::Pass).toInt());
+    // Обводка лазера -- галкой: «First» старых УП обводил тоже после растра.
+    // Виджет другого инструмента остаётся как был выбран.
+    if(params.params.contains(Creator::Pass)) {
+        const int pass = value(Creator::Pass).toInt();
+        if(!params.tools.empty() && params.tool().type() == Tool::Laser)
+            ui->chbxOutline->setChecked(pass != Creator::NoProfilePass);
+        else
+            ui->cbxPass->setCurrentIndex(pass);
+    }
     // Ускорения в УП нет -- только путь разгона v²/2a (computePaths). Обратно --
     // через подачу того же инструмента.
     if(const double accDistance = value(Creator::AccDistance).toDouble(); fast && accDistance > 0.0 && !params.tools.empty()) {
