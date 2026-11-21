@@ -33,19 +33,37 @@
 #include "pocketoffset/pocketoffset.h"
 #include "profile/profile.h"
 
+#include <QComboBox>
 #include <QHeaderView>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
+#include <QStandardItemModel>
 #include <QThread>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QWheelEvent>
 #include <QWidget>
 #include <algorithm>
 #include <set>
 
 namespace Drilling {
+
+namespace {
+
+// Выбор режима строки. Колесо над ячейкой листает таблицу, а не меняет режим:
+// иначе прокрутка длинной таблицы молча переводила бы строки, над которыми
+// прошёл курсор, со сверловки на карман.
+class ModeBox final : public QComboBox {
+public:
+    using QComboBox::QComboBox;
+
+protected:
+    void wheelEvent(QWheelEvent* event) override { event->ignore(); }
+};
+
+} // namespace
 
 // Контур паза, расширенный до нужной ширины. delta у Geo::Inflate -- ПОЛНАЯ
 // ширина, а offset здесь задан как смещение кромки, отсюда удвоение. Замыкать
@@ -68,6 +86,32 @@ static QString programTag(const Tool& tool, const ToolKey& key) {
     if(!key.hash)
         return tool.nameEnc();
     return tool.nameEnc() + u"_E"_s + QString::number(key.hash % 1679616u, 36).rightJustified(4, u'0').toUpper();
+}
+
+// Хвост имени УП фрезеровки отверстий: за один Create одна фреза даёт и
+// карман, и профиль, и каждый -- попутно и встречно. Под одним именем такие УП
+// раскладка дерева сложила бы в одну программу (одна папка, одно имя в
+// задании), хотя это разные обработки. Попутное -- без пометки.
+static QString modeTag(Mode mode) {
+    switch(mode) {
+    case Mode::PocketClimb        : return u"_POCKET"_s;
+    case Mode::PocketConventional : return u"_POCKET-CONV"_s;
+    case Mode::ProfileClimb       : return u"_PROFILE"_s;
+    case Mode::ProfileConventional: return u"_PROFILE-CONV"_s;
+    case Mode::Drilling           : break;
+    }
+    return {};
+}
+
+// Режим строк УП, сделанной формой до режимов у строк: режим, направление и
+// сторона были на всю форму. Профиль -- всегда внутри: снаружи и по контуру
+// отверстие больше не обрабатывается, сторона такой УП не переносится.
+static Mode modeOf(GCType type, bool conventional) {
+    switch(type) {
+    case GCType::Pocket : return conventional ? Mode::PocketConventional : Mode::PocketClimb;
+    case GCType::Profile: return conventional ? Mode::ProfileConventional : Mode::ProfileClimb;
+    default             : return Mode::Drilling;
+    }
 }
 
 // Группа в дереве по умолчанию: все УП одного файла сверловки (сверловка,
@@ -104,34 +148,24 @@ Form::Form(GCode::Plugin* plugin)
     initToolTable();
 
     pbCreate->setEnabled(false);
-    ui->rb_drilling->setChecked(true);
 
     {
         MySettings settings;
         settings.beginGroup(u"DrillForm"_s);
-        settings.getValue(ui->rbConventional, true);
-        settings.getValue(ui->rb_drilling, true);
-        settings.getValue(ui->rb_in, true);
-        settings.getValue(ui->rb_on);
-        settings.getValue(ui->rb_out);
-        settings.getValue(ui->rb_pocket);
-        settings.getValue(ui->rb_profile);
-        settings.getValue(ui->rbClimb);
         settings.getValue(ui->chbxZoomToSelected);
+        // Режим, сторона и направление на всю форму ушли в строки таблицы
+        // (столбец Mode) -- их прежние ключи больше не читаются. Не переносятся
+        // нарочно: режим прошлой формы по умолчанию для всех строк оставил бы
+        // их без инструмента (подбор по диаметру -- только сверловке).
+        for(const QString& key: {u"rb_drilling"_s, u"rb_pocket"_s, u"rb_profile"_s, u"rb_on"_s, u"rb_in"_s, u"rb_out"_s, u"rbClimb"_s, u"rbConventional"_s})
+            settings.remove(key);
         settings.endGroup();
     }
 
     //
     connect(ui->pbPickUpTools, &QPushButton::clicked, this, &Form::pickUpTool);
-    connect(ui->rb_drilling, &QRadioButton::clicked, this, &Form::updateState);
-    connect(ui->rb_in, &QRadioButton::clicked, this, &Form::updateState);
-    connect(ui->rb_on, &QRadioButton::clicked, this, &Form::updateState);
-    connect(ui->rb_out, &QRadioButton::clicked, this, &Form::updateState);
-    connect(ui->rb_pocket, &QRadioButton::clicked, this, &Form::updateState);
-    connect(ui->rb_profile, &QRadioButton::clicked, this, &Form::updateState);
 
     updateButtonIconSize();
-    updateState();
     updateFiles();
     setWindowTitle(tr("GCType::Drill Toolpath"));
     App::drillForm.set(this);
@@ -142,14 +176,6 @@ Form::~Form() {
 
     MySettings settings;
     settings.beginGroup(u"DrillForm"_s);
-    settings.setValue(ui->rbClimb);
-    settings.setValue(ui->rbConventional);
-    settings.setValue(ui->rb_drilling);
-    settings.setValue(ui->rb_in);
-    settings.setValue(ui->rb_on);
-    settings.setValue(ui->rb_out);
-    settings.setValue(ui->rb_pocket);
-    settings.setValue(ui->rb_profile);
     settings.setValue(ui->chbxZoomToSelected);
     settings.endGroup();
 
@@ -357,27 +383,176 @@ void Form::on_cbxFileCurrentIndexChanged() {
     delete ui->toolTable->model();
     ui->toolTable->setModel(model);
     connect(model, &Model::set, header, &Header::set);
+    initModeBoxes();
     initEditButtons();
     ui->toolTable->resizeColumnsToContents();
     ui->toolTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     ui->toolTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ui->toolTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    // Ширина -- по кнопке правки (index-виджеты view учитывает в sizeHint столбца).
+    // Ширина -- по спискам режима и кнопкам правки (index-виджеты view
+    // учитывает в sizeHint столбца).
+    ui->toolTable->horizontalHeader()->setSectionResizeMode(Model::Mode, QHeaderView::ResizeToContents);
     ui->toolTable->horizontalHeader()->setSectionResizeMode(Model::Edit, QHeaderView::ResizeToContents);
     connect(ui->toolTable->selectionModel(), &QItemSelectionModel::selectionChanged, this, &Form::on_selectionChanged);
 
     header->onChecked();
 }
 
-Tool::Operation Form::operation(const Tool& tool, bool slot) const {
-    return Tool::programOperation(tool.type(), worckType == GCType::Drill && !slot);
+Tool::Operation Form::operation(const Tool& tool, Mode mode, bool slot) const {
+    return Tool::programOperation(tool.type(), mode == Mode::Drilling && !slot);
 }
 
-Tool Form::resolved(const Tool& tool, bool slot) const {
-    return App::toolHolder().resolve(tool, operation(tool, slot), App::project().material());
+Tool Form::resolved(const Tool& tool, Mode mode, bool slot) const {
+    return App::toolHolder().resolve(tool, operation(tool, mode, slot), App::project().material());
 }
 
-Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool(), row.isSlot); }
+Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool(), row.mode, row.isSlot); }
+
+void Form::initModeBoxes() {
+    if(!model)
+        return;
+    for(int row{}; row < model->rowCount(); ++row) {
+        auto* box = new ModeBox{ui->toolTable};
+        // Фокус не нужен: стрелки клавиатуры меняли бы режим молча, как колесо.
+        box->setFocusPolicy(Qt::NoFocus);
+        box->setFrame(false);
+        // Ширина -- по самому длинному режиму, а не по текущему: столбец
+        // подгоняется под списки один раз, смена режима его не перекраивает.
+        box->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        box->setToolTip(tr("How to process these holes. If the row is selected, the choice applies to all selected rows."));
+        for(Mode mode: modes)
+            box->addItem(Model::modeIcon(mode), Model::modeName(mode), static_cast<int>(mode));
+        // activated -- только выбор пользователя; режим из модели ставит
+        // updateModeBox(), и сюда он не приходит.
+        connect(box, &QComboBox::activated, this, [this, box, row, tableModel = model](int index) {
+            if(model != tableModel)
+                return;
+            // Строка среди выделенных -- режим всем выделенным, как и правка
+            // инструмента; иначе -- ей одной.
+            std::vector<int> rows{row};
+            if(ui->toolTable->selectionModel()->isSelected(model->index(row, Model::Tool)))
+                rows = selectedRows();
+            setRowsMode(rows, static_cast<Mode>(box->itemData(index).toInt()));
+            updateModeBox(row); // режим мог не смениться -- список снова по модели
+        });
+        // Index-виджет view удаляет сам при смене или удалении модели.
+        ui->toolTable->setIndexWidget(model->index(row, Model::Mode), box);
+        updateModeBox(row);
+    }
+    // Режим строки меняют и не через её список: выбор на нескольких строках,
+    // сверло вместо фрезы (Model::setToolId), правка УП. И доступные режимы --
+    // по инструменту строки: всё это приходит через dataChanged.
+    connect(model, &QAbstractItemModel::dataChanged, this, [this, tableModel = model](const QModelIndex& topLeft, const QModelIndex& bottomRight) {
+        if(model != tableModel)
+            return;
+        for(int row = topLeft.row(); row <= bottomRight.row(); ++row)
+            updateModeBox(row);
+    });
+}
+
+void Form::updateModeBox(int row) {
+    if(!model || row < 0 || row >= model->rowCount())
+        return;
+    auto* box = qobject_cast<QComboBox*>(ui->toolTable->indexWidget(model->index(row, Model::Mode)));
+    if(!box)
+        return;
+    // Чего инструмент строки не умеет -- серым и с причиной в подсказке пункта.
+    auto* items = qobject_cast<QStandardItemModel*>(box->model());
+    for(int i{}; i < box->count(); ++i) {
+        const bool allowed = model->modeAllowed(row, static_cast<Mode>(box->itemData(i).toInt()));
+        if(QStandardItem* item = items ? items->item(i) : nullptr) {
+            item->setEnabled(allowed);
+            // Недоступный режим бывает только у строки с инструментом (сверло,
+            // лазер), и инструмент этот известен -- modeAllowed его нашёл.
+            item->setToolTip(allowed ? QString{}
+                    : model->tool(row).type() == Tool::Drill
+                    ? tr("A drill only drills: to mill these holes, choose an end mill")
+                    : tr("A laser does not drill: to drill these holes, choose a drill or an end mill"));
+        }
+    }
+    box->setCurrentIndex(box->findData(static_cast<int>(model->mode(row))));
+}
+
+void Form::fillModeMenu(QMenu* menu, const std::vector<int>& rows) {
+    for(Mode mode: modes) {
+        auto* action = menu->addAction(Model::modeIcon(mode), Model::modeName(mode));
+        action->setCheckable(true);
+        action->setChecked(!rows.empty() && r::all_of(rows, [this, mode](int row) { return model->mode(row) == mode; }));
+        // Доступен, если его умеет инструмент хоть одной строки; строки, чей
+        // инструмент не умеет (сверло -- фрезеровку), остаются как были.
+        action->setEnabled(r::any_of(rows, [this, mode](int row) { return model->modeAllowed(row, mode); }));
+        connect(action, &QAction::triggered, this, [this, rows, mode, tableModel = model] {
+            if(model == tableModel)
+                setRowsMode(rows, mode);
+        });
+    }
+}
+
+void Form::setRowsMode(const std::vector<int>& rows, Mode mode) {
+    if(!model)
+        return;
+    const auto& tools = App::toolHolder().tools();
+    for(int row: rows) {
+        const Row& data = model->data()[row];
+        const Mode before = data.mode;
+        if(before == mode || !model->setMode(row, mode))
+            continue;
+        // Правка инструмента «только для этой УП» сделана под операцию прежнего
+        // режима: подачи и обороты сверловки фрезеровке не годятся (и наоборот).
+        // Если наборы режимов дают инструменту базы под эти операции разное,
+        // правка уходит -- строка берёт инструмент базы под новую операцию. Без
+        // наборов правка операции не касается и остаётся. Инструмента в базе уже
+        // нет -- правка единственная его копия, она остаётся всегда.
+        if(!data.toolOverride)
+            continue;
+        if(auto it = tools.find(data.toolId); it != tools.end()
+            && operation(it->second, before, data.isSlot) != operation(it->second, mode, data.isSlot)
+            && resolved(it->second, before, data.isSlot).hash() != resolved(it->second, mode, data.isSlot).hash())
+            model->setToolOverride(row, std::nullopt);
+    }
+}
+
+void Form::setRowsTool(const std::vector<int>& rows, const Tool& tool) {
+    if(!model)
+        return;
+    QStringList refused;
+    for(int row: rows) {
+        // Паз -- только концевой фрезой: его фрезеруют и при сверловке. Строке
+        // отверстий -- то, что умеет её режим, и сверло всегда: строку в
+        // режиме фрезеровки оно переводит на сверловку (Model::setToolId).
+        const bool fits = model->isSlot(row)
+            ? tool.type() == Tool::EndMill
+            : tool.type() == Tool::Drill || canProcess(tool.type(), model->mode(row));
+        if(!fits) {
+            refused.append(model->data()[row].name.back());
+            continue;
+        }
+        // Новый выбор заменяет старый инструмент независимо от текущей галки --
+        // setToolId сам взводит её обратно.
+        model->setToolId(row, tool.id());
+    }
+    if(!refused.isEmpty())
+        QMessageBox::information(this, {}, tr("\"%1\" is not suitable for: %2").arg(tool.name(), refused.join(u", "_s)));
+}
+
+std::vector<Tool::Type> Form::toolTypesOf(const std::vector<int>& rows) const {
+    std::vector<Tool::Type> types;
+    if(!model)
+        return types;
+    for(Tool::Type type: {Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser})
+        if(r::any_of(rows, [this, type](int row) { return r::contains(toolTypes(model->mode(row), model->isSlot(row)), type); }))
+            types.push_back(type);
+    return types;
+}
+
+std::vector<int> Form::selectedRows() const {
+    std::vector<int> rows;
+    for(const QModelIndex& index: selectedIndexes())
+        rows.push_back(index.row());
+    r::sort(rows);
+    rows.erase(r::unique(rows).begin(), rows.end());
+    return rows;
+}
 
 void Form::initEditButtons() {
     if(!model)
@@ -408,12 +583,14 @@ void Form::editRowTool(int row) {
     const Tool::ID id = model->toolId(row);
 
     // Правится КОПИЯ действующего инструмента строки -- база не трогается.
-    // Действующий -- с набором режимов под операцию и материал проекта: его
-    // УП и получит, его и правят.
+    // Действующий -- с набором режимов под операцию строки (её режим) и
+    // материал проекта: его УП и получит, его и правят.
     const bool slot = model->data()[row].isSlot;
+    const Mode mode = model->mode(row);
     const Tool current = rowTool(model->data()[row]);
+    const Tool::Operation rowOperation = operation(current, mode, slot);
     ToolEditDialog dialog{this};
-    dialog.setOperation(operation(current, slot));
+    dialog.setOperation(rowOperation);
     dialog.setTool(current);
     // setTool() сам взводит признак правки (поля дёргают valueChanged) --
     // сброс: OK без единой правки ничего не меняет.
@@ -421,7 +598,7 @@ void Form::editRowTool(int row) {
     if(dialog.exec() != QDialog::Accepted || !dialog.isWindowModified())
         return;
     // Пока был открыт диалог, таблицу могли перестроить.
-    if(model != tableModel || model->toolId(row) != id)
+    if(model != tableModel || model->toolId(row) != id || model->mode(row) != mode)
         return;
 
     Tool tool = dialog.tool();
@@ -432,14 +609,16 @@ void Form::editRowTool(int row) {
     // Правка, совпавшая с тем, что дала бы база (с набором режимов), -- уже не правка.
     ToolOverride toolOverride;
     const auto& tools = App::toolHolder().tools();
-    if(auto it = tools.find(id); it == tools.end() || resolved(it->second, slot).hash() != tool.hash())
+    if(auto it = tools.find(id); it == tools.end() || resolved(it->second, mode, slot).hash() != tool.hash())
         toolOverride = std::move(tool);
 
-    // Строка среди выделенных -- правка всем выделенным с тем же инструментом базы.
+    // Строка среди выделенных -- правка всем выделенным с тем же инструментом
+    // базы и той же операцией: правка сделана под операцию строки, подачи
+    // сверловки фрезеровке отверстий не годятся.
     std::set<int> rows{row};
     if(ui->toolTable->selectionModel()->isSelected(model->index(row, Model::Tool)))
         for(const QModelIndex& index: selectedIndexes())
-            if(model->toolId(index.row()) == id)
+            if(model->toolId(index.row()) == id && operation(current, model->mode(index.row()), model->isSlot(index.row())) == rowOperation)
                 rows.insert(index.row());
     for(int r: rows)
         model->setToolOverride(r, toolOverride);
@@ -470,20 +649,17 @@ int Form::toolRowOf(const QModelIndexList& indexes, int preferred) const {
 }
 
 void Form::on_doubleClicked(const QModelIndex& current) {
-    if(current.column() == Model::Tool) {
-        // Тот же выбор типов, что в контекстном меню: паз -- концевая фреза,
-        // сверловка -- сверло или фреза, обработка по отверстиям -- любой.
-        const std::vector<Tool::Type> tools = model->isSlot(current.row())
-            ? std::vector<Tool::Type>{Tool::EndMill}
-            : (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill}
-                                           : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
-        ToolDatabase tdb(this, tools);
-        selectRowTool(tdb, current.row());
-        if(tdb.exec()) {
-            const Tool tool(tdb.tool());
-            model->setToolId(current.row(), tool.id());
-        }
-    }
+    if(!model || current.column() != Model::Tool)
+        return;
+    const int row = current.row();
+    const Model* const tableModel = model;
+    // Что строка принимает в своём режиме: паз -- концевую фрезу, сверловка --
+    // сверло или фрезу, карман и профиль -- фрезу, гравёр, лазер (не сверло).
+    ToolDatabase tdb(this, toolTypes(model->mode(row), model->isSlot(row)));
+    selectRowTool(tdb, row);
+    // Пока была открыта база, таблицу могли перестроить.
+    if(tdb.exec() && model == tableModel)
+        setRowsTool({row}, tdb.tool());
 }
 
 void Form::on_selectionChanged(const QItemSelection& selected, const QItemSelection& deselected) {
@@ -501,38 +677,20 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
     if(selectedIndexes().isEmpty())
         return;
     QMenu menu;
+    // Режим -- всем выделенным строкам, чей инструмент его умеет.
+    fillModeMenu(menu.addMenu(tr("&Mode")), selectedRows());
+
     // База -- на инструменте строки под курсором (иначе первой выделенной с ним).
     const int toolRow = toolRowOf(selectedIndexes(), ui->toolTable->indexAt(pos).row());
     menu.addAction(QIcon::fromTheme(u"view-form"_s), tr("&Select Tool"), [this, toolRow] {
-        bool flag = true;
-        for(QModelIndex current: selectedIndexes()) {
-            flag = model->isSlot(current.row());
-            if(!flag)
-                break;
-        }
-
-        std::vector<Tool::Type> tools;
-        if(flag)
-            tools = std::vector<Tool::Type>{Tool::EndMill};
-        else
-            tools = (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill} : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
-
-        ToolDatabase tdb(this, tools);
+        const std::vector<int> rows = selectedRows();
+        const Model* const tableModel = model;
+        // Всё, что принимает хоть одна выделенная строка; что какой строке не
+        // подошло, скажет setRowsTool().
+        ToolDatabase tdb(this, toolTypesOf(rows));
         selectRowTool(tdb, toolRow);
-        if(tdb.exec()) {
-            const Tool tool(tdb.tool());
-            for(QModelIndex current: selectedIndexes()) {
-                if(model->isSlot(current.row()) && tool.type() == Tool::EndMill) {
-                    model->setToolId(current.row(), tool.id());
-                } else if(model->isSlot(current.row()) && tool.type() != Tool::EndMill) {
-                    QMessageBox::information(this, {}, u"\""_s + tool.name() + tr("\" not suitable for Tu") + model->data(current.sibling(current.row(), 0), Qt::UserRole).toString() + u"_s-u"_s + model->data(current.sibling(current.row(), 0)).toString() + u"_s-"_s);
-                } else if(!model->isSlot(current.row())) {
-                    // Новый выбор заменяет старый инструмент независимо от текущей
-                    // галки -- setToolId сам взводит её обратно.
-                    model->setToolId(current.row(), tool.id());
-                }
-            }
-        }
+        if(tdb.exec() && model == tableModel)
+            setRowsTool(rows, tdb.tool());
     });
 
     // Правка "только для этой УП": строка под курсором, иначе первая выделенная
@@ -580,36 +738,23 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
 }
 
 void Form::customContextMenuRequested(const QPoint& pos) {
+    if(!model)
+        return;
     QMenu menu;
-    menu.addAction(QIcon::fromTheme(u"view-form"_s), tr("&Choose a Tool for everyone"), [this] {
+    // Режим всем строкам сразу -- то, что раньше задавал переключатель на всю
+    // форму; строки, чей инструмент его не умеет, остаются как были.
+    std::vector<int> all;
+    for(int row{}; row < model->rowCount(); ++row)
+        all.push_back(row);
+    fillModeMenu(menu.addMenu(tr("&Mode for everyone")), all);
+
+    menu.addAction(QIcon::fromTheme(u"view-form"_s), tr("&Choose a Tool for everyone"), [this, all] {
         ui->toolTable->selectAll();
-        bool fl = true;
-        for(QModelIndex current: selectedIndexes()) {
-            fl = model->isSlot(current.row());
-            if(!fl)
-                break;
-        }
-        std::vector<Tool::Type> tools;
-        if(fl)
-            tools = std::vector<Tool::Type>{Tool::EndMill};
-        else
-            tools = (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill} : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
-        ToolDatabase tdb(this, tools);
+        const Model* const tableModel = model;
+        ToolDatabase tdb(this, toolTypesOf(all));
         selectRowTool(tdb, toolRowOf(selectedIndexes()));
-        if(tdb.exec()) {
-            const Tool tool(tdb.tool());
-            for(QModelIndex current: selectedIndexes()) {
-                if(model->isSlot(current.row()) && tool.type() == Tool::EndMill) {
-                    model->setToolId(current.row(), tool.id());
-                } else if(model->isSlot(current.row()) && tool.type() != Tool::EndMill) {
-                    QMessageBox::information(this, {}, u"\""_s + tool.name() + tr("\" not suitable for Tu") + model->data(current.sibling(current.row(), 0), Qt::UserRole).toString() + u"_s-u"_s + model->data(current.sibling(current.row(), 0)).toString() + u"_s-"_s);
-                } else if(!model->isSlot(current.row())) {
-                    // Новый выбор заменяет старый инструмент независимо от текущей
-                    // галки -- setToolId сам взводит её обратно.
-                    model->setToolId(current.row(), tool.id());
-                }
-            }
-        }
+        if(tdb.exec() && model == tableModel)
+            setRowsTool(all, tdb.tool());
     });
     menu.addAction(QIcon::fromTheme(u"list-remove"_s), tr("&Remove Tool for everyone"), [this] {
         ui->toolTable->selectAll();
@@ -630,6 +775,13 @@ void Form::pickUpTool() {
     for(const auto& row: model->data()) {
         // model->setToolId(ctr++, 3);
         // continue;
+        // Подбор по диаметру отверстия -- только сверловке. Фреза под карман
+        // или профиль должна быть меньше отверстия, а сверло в такую строку
+        // перевело бы её на сверловку -- выбор режима пропал бы молча.
+        if(row.mode != Mode::Drilling) {
+            ++ctr;
+            continue;
+        }
         const double drillDiameterMin = row.diameter * (1.0 - k);
         const double drillDiameterMax = row.diameter * (1.0 + k);
 
@@ -651,13 +803,6 @@ void Form::pickUpTool() {
     }
 }
 
-void Form::updateState() {
-    worckType = ui->rb_drilling->isChecked() ? GCType::Drill : (ui->rb_profile->isChecked() ? GCType::Profile : GCType::Pocket);
-    ui->grbxSide->setEnabled(worckType == GCType::Profile);
-    ui->grbxDirection->setEnabled(worckType == GCType::Profile || worckType == GCType::Pocket);
-    side = ui->rb_on->isChecked() ? GCode::On : (ui->rb_out->isChecked() ? GCode::Outer : GCode::Inner);
-}
-
 void Form::errorOccurred() {
     [[maybe_unused]] auto tpc = (GCode::Creator*)sender();
     // tpc->continueCalc(ErrorDialog(std::move(tpc->items), this).exec());
@@ -671,6 +816,8 @@ void Form::zoomToSelected() {
 }
 
 void Form::computePaths() {
+    if(!model)
+        return;
     auto indexes = [](const auto& range) {
         QString indexes;
         for(int32_t id: range) {
@@ -695,7 +842,23 @@ void Form::computePaths() {
         pendingRuns_.front().discard = true;
     }
 
-    if(worckType == GCType::Drill) { // slots only
+    // УП сверловки -- в проект: на место прежней УП того же ключа за этот показ
+    // формы, иначе новой. Галки строк снимаются только теперь, когда УП по ним
+    // реально получилась.
+    auto place = [this, &revealId](const ProgramKey& key, File* gcode, const std::vector<int>& rows) {
+        if(auto it = createdFileIds_.find(key); it != createdFileIds_.end() && App::project().file(it->second))
+            App::project().replaceFile(it->second, gcode);
+        else
+            createdFileIds_[key] = App::project().addFile(gcode);
+        if(gcode->id() > -1) revealId = gcode->id();
+        for(int row: rows)
+            model->setCreate(row, false);
+    };
+    // Строка идёт в расчёт: инструмент есть, галка стоит. Что из неё считать --
+    // по её режиму.
+    auto computed = [](const Row& row) { return row.toolId > Tool::ID::Null && row.useForCalc; };
+
+    { // Сверловка, пазы: фрезеруются вдоль путей (drilling.js)
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
         // Инструмент базы -- с набором режимов под операцию и материал проекта.
@@ -708,7 +871,7 @@ void Form::computePaths() {
         std::map<ToolKey, Data> pathsMap;
 
         for(int i{}; auto&& row: *model) {
-            if(row.toolId > Tool::ID::Null && row.useForCalc && row.isSlot) {
+            if(computed(row) && row.mode == Mode::Drilling && row.isSlot) {
                 auto& data = pathsMap[toolKeyOf(row)];
                 data.tool = rowTool(row);
                 data.toolsApertures.push_back(i);
@@ -736,83 +899,39 @@ void Form::computePaths() {
                 slotGcp.params[GCode::Params::SlotPaths] = 1;
                 auto* gcode = new File{std::move(slotGcp)};
                 gcode->setRows(rowRefs(data.toolsApertures));
-                gcode->setWorckType(static_cast<int>(worckType));
+                gcode->setWorckType(static_cast<int>(GCType::Drill));
                 gcode->setSrcFileId(file ? file->id() : -1);
                 gcode->setFileName(
                     programTag(data.tool, key)
                     + u"_T"_s + indexes(data.toolsApertures));
                 if(file) gcode->setSide(file->side());
                 gcode->setGroup(drillGroup(file));
-
-                auto it = createdSlotFileIds_.find(key);
-                if(it != createdSlotFileIds_.end() && App::project().file(it->second))
-                    App::project().replaceFile(it->second, gcode);
-                else
-                    createdSlotFileIds_[key] = App::project().addFile(gcode);
-                if(gcode->id() > -1) revealId = gcode->id();
-
-                // УП по этим строкам реально получилась -- только теперь снимаем галки.
-                for(int row: data.toolsApertures)
-                    model->setCreate(row, false);
+                place({Mode::Drilling, true, key}, gcode, data.toolsApertures);
             }
         }
     }
 
-    { // other
+    { // Сверловка, отверстия: точками
         struct Data {
             Tool tool; // действующий: правка строки или инструмент базы
             Geo::Polyline drillPath;
-            Geo::Polylines paths;
             std::vector<int> toolsApertures;
         };
 
         std::map<ToolKey, Data> pathsMap;
 
         for(int i{}; auto&& row: *model) {
-            if(row.toolId > Tool::ID::Null && row.useForCalc) {
+            if(computed(row) && row.mode == Mode::Drilling && !row.isSlot) {
                 auto& data = pathsMap[toolKeyOf(row)];
                 data.tool = rowTool(row);
-                const Tool::Type toolType = data.tool.type();
                 data.toolsApertures.push_back(i);
-                for(auto& item: row.items) {
-                    if(!item->isUsed()) continue;
-                    // if (item->isSlot())
-                    // continue;
-                    switch(worckType) {
-                    case GCType::Profile:
-                        if(toolType != Tool::Drill) {
-                            switch(side) {
-                            case GCode::On:
-                                data.paths.append_range(item->paths());
-                                break;
-                            case GCode::Outer:
-                                data.paths.append_range(item->offset());
-                                break;
-                            case GCode::Inner:
-                                // if (item->fit(dsbxDepth->value())) {
-                                data.paths.append_range(item->offset());
-                                // }
-                                break;
-                            }
-                        }
-                        break;
-                    case GCType::Pocket:
-                        if(toolType != Tool::Drill) {
-                            // if (toolType != Tool::Drill && item->fit(dsbxDepth->value())) {
-                            data.paths.append_range(item->offset());
-                            // }
-                        }
-                        break;
-                    case GCType::Drill:
-                        // Лазер не сверлит. Было "!= Engraver || != Laser" -- истинно
-                        // всегда; гравёр (V-фреза) оставлен: им накернивают центры.
-                        if(toolType != Tool::Laser) {
+                // Лазер не сверлит (и в сверловку строку с ним Model не пускает).
+                // Было "!= Engraver || != Laser" -- истинно всегда; гравёр
+                // (V-фреза) оставлен: им накернивают центры.
+                if(data.tool.type() != Tool::Laser)
+                    for(auto& item: row.items)
+                        if(item->isUsed())
                             data.drillPath.emplace_back(item->pos());
-                        }
-                        break;
-                    default:;
-                    }
-                }
             }
             ++i;
         }
@@ -832,36 +951,60 @@ void Form::computePaths() {
                 };
 
                 gcode->setRows(rowRefs(val.toolsApertures));
-                gcode->setWorckType(static_cast<int>(worckType));
+                gcode->setWorckType(static_cast<int>(GCType::Drill));
                 gcode->setSrcFileId(file ? file->id() : -1);
                 gcode->setFileName(programTag(val.tool, key) + /*type_ +*/ indexes(val.toolsApertures));
                 if(file) gcode->setSide(file->side());
                 gcode->setGroup(drillGroup(file));
-
-                auto it = createdDrillFileIds_.find(key);
-                if(it != createdDrillFileIds_.end() && App::project().file(it->second))
-                    App::project().replaceFile(it->second, gcode);
-                else
-                    createdDrillFileIds_[key] = App::project().addFile(gcode);
-                if(gcode->id() > -1) revealId = gcode->id();
-
-                // УП по этим строкам реально получилась -- только теперь снимаем галки.
-                for(int row: val.toolsApertures)
-                    model->setCreate(row, false);
+                place({Mode::Drilling, false, key}, gcode, val.toolsApertures);
             }
-            if(val.paths.size() && (worckType == GCType::Profile || worckType == GCType::Pocket)) {
-                auto& createdIds = worckType == GCType::Profile ? createdProfileFileIds_ : createdPocketFileIds_;
-                std::vector<int32_t> replaced;
-                if(auto it = createdIds.find(key); it != createdIds.end() && App::project().file(it->second))
-                    replaced = {it->second};
-                GCode::Params runGcp;
-                runGcp.setConvent(ui->rbConventional->isChecked());
-                runGcp.setSide(worckType == GCType::Profile ? side : GCode::Inner);
-                runGcp.tools = {val.tool};
-                runGcp.params[GCode::Params::Depth] = dsbxDepth->value();
-                runGcp.closedCurves = Geo::Polygons{val.paths};
-                pendingRuns_.push_back({rowRefs(val.toolsApertures), worckType, key, programTag(val.tool, key), std::move(replaced), std::move(runGcp)});
+        }
+    }
+
+    { // Фрезеровка отверстий и пазов: карман и профиль, всегда внутри
+        struct Data {
+            Tool tool;
+            Geo::Polylines paths;
+            std::vector<int> toolsApertures;
+        };
+
+        // По режиму -- обработка с направлением: одна фреза за клик даёт
+        // столько УП, сколько режимов у её строк.
+        std::map<std::pair<Mode, ToolKey>, Data> pathsMap;
+
+        for(int i{}; auto&& row: *model) {
+            // Сверло не фрезерует: Model строку с ним в фрезеровку не пускает, а
+            // попади она туда всё же -- не обрабатывается вовсе.
+            if(computed(row) && row.mode != Mode::Drilling && row.tool().type() != Tool::Drill) {
+                auto& data = pathsMap[{row.mode, toolKeyOf(row)}];
+                data.tool = rowTool(row);
+                data.toolsApertures.push_back(i);
+                // Контур отверстия (у паза -- его тело): карман выбирает его
+                // целиком, профиль идёт по стенке изнутри.
+                for(auto& item: row.items)
+                    if(item->isUsed())
+                        data.paths.append_range(item->offset());
             }
+            ++i;
+        }
+
+        for(auto& [modeKey, data]: pathsMap) {
+            if(data.paths.empty())
+                continue;
+            const auto& [mode, key] = modeKey;
+            const ProgramKey programKey{mode, false, key};
+            std::vector<int32_t> replaced;
+            if(auto it = createdFileIds_.find(programKey); it != createdFileIds_.end() && App::project().file(it->second))
+                replaced = {it->second};
+            GCode::Params runGcp;
+            runGcp.setConvent(isConventional(mode));
+            // Отверстие обрабатывается только изнутри: и карман, и профиль.
+            runGcp.setSide(GCode::Inner);
+            runGcp.tools = {data.tool};
+            runGcp.params[GCode::Params::Depth] = dsbxDepth->value();
+            runGcp.closedCurves = Geo::Polygons{data.paths};
+            pendingRuns_.push_back({rowRefs(data.toolsApertures), programKey, programTag(data.tool, key) + modeTag(mode),
+                std::move(replaced), std::move(runGcp), file ? file->id() : -1});
         }
     }
 
@@ -908,10 +1051,10 @@ void Form::startRun() {
     // полосу, а createToolpath забирает параметры в рабочий поток.
     fileName_ = run.programName;
     gcp = std::move(run.gcp);
-    if(run.worckType == GCType::Profile)
-        setCreator(new Profile::Creator);
-    else
+    if(isPocket(run.key.mode))
         setCreator(new PocketOffset::Creator);
+    else
+        setCreator(new Profile::Creator);
     fileCount = 1;
     emit createToolpath(&gcp);
 }
@@ -954,20 +1097,20 @@ void Form::fileHandler(GCode::File* file_) {
 
     if(auto* drillFile = dynamic_cast<File*>(file_); drillFile) {
         drillFile->setRows(std::move(run.rows));
-        drillFile->setWorckType(static_cast<int>(run.worckType));
-        drillFile->setSrcFileId(file ? file->id() : -1);
+        drillFile->setWorckType(static_cast<int>(isPocket(run.key.mode) ? GCType::Pocket : GCType::Profile));
+        drillFile->setSrcFileId(run.srcFileId);
     }
     // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
-    // и пазам. Разложит и покажет база, в конце прогона.
-    if(file_) file_->setGroup(drillGroup(file));
+    // и пазам. Разложит и покажет база, в конце прогона. Файл -- прогона, а не
+    // выбранный в форме сейчас: пока прогон ждал очереди, выбрать могли другой.
+    if(file_) file_->setGroup(drillGroup(run.srcFileId > -1 ? App::project().file(run.srcFileId) : nullptr));
 
     GCode::Form::fileHandler(file_);
 
     if(isAsyncRun && accepted) {
-        auto& map = run.worckType == GCType::Profile ? createdProfileFileIds_ : createdPocketFileIds_;
-        map[run.key] = file_->id();
-        if(file) {
-            auto& programs = srcPrograms_[file->id()];
+        createdFileIds_[run.key] = file_->id();
+        if(run.srcFileId > -1) {
+            auto& programs = srcPrograms_[run.srcFileId];
             std::pair<int32_t, QString> entry{file_->id(), file_->programName()};
             if(std::find(programs.begin(), programs.end(), entry) == programs.end()) // замена на месте -- тот же id
                 programs.push_back(std::move(entry));
@@ -988,13 +1131,13 @@ void Form::editFile(GCode::File* file_) {
     auto* drillFile = dynamic_cast<File*>(file_);
     if(!drillFile) return GCode::Form::editFile(file_);
 
-    // Режим -- первым: от него зависит, какие столбцы и кнопки вообще активны.
-    switch(static_cast<GCType>(drillFile->worckType())) {
-    case GCType::Profile: ui->rb_profile->setChecked(true); break;
-    case GCType::Pocket : ui->rb_pocket->setChecked(true); break;
-    default             : ui->rb_drilling->setChecked(true); break;
-    }
-    updateState();
+    // Режим строк этой УП: сверловка (точки и пазы). УП с профилем или карманом
+    // по отверстиям на всю форму (worckType) -- тот же режим строкам, направление
+    // -- из её параметров; сторона не переносится: профиль отверстий теперь
+    // всегда внутри. В проектах без ключа worckType -- 0, это сверловка.
+    const GCode::Params& params = drillFile->params();
+    const Mode mode = modeOf(static_cast<GCType>(drillFile->worckType()),
+        params.params.contains(GCode::Params::Convent) && params.convent());
 
     // Таблица строится по выбранному в cbxFile файлу: без него имена строк не с
     // чем сопоставлять. Смена индекса перестраивает модель синхронно.
@@ -1026,6 +1169,10 @@ void Form::editFile(GCode::File* file_) {
                     toolOverride = drillFile->tool();
                 model->setToolId(static_cast<int>(i), it->second->toolId, std::move(toolOverride));
             }
+            // Режим -- после инструмента: строку со сверлом Model в фрезеровку
+            // не пустит. Правка инструмента из УП остаётся -- она под этот режим.
+            if(mine)
+                model->setMode(static_cast<int>(i), mode);
             model->setCreate(static_cast<int>(i), mine && it->second->useForCalc);
         }
         header->onChecked();
