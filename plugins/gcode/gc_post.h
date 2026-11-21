@@ -16,6 +16,7 @@
 #include <QString>
 #include <QStringList>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace GCode {
@@ -23,7 +24,8 @@ namespace GCode {
 // Постпроцессор -- диалект станка, описанный JS-файлом scripts/posts/<id>.js.
 // Файл объявляет глобальный объект `post` (см. scripts/posts/README.md):
 // имя, расширение, стиль комментариев, способ записи дуг, формат слов для
-// линейных строк и для дуг, шапка/концовка, коды шпинделя/лазера.
+// линейных строк, дуг и циклов сверления, шапка/концовка, коды
+// шпинделя/лазера, циклы сверления контроллера и единица выдержки P.
 //
 // Диалект -- это ТОЛЬКО текст. Что и когда писать (G0 на безопасную высоту,
 // врезание, переезд домой) решает C++/скрипт плагина; пост лишь говорит,
@@ -45,6 +47,27 @@ public:
         bool enabled{};
         int start{10};
         int step{10};
+    };
+
+    // Циклы сверления контроллера (post.cycles): коды, которыми их писать.
+    // Пустой код -- такого цикла у контроллера нет, его скрипт разворачивает
+    // в G0/G1 сам (common_gcode.js, expandDrillCycle). Что писать и когда --
+    // решает скрипт (drilling.js), пост лишь говорит, какими словами.
+    struct Cycles {
+        QString drill;          // G81: врезание на подаче, быстрый отвод
+        QString dwell;          // G82: то же с выдержкой P внизу
+        QString peck;           // G83: клевки Q с выводом из отверстия
+        QString chipBreak;      // G73: клевки Q с коротким отскоком
+        QString cancel;         // G80: отмена цикла
+        QString retractInitial; // G98: отвод на исходный уровень
+        QString retractR;       // G99: отвод на плоскость R
+    };
+
+    // Единица слова P выдержки -- у G4 и у G82: grblHAL и LinuxCNC считают
+    // её в секундах, Fanuc/Haas и прошивки 3D-принтеров -- в миллисекундах.
+    enum class DwellUnit {
+        Seconds,
+        Milliseconds,
     };
 
     // Контекст для функций поста: что известно о программе на момент вызова.
@@ -79,7 +102,13 @@ public:
     double arcTolerance() const { return arcTolerance_; }
     const QString& formatLinear(bool laser) const { return laser ? laserLinear_ : millingLinear_; }
     const QString& formatArc(bool laser) const { return laser ? laserArc_ : millingArc_; }
+    // Формат строки цикла сверления (format.cycle); нет его -- линейный фрезы.
+    const QString& formatCycle() const { return cycle_; }
     const LineNumbers& lineNumbers() const { return lineNumbers_; }
+    // Циклы сверления; nullopt -- у контроллера их нет (поля cycles нет, или
+    // в нём ни одного кода цикла, или пуст код отмены).
+    const std::optional<Cycles>& cycles() const { return cycles_; }
+    DwellUnit dwellUnit() const { return dwellUnit_; }
 
     QString comment(const QString& text) const;
     // Является ли строка комментарием в этом диалекте.
@@ -95,6 +124,10 @@ public:
     QString spindleOff(const Context& ctx);
     QString laserOn(const Context& ctx, bool dynamic);
     QString laserOff(const Context& ctx);
+    // Пауза на seconds своим текстом поста: post.dwell(ctx, seconds) -- для
+    // диалектов, где это не «G4 P» (у Sinumerik «G4 F»). Функции у поста нет
+    // -- nullopt: «G4 P» в единицах dwellUnit() пишет вызывающий.
+    std::optional<QString> dwell(const Context& ctx, double seconds);
 
     // Итоговый текст файла: строки + нумерация N по посту.
     QString renderText(const std::vector<QString>& lines) const;
@@ -114,8 +147,10 @@ private:
     bool parenComments_{};
     Arcs arcs_{Arcs::IJ};
     double arcTolerance_{0.01};
-    QString millingLinear_, millingArc_, laserLinear_, laserArc_;
+    QString millingLinear_, millingArc_, laserLinear_, laserArc_, cycle_;
     LineNumbers lineNumbers_;
+    std::optional<Cycles> cycles_;
+    DwellUnit dwellUnit_{DwellUnit::Seconds};
 };
 
 } // namespace GCode

@@ -92,7 +92,11 @@ void Post::resetDefaults() {
     millingArc_ = u"G?X?Y?I+J+Z?F?S?"_s;
     laserLinear_ = millingLinear_;
     laserArc_ = millingArc_;
+    cycle_ = millingLinear_;
     lineNumbers_ = {};
+    // Циклов у generic нет: сверловка разворачивается в G0/G1, как и прежде.
+    cycles_.reset();
+    dwellUnit_ = DwellUnit::Seconds;
     post_ = QJSValue{};
 }
 
@@ -148,6 +152,36 @@ void Post::readFields() {
         laserLinear_ = millingLinear_, laserArc_ = millingArc_; // лазер наследует фрезу
         readPair(u"laser"_s, laserLinear_, laserArc_);
     }
+    // Строка цикла -- свой формат; нет его -- линейный фрезы. Буквы R, Q, P,
+    // которых в нём нет, пишутся как «?» -- только изменившиеся.
+    cycle_ = strOr(format, u"cycle"_s, millingLinear_);
+
+    // Циклы -- только с кодом отмены и хотя бы одним кодом цикла: без G80
+    // цикл не закрыть, а пустой объект -- то же, что его отсутствие.
+    if(auto obj = post_.property(u"cycles"_s); obj.isObject()) {
+        Cycles cycles;
+        cycles.drill = strOr(obj, u"drill"_s, {});
+        cycles.dwell = strOr(obj, u"dwell"_s, {});
+        cycles.peck = strOr(obj, u"peck"_s, {});
+        cycles.chipBreak = strOr(obj, u"chipBreak"_s, {});
+        cycles.cancel = strOr(obj, u"cancel"_s, u"G80"_s);
+        // Нет retract -- G98/G99, как почти у всех. Пустая строка -- такого
+        // отвода у контроллера нет: скрипт тогда разворачивает цикл сам.
+        const auto retract = obj.property(u"retract"_s);
+        cycles.retractInitial = strOr(retract, u"initial"_s, u"G98"_s);
+        cycles.retractR = strOr(retract, u"r"_s, u"G99"_s);
+        const bool anyCycle = !cycles.drill.isEmpty() || !cycles.dwell.isEmpty()
+            || !cycles.peck.isEmpty() || !cycles.chipBreak.isEmpty();
+        if(anyCycle && !cycles.cancel.isEmpty())
+            cycles_ = std::move(cycles);
+        else
+            qWarning() << "GCode post" << id_ << ": `cycles` has no cycle codes or an empty `cancel` -- ignored";
+    }
+
+    // Единица P -- поле самого поста: она нужна и без циклов (G4 развёртки
+    // G82). Записанная внутри cycles тоже годится.
+    const QString dwellUnit = strOr(post_, u"dwellUnit"_s, strOr(post_.property(u"cycles"_s), u"dwellUnit"_s, u"s"_s));
+    dwellUnit_ = dwellUnit.trimmed().toLower() == u"ms"_s ? DwellUnit::Milliseconds : DwellUnit::Seconds;
 
     auto ln = post_.property(u"lineNumbers"_s);
     if(ln.isObject()) {
@@ -240,6 +274,13 @@ QString Post::laserOn(const Context& ctx, bool dynamic) {
 QString Post::laserOff(const Context& ctx) {
     if(!post_.isObject()) return u"M5"_s;
     return callLines(u"laserOff"_s, makeCtx(ctx)).join(u'\n');
+}
+
+std::optional<QString> Post::dwell(const Context& ctx, double seconds) {
+    // Только функция: строка-константа паузе ни к чему -- время у неё своё
+    // на каждый вызов.
+    if(!post_.isObject() || !post_.property(u"dwell"_s).isCallable()) return std::nullopt;
+    return callLines(u"dwell"_s, makeCtx(ctx), QJSValue{seconds}).join(u'\n');
 }
 
 QString Post::renderText(const std::vector<QString>& lines) const {

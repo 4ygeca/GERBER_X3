@@ -13,6 +13,7 @@ var post = {
         laser:   { linear: "G?X?Y?Z?F?S?", arc: "G?X+Y+I+J+Z?F?S?" },
     },
     lineNumbers: false,
+    dwellUnit: "ms", // G4 P is milliseconds in Marlin (G4 S -- seconds); no canned cycles
 
     header: function(ctx) {
         var lines = ["G21", "G90", "M82"];

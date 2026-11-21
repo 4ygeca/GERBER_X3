@@ -11,8 +11,21 @@ var post = {
     format: {
         milling: { linear: "G?X?Y?Z?F?S?", arc: "G?X?Y?I+J+Z?F?S?" },
         laser:   { linear: "G?X?Y?Z?F?S?", arc: "G?X?Y?I+J+Z?F?S?" },
+        cycle:   "G?X?Y?Z?R?Q?P?F?",
     },
     lineNumbers: { start: 10, step: 10 },
+
+    // Canned drilling cycles (G73 G81 G82 G83, G98/G99, G80). The G73 back-off
+    // and the G83 re-entry clearance are machine settings.
+    cycles: {
+        drill:     "G81",
+        dwell:     "G82",
+        peck:      "G83",
+        chipBreak: "G73",
+        cancel:    "G80",
+        retract:   { initial: "G98", r: "G99" },
+    },
+    dwellUnit: "ms", // P without a decimal point is milliseconds on Haas
 
     header: function(ctx) {
         var lines = ["%", "O00001 (" + (ctx.programName || ctx.name).replace(/[()]/g, "") + ")",

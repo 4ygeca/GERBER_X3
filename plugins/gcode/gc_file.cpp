@@ -459,12 +459,14 @@ void File::initSave() {
     const bool laser = gcp.tool().type() == Tool::Laser;
     parseFormat(post.formatLinear(laser), formatFlags[Linear]);
     parseFormat(post.formatArc(laser), formatFlags[Arc]);
+    parseFormat(post.formatCycle(), formatFlags[Cycle]);
 
     for(QString& str: lastValues)
         str.clear();
     for(bool& written: lastWritten)
         written = false;
     gCode_ = GNull;
+    cycle_ = false;
 }
 
 void File::writeHeader() {
@@ -723,14 +725,39 @@ QString File::formatedText(const std::vector<QString>& data) {
     return formated(words);
 }
 
+void File::forceWords(QStringView letters) {
+    for(QChar letter: letters) {
+        const auto index = CMD_LIST.indexOf(letter, 0, Qt::CaseInsensitive);
+        if(index == -1) continue;
+        lastWritten[index] = false;
+        lastValues[index].clear();
+    }
+}
+
 QString File::formated(const std::vector<Word>& data) {
-    // Диалект строки -- по её слову G: дуги пишутся своим набором флагов.
-    // Строка без G наследует последний записанный код.
+    // Диалект строки -- по её слову G: дуги и циклы сверления пишутся своими
+    // наборами флагов. Строка без G наследует последний записанный код: «X..
+    // Y..» внутри цикла -- тоже строка цикла.
     FormatKind kind = (gCode_ == G02 || gCode_ == G03) ? Arc : Linear;
+    if(cycle_) kind = Cycle;
     for(const Word& word: data)
         if(!word.text.isEmpty() && (word.text.front() == u'G' || word.text.front() == u'g')) {
             const QStringView num = QStringView{word.text}.sliced(1);
-            kind = (num == u"2" || num == u"02" || num == u"3" || num == u"03") ? Arc : Linear;
+            bool isNumber{};
+            // Десятые -- в счёт: G90.1 и G91.1 -- не G90/G91 и не циклы.
+            const int code = qRound(num.toDouble(&isNumber) * 10);
+            if(!isNumber)
+                kind = Linear;
+            else if(code == 20 || code == 30)
+                kind = Arc, cycle_ = false;
+            else if(code == 730 || (810 <= code && code <= 890 && code % 10 == 0))
+                kind = Cycle, cycle_ = true;
+            else {
+                // G0/G1 и G80 цикл завершают; прочие G (G4, G17, G90...) его не
+                // трогают, а строку пишут линейным форматом, как и прежде.
+                kind = Linear;
+                if(code == 0 || code == 10 || code == 800) cycle_ = false;
+            }
             break;
         }
     const bool (&flags)[Size] = formatFlags[kind];
