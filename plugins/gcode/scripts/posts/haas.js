@@ -29,7 +29,7 @@ var post = {
 
     header: function(ctx) {
         var lines = ["%", "O00001 (" + (ctx.programName || ctx.name).replace(/[()]/g, "") + ")",
-                     "G21 G17 G40 G49 G80 G90 G94", "G54", "G187 P2"];
+                     "G21 G17 G40 G80 G90 G94", "G54", "G187 P2"];
         if (!ctx.laser) lines.push("S" + ctx.spindleSpeed + " M3");
         return lines;
     },

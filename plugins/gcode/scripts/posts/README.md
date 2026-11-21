@@ -7,6 +7,11 @@ has. It does **not** decide what to cut -- that is the job of the plugin
 scripts (`scripts/<plugin>.js`) and the C++ core; the post only supplies the
 words.
 
+Tool lengths are not the CAM's business: no post writes `G43`/`G43.1`/`G49`,
+`G10 L1` or probing. The sender (ncSender, ioSender, a plugin) or the operator
+sets the tool length offset after a tool change or touch-off; a `G49` in a
+header would silently cancel it.
+
 Every `scripts/posts/<id>.js` file defines a global object `post`. The file name
 without `.js` is the post id (stored in the settings), `post.name` is what the
 combobox in *Settings -> G-Code -> Postprocessor* shows. The list is rebuilt from

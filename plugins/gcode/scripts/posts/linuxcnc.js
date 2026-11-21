@@ -29,7 +29,7 @@ var post = {
     dwellUnit: "s", // P of G4/G82 in seconds
 
     header: function(ctx) {
-        var lines = ["G21 G17 G90 G40 G49 G94", "G64 P0.01"];
+        var lines = ["G21 G17 G90 G40 G94", "G64 P0.01"];
         if (!ctx.laser) lines.push("M3 S" + ctx.spindleSpeed);
         return lines;
     },

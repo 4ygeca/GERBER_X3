@@ -15,7 +15,7 @@ var post = {
     lineNumbers: { start: 10, step: 10 },
 
     header: function(ctx) {
-        var lines = ["G21 G17 G90 G40 G49 G80"];
+        var lines = ["G21 G17 G90 G40 G80"];
         if (!ctx.laser) lines.push("M3 S" + ctx.spindleSpeed);
         return lines;
     },
