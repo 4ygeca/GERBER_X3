@@ -3,7 +3,8 @@
 //
 // The `file` object (GCode::GcFileProxy):
 //   file.tool         - tool snapshot (diameter, feedRate, passDepth, ...; drill
-//                       fields drillCycle, dwell, retractToR when the tool has them)
+//                       fields drillCycle, dwell, retractToR when the tool has them;
+//                       laserDynamic: true -- M4, false -- M3, see laserDynamic())
 //   file.properties   - project properties (GCode::Properties form) as one object:
 //                       safeZ, clearence, plunge, boardThickness, copperThickness, glue,
 //                       tailing{spacingX, spacingY, stepsX, stepsY},
@@ -19,7 +20,8 @@
 //   file.cycles       - canned drilling cycles of the post ({drill, dwell, peck,
 //                       chipBreak, cancel, retract{initial, r}}), undefined if none
 //   file.dwellUnit    - unit of the dwell word P of the post: "s" or "ms"
-//   file.ext          - plugin-specific extension object (Profile: bridges), may be undefined
+//   file.ext          - plugin-specific extension object (Profile: bridges; PocketRaster:
+//                       hldi -- see pocketraster.js), may be undefined
 
 // Append an array of gcode line strings to the file output.
 function appendLines(file, lines) {
@@ -111,14 +113,43 @@ function expandDrillCycle(file, x, y, cycle) {
 // ---------------------------------------------------------------------------
 // Shared tile strategies.
 
+// Laser power mode of the cutting data (the tool editor, "Dynamic power
+// (M4)"): true -- M4, the power follows the actual speed, the exposure stays
+// even at corners and while accelerating; false -- M3, constant power. A tool
+// snapshot without the field (an older project or GGEasy) -- M4, as the laser
+// was always switched on.
+function laserDynamic(file) {
+    return file.tool.laserDynamic !== false;
+}
+
+// M3/M4 of the post. Written right AFTER the first rapid of a tile (startPath
+// writes "G0 X.. Y.. S0"), not before it: in laser mode grbl/grblHAL light the
+// beam on M3 at once, standing still, with the modal S -- before that rapid it
+// is the power of the previous tile or of the previous program of a job, and
+// the beam would burn a dot where the head stands. After it S is 0, and the
+// beam stays dark until the first G1 with the power.
+function switchLaserOn(file) {
+    file.addLine(file.laserOn(laserDynamic(file)));
+}
+
 // Laser: every curve is one pass at full power, no depth.
 function laserTile(file, pathss) {
-    file.addLine(file.laserOn(true));
-    for (var i = 0; i < pathss.length; i++) {
+    laserCurves(file, pathss, 0, true);
+}
+
+// Curves pathss[first..] exposed one by one: a rapid to the start (beam off,
+// S0), then the curve at the laser power. switchOn -- switch the laser on after
+// the first rapid.
+function laserCurves(file, pathss, first, switchOn) {
+    for (var i = first; i < pathss.length; i++) {
         var paths = pathss[i];
         for (var j = 0; j < paths.length; j++) {
             var path = paths[j];
             file.startPath(path[0].x, path[0].y);
+            if (switchOn) {
+                switchLaserOn(file);
+                switchOn = false;
+            }
             appendLines(file, file.savePathLines(i, j, false, 0, 0));
             file.endPath();
         }
