@@ -82,6 +82,7 @@ QJSValue GcFileProxy::cycles() const {
     retract.setProperty(u"initial"_s, cycles->retractInitial);
     retract.setProperty(u"r"_s, cycles->retractR);
     obj.setProperty(u"retract"_s, retract);
+    if(cycles->peckRefeed) obj.setProperty(u"peckRefeed"_s, true);
     return obj;
 }
 

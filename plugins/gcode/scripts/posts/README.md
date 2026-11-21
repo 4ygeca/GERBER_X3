@@ -50,6 +50,7 @@ var post = {
         chipBreak: "G73",              // pecks of Q, a short back-off after each
         cancel:    "G80",
         retract:   { initial: "G98", r: "G99" },
+        peckRefeed: false,             // true: G83 feeds back down after every peck (grblHAL)
     },
     dwellUnit: "s",                    // unit of P in G4/G82: "s" (default) or "ms"
 
@@ -114,7 +115,9 @@ code is written right before the cycle. The 3D preview draws cycles the way
 grblHAL executes them (`mc_canned_drill`): its G83 retracts to the initial
 plane (G98) or R (G99) after every peck and feeds back from there, so for
 pecks on grblHAL prefer "retract to R". grblHAL also dwells 0.25 s at the
-bottom of every G73/G83 peck.
+bottom of every G73/G83 peck. Such a post sets `peckRefeed: true`: Auto then
+expands pecks into G0/G1 (rapid back to 0.2 mm above the previous bottom), and
+only a G83 chosen explicitly in the tool is written as G83.
 
 `dwellUnit` is the unit of P in `G4` and in `G82`: `"s"` -- seconds (grbl,
 grblHAL, LinuxCNC; the default), `"ms"` -- whole milliseconds without a decimal

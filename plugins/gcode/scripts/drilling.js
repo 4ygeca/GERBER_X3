@@ -5,7 +5,8 @@
 //
 // Tool fields (file.tool; a tool that has none of them behaves as the defaults):
 //   drillCycle  0 Auto (default): G81; G82 if the tool has a dwell; G83 if
-//                 getDepths() splits the depth into several passes (tool Pass < depth)
+//                 getDepths() splits the depth into several passes (tool Pass < depth),
+//                 expanded instead when the post marks its G83 as slow (cycles.peckRefeed)
 //               1 Expand: the Auto cycle, always as plain G0/G1 (no canned cycles)
 //               2 G81 (feed to the bottom), 3 G82 (+ dwell at the bottom),
 //               4 G83 (peck, full retract), 5 G73 (peck, chip break)
@@ -101,7 +102,12 @@ function drillCycle(file, depths) {
 
     var c = file.cycles;
     // R must lie above the bottom, or the controller rejects the cycle.
-    if (c && mode !== DRILL_CYCLE_EXPAND && cycle.bottom < cycle.r) {
+    // Auto on a controller whose G83 feeds back down from the retract plane
+    // after every peck (grblHAL: from clearence with G98): the expansion rapids
+    // back to just above the previous bottom -- several times faster. A G83
+    // chosen explicitly in the tool stays G83.
+    var refeed = mode === DRILL_CYCLE_AUTO && cycle.kind === "peck" && c && c.peckRefeed;
+    if (c && !refeed && mode !== DRILL_CYCLE_EXPAND && cycle.bottom < cycle.r) {
         var code    = c[cycle.kind];
         var retract = c.retract ? (cycle.toR ? c.retract.r : c.retract.initial) : undefined;
         if (code && retract && c.cancel) {

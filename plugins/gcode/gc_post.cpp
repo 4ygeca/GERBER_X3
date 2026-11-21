@@ -170,6 +170,7 @@ void Post::readFields() {
         const auto retract = obj.property(u"retract"_s);
         cycles.retractInitial = strOr(retract, u"initial"_s, u"G98"_s);
         cycles.retractR = strOr(retract, u"r"_s, u"G99"_s);
+        cycles.peckRefeed = obj.property(u"peckRefeed"_s).toBool();
         const bool anyCycle = !cycles.drill.isEmpty() || !cycles.dwell.isEmpty()
             || !cycles.peck.isEmpty() || !cycles.chipBreak.isEmpty();
         if(anyCycle && !cycles.cancel.isEmpty())
