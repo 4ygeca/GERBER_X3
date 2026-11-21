@@ -3,7 +3,7 @@
 
 var post = {
     name: "grblHAL",
-    description: "grblHAL (32-bit grbl). Same dialect as grbl 1.1 with M4 dynamic laser power.",
+    description: "grblHAL (32-bit grbl). Same dialect as grbl 1.1: M3 constant / M4 dynamic laser power (chosen in the tool).",
     extension: "nc",
     comment: ";",
     arcs: "ij",

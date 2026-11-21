@@ -316,6 +316,17 @@ Without the outline: the board border, otherwise about 1 mm beyond the selected 
      </property>
     </widget>
    </item>
+   <item row="8" column="1" colspan="2">
+    <widget class="QCheckBox" name="chbxOutline">
+     <property name="toolTip">
+      <string>After all the raster lines, trace the contours of the exposed area with the beam: sharp edges without the steps of the raster lines.
+For the plain raster and for HLDI.</string>
+     </property>
+     <property name="text">
+      <string>Outline the contour after the raster</string>
+     </property>
+    </widget>
+   </item>
    <item row="7" column="1">
     <widget class="QLabel" name="labelAcc">
 <property name="text">

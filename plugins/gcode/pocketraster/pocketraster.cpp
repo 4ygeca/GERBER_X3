@@ -27,16 +27,21 @@
 namespace PocketRaster {
 
 void Creator::create() {
+    int pass = gcp.params[Pass].toInt();
+    // Лазер обводит контур только ПОСЛЕ растра (галка формы пишет Last). Так
+    // считались и старые УП с «First»: оба растра ставили обводку последней.
+    if(gcp.tools.front().type() == Tool::Laser && pass != NoProfilePass)
+        pass = Last;
     if(gcp.params[Fast].toBool())
         createRasterAccLaser(gcp.tools.front(),
             gcp.params[GCode::Params::Depth].toDouble(),
             gcp.params[UseAngle].toDouble(),
-            gcp.params[Pass].toInt());
+            pass);
     else
         createRaster(gcp.tools.front(),
             gcp.params[GCode::Params::Depth].toDouble(),
             gcp.params[UseAngle].toDouble(),
-            gcp.params[Pass].toInt());
+            pass);
 }
 
 uint32_t Creator::type() { return POCKET_RASTER; }
@@ -292,9 +297,26 @@ File::File(GCode::Params&& newGcp)
     }
 }
 
+bool File::hldi() const {
+    const auto it = gcp.params.find(Creator::Fast);
+    return toolType == Tool::Laser && it != gcp.params.end() && it->second.toBool();
+}
+
+QObject* File::createJsExtension(GCode::GcFileProxy& /*proxy*/, QJSEngine& /*engine*/) {
+    return new RasterApi{hldi()};
+}
+
 void File::createGi() {
     if(toolType == Tool::Laser) {
-        createGiLaser();
+        // У HLDI в первой группе засветка вперемешку с ходами без луча --
+        // createGiLaser рисует чётные холостыми. Обычный растр лазером светит
+        // КАЖДЫЙ путь, змейку и обводку, -- как профиль лазером, лучом в
+        // ширину пятна. Прежде и он шёл через createGiLaser, и каждая вторая
+        // змейка рисовалась холостой, хотя в УП засвечена.
+        if(hldi())
+            createGiLaser();
+        else
+            createGiProfile();
         // Граница, до которой шёл растр снаружи, -- тонким пунктиром: видно,
         // что взято (контур платы, рамка проекта), и пересчитать ли УП после
         // того, как граница сменилась. Без границы -- прежняя рамка по

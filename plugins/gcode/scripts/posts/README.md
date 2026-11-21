@@ -97,6 +97,31 @@ circle as one block); `"r"` writes `G2/G3 X Y R` (arcs of 180° and more are
 split in two); `"linear"` replaces every arc with G1 chords within
 `arcTolerance`.
 
+## Laser
+
+`dynamic` of `laserOn(ctx, dynamic)` is the laser power mode of the tool's
+cutting data (`file.tool.laserDynamic`, the checkbox "Dynamic power (M4)" of
+the tool editor, per tool and per cutting data set; a tool snapshot without
+the field -- `true`, as before). All bundled posts return
+`dynamic ? "M4" : "M3"`:
+
+| `dynamic` | grbl / grblHAL in laser mode (`$32=1`) |
+|-----------|-----------------------------------------|
+| `true`    | `M4` -- the power follows the actual speed: the exposure stays even at corners, accelerations and decelerations |
+| `false`   | `M3` -- constant power, the same S at any speed: corners and slow segments get more exposure |
+
+On controllers without a laser mode (LinuxCNC, Mach3/Mach4, Fanuc, ...) `M4`
+is just "spindle counterclockwise" -- check how the laser is wired there.
+
+The scripts call `laserOn` once per tile, right AFTER the first rapid of the
+tile (`G0 X.. Y.. S0`), not before it: grbl and grblHAL light the beam on `M3`
+at once, standing still, with the modal S -- the power of the previous tile
+or of the previous program of a job. Every move with the beam on is
+`G1/G2/G3 … S<power>`, every rapid `G0 … S0`. The HLDI raster (Pocket Raster,
+type HLDI) is one continuous pass: its run-ups, turns, run-outs and the gaps
+between the exposed strokes of a row are `G1 … S0` at the feed, so the head
+keeps its speed through them and nothing outside the strokes is exposed.
+
 ## Canned drilling cycles
 
 `cycles` lists the canned cycles the controller has. A missing key (or an

@@ -48,6 +48,25 @@ private:
     void addAcc(Geo::Polylines& src, const double accDistance);
 };
 
+// Объект file.ext в pocketraster.js: чем растр этой УП пишется.
+class RasterApi final : public QObject {
+    Q_OBJECT
+    // Растр HLDI (Params Fast, только лазер): первая группа путей -- ОДИН
+    // непрерывный проход головки, в нём нечётные пути -- засвечиваемые
+    // отрезки, чётные -- ходы с выключенным лучом между ними (Creator::addAcc:
+    // разгоны, развороты, промежутки внутри строки, выбег). Так же их рисует
+    // createGiLaser. Вторая группа, если есть, -- обводка контура.
+    Q_PROPERTY(bool hldi READ hldi CONSTANT)
+
+public:
+    explicit RasterApi(bool hldi)
+        : hldi_{hldi} { }
+    bool hldi() const { return hldi_; }
+
+private:
+    bool hldi_;
+};
+
 class[[= Serial::name("PocketRaster")]] File final : public GCode::File {
 public:
     void serialize(Serial::Writer& sb) const override { Serial::writeInto(sb, *this); }
@@ -56,6 +75,11 @@ public:
     QIcon icon() const override { return QIcon::fromTheme(u"raster-path"_s); }
     uint32_t type() const override { return POCKET_RASTER; }
     void createGi() override;
+    QObject* createJsExtension(GCode::GcFileProxy& proxy, QJSEngine& engine) override;
+
+private:
+    // Растр HLDI лазером: в первой группе ходы с выключенным лучом (см. RasterApi).
+    bool hldi() const;
 };
 
 } // namespace PocketRaster

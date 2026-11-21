@@ -119,6 +119,7 @@ Tool::CuttingPreset Tool::cuttingData() const {
         .drillCycle = data.drillCycle,
         .dwell = data.dwell,
         .retractToR = data.retractToR,
+        .laserDynamic = data.laserDynamic,
     };
 }
 
@@ -134,11 +135,15 @@ void Tool::setCuttingData(const CuttingPreset& preset) {
     data.drillCycle = preset.drillCycle;
     data.dwell = preset.dwell;
     data.retractToR = preset.retractToR;
+    data.laserDynamic = preset.laserDynamic;
 }
 
 std::vector<Tool::Operation> Tool::operations(Type type) {
     switch(type) {
-    case Drill     : return {Operation::Drilling, Operation::Milling};
+    // Сверло только сверлит: режимов фрезеровки у него не бывает. Такие наборы
+    // из прежнего tools.json readTools пропускает (недопустимая операция), и
+    // при следующем сохранении базы их в файле уже нет.
+    case Drill     : return {Operation::Drilling};
     case EndMill   : return {Operation::Milling, Operation::Drilling};
     case Engraver  : return {Operation::Milling};
     case Laser     : return {Operation::Laser};
@@ -311,6 +316,7 @@ size_t Tool::hash() const {
     push_back(data.drillCycle);
     push_back(data.dwell);
     push_back(data.retractToR);
+    push_back(data.laserDynamic);
     push_back(data.id);
     return hash_ = qHash(hashData);
 }
