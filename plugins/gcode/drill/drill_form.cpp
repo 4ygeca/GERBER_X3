@@ -369,13 +369,15 @@ void Form::on_cbxFileCurrentIndexChanged() {
     header->onChecked();
 }
 
-Tool::Operation Form::operation(const Tool& tool) const { return Tool::programOperation(tool.type(), worckType == GCType::Drill); }
-
-Tool Form::resolved(const Tool& tool) const {
-    return App::toolHolder().resolve(tool, operation(tool), App::project().material());
+Tool::Operation Form::operation(const Tool& tool, bool slot) const {
+    return Tool::programOperation(tool.type(), worckType == GCType::Drill && !slot);
 }
 
-Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool()); }
+Tool Form::resolved(const Tool& tool, bool slot) const {
+    return App::toolHolder().resolve(tool, operation(tool, slot), App::project().material());
+}
+
+Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool(), row.isSlot); }
 
 void Form::initEditButtons() {
     if(!model)
@@ -408,9 +410,10 @@ void Form::editRowTool(int row) {
     // Правится КОПИЯ действующего инструмента строки -- база не трогается.
     // Действующий -- с набором режимов под операцию и материал проекта: его
     // УП и получит, его и правят.
+    const bool slot = model->data()[row].isSlot;
     const Tool current = rowTool(model->data()[row]);
     ToolEditDialog dialog{this};
-    dialog.setOperation(operation(current));
+    dialog.setOperation(operation(current, slot));
     dialog.setTool(current);
     // setTool() сам взводит признак правки (поля дёргают valueChanged) --
     // сброс: OK без единой правки ничего не меняет.
@@ -429,7 +432,7 @@ void Form::editRowTool(int row) {
     // Правка, совпавшая с тем, что дала бы база (с набором режимов), -- уже не правка.
     ToolOverride toolOverride;
     const auto& tools = App::toolHolder().tools();
-    if(auto it = tools.find(id); it == tools.end() || resolved(it->second).hash() != tool.hash())
+    if(auto it = tools.find(id); it == tools.end() || resolved(it->second, slot).hash() != tool.hash())
         toolOverride = std::move(tool);
 
     // Строка среди выделенных -- правка всем выделенным с тем же инструментом базы.

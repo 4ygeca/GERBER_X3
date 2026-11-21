@@ -84,11 +84,12 @@ private:
     QString drillGroup(const AbstractFile* srcFile) const;
 
     void initToolTable();
-    // Операция УП для инструмента: сверловка -- только в режиме сверления,
+    // Операция УП для инструмента: сверловка -- только в режиме сверления и
+    // не у паза (пазы фрезеруются вдоль, drilling.js -- millingProfilePath),
     // лазер и резьба -- по типу, остальное -- фрезеровка.
-    Tool::Operation operation(const Tool& tool) const;
-    // Инструмент базы под операцию формы и материал проекта (наборы режимов).
-    Tool resolved(const Tool& tool) const;
+    Tool::Operation operation(const Tool& tool, bool slot) const;
+    // Инструмент базы под операцию строки и материал проекта (наборы режимов).
+    Tool resolved(const Tool& tool, bool slot) const;
     // Действующий инструмент строки для УП: правка -- как есть, инструмент
     // базы -- разрешённый (resolved).
     Tool rowTool(const Row& row) const;
