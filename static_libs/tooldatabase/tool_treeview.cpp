@@ -111,6 +111,8 @@ void ToolTreeView::copyTool() {
     // Присваивание Tool целиком тащит и id источника -- вернуть только что
     // выданный свежий id, иначе копия дублирует id оригинала.
     itemDst->tool().setId(newId);
+    // Копия -- другой физический инструмент: свой uid (наборы режимов копируются).
+    itemDst->tool().setUid(Tool::newUid());
     selectAndReveal(index);
 }
 

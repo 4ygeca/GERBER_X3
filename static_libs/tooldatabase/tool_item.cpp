@@ -146,7 +146,11 @@ void ToolItem::setIsTool() {
         id = static_cast<Tool::ID>(+App::toolHolder().tools_.begin()->first + 1);
     else
         id = Tool::ID::Tool;
-    App::toolHolder().tools_[id].setId(id);
+    Tool& tool = App::toolHolder().tools_[id];
+    tool.setId(id);
+    // Новый инструмент -- новая личность: свой uid и код по геометрии.
+    tool.setUid(Tool::newUid());
+    tool.updateAutoCode();
 }
 
 QString ToolItem::note() const {

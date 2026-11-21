@@ -62,7 +62,6 @@ int main(int argc, char* argv[]) {
     [[maybe_unused]] GCode::Settings gcSingleton;
     App::gcSettings.set(&gcSingleton);
     App::settingsPath() = QStandardPaths::standardLocations(QStandardPaths::AppDataLocation).constFirst();
-    App::toolHolder().readTools();
 
     if(QDir dir(App::settingsPath()); !dir.exists())
         dir.mkpath(App::settingsPath());
@@ -130,6 +129,11 @@ int main(int argc, char* argv[]) {
         settings.endGroup();
         MainWindow::translate(locale);
     }
+
+    // База инструментов -- после переводчиков: при первом запуске (и со
+    // старым tools.json) она создаёт список материалов, и имена в нём --
+    // на языке интерфейса.
+    App::toolHolder().readTools();
 
     if(0) return ToolDatabase{}.exec();
 
