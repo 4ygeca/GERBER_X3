@@ -2,7 +2,8 @@
 // Loaded automatically before the plugin script (see GCode::File::runJsScript).
 //
 // The `file` object (GCode::GcFileProxy):
-//   file.tool         - tool snapshot (diameter, feedRate, passDepth, ...)
+//   file.tool         - tool snapshot (diameter, feedRate, passDepth, ...; drill
+//                       fields drillCycle, dwell, retractToR when the tool has them)
 //   file.properties   - project properties (GCode::Properties form) as one object:
 //                       safeZ, clearence, plunge, boardThickness, copperThickness, glue,
 //                       tailing{spacingX, spacingY, stepsX, stepsY},
@@ -10,8 +11,14 @@
 //   file.laser, file.spiralRamp, file.notTile, file.toolDiameter, ...
 //   file.getDepths(), file.getToolPaths(ox, oy), file.savePathLines(...),
 //   file.startPath(x, y), file.endPath(), file.addLine(s), file.formatted([...]),
-//   file.g0()..g3(), file.fmtX()..fmtF(), file.strFeed/strPlungeFeed/strSpindle,
-//   file.comment(text), file.spindleOn(), file.spindleOff(), file.laserOn(dyn), file.laserOff()
+//   file.forceWords(letters) - next formatted() writes these letters even if unchanged,
+//   file.g0()..g3(), file.fmtX()..fmtF(), file.fmtR/fmtQ/fmtP(v), file.fmtDwell(seconds),
+//   file.strFeed/strPlungeFeed/strSpindle,
+//   file.comment(text), file.spindleOn(), file.spindleOff(), file.laserOn(dyn), file.laserOff(),
+//   file.dwell(seconds) - pause line in the post dialect ("G4 P..." by default)
+//   file.cycles       - canned drilling cycles of the post ({drill, dwell, peck,
+//                       chipBreak, cancel, retract{initial, r}}), undefined if none
+//   file.dwellUnit    - unit of the dwell word P of the post: "s" or "ms"
 //   file.ext          - plugin-specific extension object (Profile: bridges), may be undefined
 
 // Append an array of gcode line strings to the file output.
@@ -48,6 +55,57 @@ function forEachTile(file, callback) {
 function plungeTo(file, depth) {
     file.z = depth;
     file.addLine(file.formatted([file.g1(), file.fmtZ(depth), file.strPlungeFeed]));
+}
+
+// ---------------------------------------------------------------------------
+// Canned drilling cycles expanded into plain G0/G1: for controllers without
+// them (a post without `cycles`) or when the tool asks so (drillCycle = Expand).
+// The same idea as Fusion's expandCyclePoint -- one motion for every post.
+//
+// cycle: {
+//   kind:   "drill" (G81) | "dwell" (G82) | "peck" (G83) | "chipBreak" (G73)
+//   depths: pass bottoms from file.getDepths() (negative, deepest last); pecks
+//           (G83/G73) stop at each of them, G81/G82 go straight to the last
+//   r:      R plane -- the project plunge height
+//   dwell:  G82 dwell at the bottom, s (0 -- none)
+//   toR:    G99: stay at R after the hole (the next one is reached at R
+//           height); otherwise G98: back to the initial plane (clearence)
+// }
+//
+// No rapid ever goes below the deepest cut of the hole so far: G83 clears the
+// chips up at R and comes back down at rapid only to DRILL_PECK_CLEARANCE
+// above the previous bottom, then feeds on; G73 only backs off by
+// DRILL_CHIP_BREAK and feeds on.
+var DRILL_PECK_CLEARANCE = 0.2; // mm above the previous peck bottom (G83 re-entry)
+var DRILL_CHIP_BREAK     = 0.1; // mm back-off after a peck (G73); grblHAL $28 default
+
+function expandDrillCycle(file, x, y, cycle) {
+    // G0 X Y S, G0 Z plunge (= R), G1 Z0: the entry every hole had before the
+    // cycles, so single-pass drilling stays exactly what it was.
+    file.startPath(x, y);
+    var pecks  = cycle.kind === "peck" || cycle.kind === "chipBreak";
+    var depths = pecks ? cycle.depths : [cycle.depths[cycle.depths.length - 1]];
+    for (var d = 0; d < depths.length; d++) {
+        if (d > 0) {
+            var bottom = depths[d - 1]; // the deepest cut so far
+            if (cycle.kind === "peck") {
+                // Chips out: up to R, back down at rapid -- only to just above the bottom.
+                file.addLine(file.formatted([file.g0(), file.fmtZ(cycle.r)]));
+                if (bottom + DRILL_PECK_CLEARANCE < cycle.r)
+                    file.addLine(file.formatted([file.g0(), file.fmtZ(bottom + DRILL_PECK_CLEARANCE)]));
+            } else {
+                // Chip break: a short back-off, the drill stays in the hole.
+                file.addLine(file.formatted([file.g0(), file.fmtZ(Math.min(bottom + DRILL_CHIP_BREAK, cycle.r))]));
+            }
+        }
+        plungeTo(file, depths[d]);
+    }
+    if (cycle.kind === "dwell" && cycle.dwell > 0)
+        file.addLine(file.dwell(cycle.dwell));
+    if (cycle.toR)
+        file.addLine(file.formatted([file.g0(), file.fmtZ(cycle.r)]));
+    else
+        file.endPath();
 }
 
 // ---------------------------------------------------------------------------

@@ -585,12 +585,19 @@ std::vector<double> File::getDepths() {
     if(gDepth < tool.passDepth() || qFuzzyCompare(gDepth, tool.passDepth()))
         return {-gDepth - tool.getDepth()};
 
-    const int count = static_cast<int>(ceil(gDepth / tool.passDepth()));
-    const double depth = gDepth / count;
+    // Проходы -- ровными шагами не глубже passDepth на ВСЮ глубину, с конусом
+    // сверла (getDepth(); у прочих инструментов он 0 -- у них всё как было).
+    // Дно -- то же, что у одного прохода. Было tool.depth() -- статический
+    // Tool::depth_, который никто не задаёт: клевками сверло недобирало длину
+    // конуса, и смена шага меняла глубину отверстия. Шаг же клевков G83/G73
+    // (Q) -- первый из этих проходов: развёртка и цикл клюют одним шагом.
+    const double total = gDepth + tool.getDepth();
+    const int count = static_cast<int>(ceil(total / tool.passDepth()));
+    const double depth = total / count;
     std::vector<double> depths(count);
     for(int i{}; i < count; ++i)
         depths[i] = (i + 1) * -depth;
-    depths.back() = -gDepth - tool.depth();
+    depths.back() = -total;
     return depths;
 }
 
