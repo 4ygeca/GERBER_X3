@@ -22,9 +22,40 @@
 
 namespace Drilling {
 
+std::vector<Tool::Type> toolTypes(Mode mode, bool slot) {
+    if(slot) return {Tool::EndMill};
+    if(mode == Mode::Drilling) return {Tool::Drill, Tool::EndMill};
+    return {Tool::EndMill, Tool::Engraver, Tool::Laser};
+}
+
 Model::Model(size_t rowCount, QObject* parent)
     : QAbstractTableModel{parent} {
     data_.resize(rowCount);
+}
+
+bool Model::modeAllowed(int row, Drilling::Mode mode) const {
+    const Row& r = data_[row];
+    if(r.toolId <= Tool::ID::Null)
+        return true;
+    if(r.toolOverride)
+        return canProcess(r.toolOverride->type(), mode);
+    // Не Row::tool(): это .at(), а инструмент могли удалить в окне базы --
+    // тогда судить не по чему.
+    const auto& tools = App::toolHolder().tools();
+    const auto it = tools.find(r.toolId);
+    return it == tools.end() || canProcess(it->second.type(), mode);
+}
+
+bool Model::setMode(int row, Drilling::Mode mode) {
+    Row& r = data_[row];
+    if(r.mode == mode) return true;
+    if(!modeAllowed(row, mode)) return false;
+    r.mode = mode;
+    // Строка с инструментом -- снова в расчёт (галку взводит Header по
+    // сигналу set): прежняя её УП была другой обработки.
+    if(r.toolId > Tool::ID::Null) emit set(row, true);
+    emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
+    return true;
 }
 
 void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
@@ -34,6 +65,10 @@ void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
     // Правка -- вместе с id и ДО updateTool(): превью берёт действующий
     // инструмент, а инструмента восстановленной УП в базе может уже не быть.
     data_[row].toolOverride = id > Tool::ID::Null ? std::move(toolOverride) : ToolOverride{};
+    // Сверло не фрезерует: строка с ним -- только сверловка. Иначе, сменив
+    // фрезу на сверло, строка так и осталась бы карманом или профилем.
+    if(id > Tool::ID::Null && data_[row].tool().type() == ::Tool::Drill)
+        data_[row].mode = Drilling::Mode::Drilling;
     for(auto item: data_[row].items) {
         // Флаг должен быть выставлен ДО updateTool(), т.к. тот в конце вызывает
         // changeColor(), которая читает ItemIsSelectable как признак "Used" —
@@ -154,8 +189,11 @@ QVariant Model::data(const QModelIndex& index, int role) const {
             default          : break;
             }
         }
+    } else if(index.column() == Mode && role == Qt::UserRole) {
+        return static_cast<int>(data_[row].mode);
     }
-    // Edit: в ячейке живёт кнопка формы (index-виджет), данных у неё нет.
+    // Mode и Edit: в ячейке живёт виджет формы (index-виджет: список режима,
+    // кнопка правки) -- текст под ним не рисуется, режим показывает сам список.
     return {};
 }
 
@@ -165,6 +203,7 @@ QVariant Model::headerData(int section, Qt::Orientation orientation, int role) c
         if(orientation == Qt::Horizontal) {
             switch(section) {
             case Name: return {tr("Aperture") + u" / "_s + tr("Tool")};
+            case Mode: return tr("Mode");
             case Tool:;
                 return tr("Tool");
             default: return {}; // Edit -- без заголовка, там только кнопки
@@ -186,11 +225,28 @@ QVariant Model::headerData(int section, Qt::Orientation orientation, int role) c
 Qt::ItemFlags Model::flags(const QModelIndex& index) const {
     if(index.column() == Name)
         return Qt::ItemIsEnabled | Qt::ItemIsUserCheckable;
-    // Edit не выделяется: selectedIndexes() формы по-прежнему даёт ровно
-    // один индекс (столбец Tool) на строку.
-    if(index.column() == Edit)
+    // Mode и Edit не выделяются: selectedIndexes() формы по-прежнему даёт
+    // ровно один индекс (столбец Tool) на строку.
+    if(index.column() == Mode || index.column() == Edit)
         return Qt::ItemIsEnabled;
     return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
+}
+
+QString Model::modeName(Drilling::Mode mode) {
+    switch(mode) {
+    case Drilling::Mode::Drilling           : return tr("Drilling");
+    case Drilling::Mode::PocketClimb        : return tr("Pocket · climb");
+    case Drilling::Mode::PocketConventional : return tr("Pocket · conventional");
+    case Drilling::Mode::ProfileClimb       : return tr("Profile · climb");
+    case Drilling::Mode::ProfileConventional: return tr("Profile · conventional");
+    }
+    return {};
+}
+
+// Значки -- те же, что у самих УП в дереве: сверловка, карман, профиль.
+QIcon Model::modeIcon(Drilling::Mode mode) {
+    if(mode == Drilling::Mode::Drilling) return QIcon::fromTheme(u"drill-path"_s);
+    return QIcon::fromTheme(isPocket(mode) ? u"pocket-path"_s : u"profile-path"_s);
 }
 
 Row::~Row() { qDeleteAll(items); }
