@@ -69,12 +69,24 @@ var post = {
     laserOff:   "M5",
     // Optional: a pause in a dialect that is not "G4 P" (Sinumerik: G4 F<s>).
     dwell:      function(ctx, seconds) { return "G4 F" + seconds; },
+
+    // Jobs -- several programs in one file with tool changes (see "Jobs").
+    maxToolNumber: 8,                  // highest T the controller takes; absent -- no limit
+    message:    function(text) { return "(MSG, " + text + ")"; },  // absent -- a comment
+    toolChange: function(ctx) {        // absent -- M5, message, T<n> M6, M3 S
+        return ["M5", ctx.message, "T" + ctx.toolNumber + " M6", "M3 S" + ctx.spindleSpeed];
+    },
 };
 ```
 
-`ctx` is `{laser, name, programName, spindleSpeed, feedRate, plungeRate, tool, properties}`;
-`tool` is the tool snapshot, `properties` -- the project properties (safeZ,
-clearence, plunge, workRect, tailing, home, zero, …).
+`ctx` is `{laser, job, name, programName, spindleSpeed, feedRate, plungeRate,
+tool, properties}` (plus the tool change fields, see "Jobs"); `tool` is the
+tool snapshot, `properties` -- the project properties (safeZ, clearence,
+plunge, workRect, tailing, home, zero, …). `job` is `true` while the text is
+built as a part of a job: the **header must not start the spindle then** --
+the operator is about to change the tool, the first tool change starts it.
+A function field is called as a method of `post` (`this` is the post); the
+bundled posts read their settings as `post.<name>`.
 
 What the core always writes itself, regardless of the post: the rapid to the
 safe height right after the header, the coordinate moves of the tool path, and
@@ -141,6 +153,131 @@ that has none of them drills as before (Auto, no dwell, G98):
 
 The peck step Q is the tool pass depth (`passDepth`, the drill's "Pass"):
 `getDepths()` splits the depth into even passes no deeper than it.
+
+## Jobs
+
+*File -> Save as Job...* (and the same item in the context menu of a tool
+path, a program folder or a group in the tree) writes the tool paths
+selected in the tree into ONE file for one side of the board: for example,
+everything before through-hole plating, and later everything after it. Laser
+and spindle programs never go into one job (another machine mode), nor do
+the two sides of the board.
+
+```
+G21 G17 G90                       header of the first program, ctx.job = true:
+G94                               no spindle start
+;JOB board_TS                     job info and tool table (comments, see below)
+;...
+G0Z20                             the safe height, as after every header
+G0Z20                             before the first step of every tool: up to safeZ,
+M61 Q0                            the post's toolChange(ctx) block
+M5
+(MSG, T1 D0.8 DRILL D=0.80)
+T1 M6
+M3 S12000
+G0Z20                             and safeZ again before any XY move
+;...                              body of step 1 (with its own info comments)
+M3 S20000                         same tool, another speed: no tool change
+;...                              body of step 2
+...
+M5                                footer of the last program, once
+M2
+```
+
+- The order is proposed by the rule below and can be changed in the job
+  dialog (Up/Down). Default: by physical tool (`Tool::identityKey()`) --
+  drills by ascending diameter, then end mills, engravers and other tools,
+  each by diameter; inside a tool: drilling, milling, the blank cutout last;
+  the tool that has the cutout goes last of all. A Profile outside (Outer) of
+  a board outline (a layer marked as the board outline, Edge.Cuts, X2
+  Profile) is found as the cutout automatically; the dialog has a checkbox
+  per step.
+- T numbers are local to the job: T1..Tn in the order of first use. With
+  `maxToolNumber` (grblHAL: 8) the numbers beyond it wrap (T9 is T1 again):
+  the dialog warns and the file gets a `WARNING` comment. The tool CODE
+  identifies the tool for the sender, not the number.
+- A tool change block comes before the first step and before every step
+  whose tool differs from the previous step's (a tool used again later is
+  changed in again under its number). The core writes `G0 Z<safeZ>` before
+  and after the block itself: after a manual touch-off the tool may stand
+  just above the board, and the next body starts with an XY rapid at the
+  current height.
+- The same physical tool with other cutting data: no tool change, only
+  `spindleOn(ctx)` with the new speed when the speed differs.
+- Laser jobs: one laser, no tool changes; another laser "tool" (spot size)
+  only gets a comment with the message text.
+- GGEasy never writes tool lengths, `G43`/`G43.1`/`G49`/`G10` or probing:
+  the tool change procedure, the touch-off and the lengths are the sender's
+  (ncSender, ioSender and plugins) and the controller's (grblHAL `$341`).
+
+`toolChange(ctx)` returns the lines of the block. Besides the usual fields
+`ctx` has:
+
+| Field                | Value |
+|----------------------|-------|
+| `toolNumber`         | T of the tool to put in |
+| `previousToolNumber` | T of the tool before; 0 for the first change |
+| `first`              | `true` for the first tool change of the job |
+| `tool`               | the tool snapshot; `tool.code` is always set (the tool code, or the automatic one) |
+| `spindleSpeed`       | the speed of the step |
+| `message`            | the operator message line, already in the post's dialect (`message`) |
+| `messageText`        | the message text itself, ASCII: `T2 D1x10 DRILL D=1.00` |
+
+An empty array writes no tool change commands at all. Without `toolChange`
+the core writes `spindleOff`, the message, `T<n> M6` and `spindleOn`.
+`message(text)` returns the operator message line for `text` (without it --
+a comment); `maxToolNumber` is the highest T number the controller accepts
+(without it -- no limit).
+
+| Post | Tool change |
+|------|-------------|
+| grblHAL | `M61 Q0` (first change, and when a wrapped number repeats the previous one -- grblHAL skips `T1 M6` when tool 1 is current), `M5`, `(MSG, …)`, `T<n> M6`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0; `maxToolNumber: 8` |
+| LinuxCNC | `M5`, `(MSG, …)`, `T<n> M6`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0 |
+| Generic, Mach3, Mach4, UCCNC, PlanetCNC, Fanuc, Haas, Sinumerik, Heidenhain ISO | `M5`, comment, `T<n> M6`, spindle on |
+| grbl 1.1, FluidNC (no M6) | `M5`, comment, `M0`, `M3 S`, `G4 P<spinUp>` if `spinUp` > 0 |
+| Marlin / Klipper / RepRapFirmware / Smoothieware | `M5`, comment, `M0` / `PAUSE` / `M226` / `M600`, `M3 S` |
+
+`spinUp` is a property of the grblHAL, LinuxCNC, grbl and FluidNC posts:
+the dwell in seconds after the spindle start of a tool change, 0 by default.
+
+### Job info and tool table
+
+Every line is a comment of the post (`;text` or `(text)`). Strip the comment
+delimiters and the surrounding whitespace, then the lines are, in this order:
+
+```
+JOB <name>                                    the job (the file name without extension)
+SIDE TOP | SIDE BOTTOM
+MATERIAL <name>                               the project material, "-" when not set
+STEPS <count>
+STEP <k> T<n> <operation> <program>           one per step, in the order of the file
+TOOLS <count>                                 the number of physical tools
+T<n> <code> D=<diameter> <type>[ HITS=<holes>]   one per tool, in the order of first use
+WARNING <text>                                optional (tool numbers wrapped)
+```
+
+- `<k>`, `<n>`, `<count>`, `<holes>` -- decimal integers, `<n>` from 1.
+- `<code>` -- `[A-Za-z0-9._-]{1,20}`, the tool code of the tool database
+  (the automatic code such as `D0.8x9`, `E1`, `V0.1A30`, `L0.05`, `T1x6`
+  when it is not set).
+- `<diameter>` -- digits, a point (whatever the locale) and 2 or 3
+  decimals: `0.80`, `1.00`, `0.125`.
+- `<type>` -- `DRILL`, `ENDMILL`, `ENGRAVER`, `LASER` or `THREADMILL`.
+- `<operation>` -- `DRILLING`, `MILLING`, `CUTOUT` (milling of the blank
+  cutout), `LASER` or `THREADING`.
+- `HITS` -- the holes drilled with the tool (all its drilling steps, all
+  tiles); absent for a tool that only mills.
+- `<name>`, `<program>`, the material -- free text to the end of the line,
+  may be non-ASCII; in posts with parenthesised comments `(` `)` become
+  `[` `]`.
+- Two tools may have the same `T<n>` when the numbers wrapped; the code
+  tells them apart.
+
+A tool line matches
+`^T(\d+) ([A-Za-z0-9._-]+) D=(\d+\.\d{2,3}) (DRILL|ENDMILL|ENGRAVER|LASER|THREADMILL)(?: HITS=(\d+))?$`.
+The operator message before a tool change is
+`T<n> <code> <type> D=<diameter>` (ASCII only; tool names, which may be
+Cyrillic or have spaces, are in the plain `Tool:` comments of each body).
 
 ## Notes
 

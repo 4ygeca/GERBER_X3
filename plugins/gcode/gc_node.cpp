@@ -157,15 +157,17 @@ QString newProgramGroupName(const std::vector<int32_t>& ids) {
     return name;
 }
 
-// УП под действием меню: выделенные строки, а если щёлкнули мимо выделения --
-// одна та, по которой щёлкнули. Файл многофайловой программы тянет её всю:
-// программа -- одна строка дерева, разносить её по группам нельзя.
-std::vector<int32_t> menuProgramIds(FileTree::View* tv, FileTree::Node* clicked) {
+// Выделенные строки дерева.
+std::vector<FileTree::Node*> selectedNodes(FileTree::View* tv) {
     std::vector<FileTree::Node*> picked;
     for(const QModelIndex& index: tv->selectionModel()->selectedRows())
         picked.push_back(static_cast<FileTree::Node*>(index.internalPointer()));
-    if(!r::contains(picked, clicked)) picked = {clicked};
+    return picked;
+}
 
+// УП узлов picked. Файл многофайловой программы тянет её всю: программа --
+// одна строка дерева, разносить её по группам нельзя. Папка -- все УП под ней.
+std::vector<int32_t> programIdsOf(std::vector<FileTree::Node*> picked) {
     std::vector<int32_t> ids;
     for(FileTree::Node* node: picked) {
         if(!node || !inProgramTree(node)) continue;
@@ -180,6 +182,34 @@ std::vector<int32_t> menuProgramIds(FileTree::View* tv, FileTree::Node* clicked)
             if(!r::contains(ids, gcNode->id())) ids.push_back(gcNode->id());
     }
     return ids;
+}
+
+// УП под действием меню: выделенные строки, а если щёлкнули мимо выделения --
+// одна та, по которой щёлкнули (папка групп не выделяется -- значит, вся она).
+std::vector<int32_t> menuProgramIds(FileTree::View* tv, FileTree::Node* clicked) {
+    std::vector<FileTree::Node*> picked = selectedNodes(tv);
+    if(!r::contains(picked, clicked)) picked = {clicked};
+    return programIdsOf(std::move(picked));
+}
+
+// УП -- в порядке дерева: выделение помнит порядок щелчков, а задание (при
+// равенстве по правилу) идёт в том порядке, в котором УП лежат в дереве.
+std::vector<int32_t> inTreeOrder(std::vector<int32_t> ids) {
+    std::vector<Node*> nodes;
+    if(FileTree::Node* root = programRoot()) collectProgramNodes(root, nodes);
+    r::stable_sort(ids, {}, [&nodes](int32_t id) { return r::find(nodes, id, &Node::id) - nodes.begin(); });
+    return ids;
+}
+
+// «Сохранить как задание...» в меню УП, подпапки программы и группы: УП под
+// действием меню -- одним файлом со сменами инструмента (gc_job.h). Записывает
+// главное окно (FileTree::View::saveGCodeJob): оно владелец диалогов.
+void addJobAction(QMenu& menu, FileTree::View* tv, FileTree::Node* clicked) {
+    const std::vector<int32_t> ids = inTreeOrder(menuProgramIds(tv, clicked));
+    if(ids.empty()) return;
+    menu.addAction(QIcon::fromTheme(u"document-save-all"_s), QObject::tr("Save as &Job..."), [tv, ids] {
+        emit tv->saveGCodeJob(ids);
+    });
 }
 
 // Пункты групп в меню УП и подпапки программы.
@@ -342,6 +372,7 @@ void Node::menu(QMenu& menu, FileTree::View* tv) {
     menu.addAction(QIcon::fromTheme(u"document-save"_s), QObject::tr("&Save Toolpath"), [tv, this] {
         emit tv->saveGCodeFile(id());
     });
+    addJobAction(menu, tv, this);
     menu.addSeparator();
     menu.addAction(QIcon::fromTheme(u"hint"_s), QObject::tr("&Hide other"),
         tv, &FileTree::View::hideOther);
@@ -425,9 +456,13 @@ Qt::ItemFlags GroupNode::flags(const QModelIndex& index) const {
 }
 
 void GroupNode::menu(QMenu& menu, FileTree::View* tv) {
+    // Задание -- из всех УП папки: группа обычно и собрана под задание
+    // («до металлизации»).
+    addJobAction(menu, tv, this);
     // Подпапка программы -- та же УП, только многофайловая: и пункты те же.
     if(kind_ == Program) return addGroupActions(menu, tv, this);
 
+    menu.addSeparator();
     // Имя -- копией: «Ungroup» папку убирает, а лямбды меню её переживают.
     const QString group = name_;
     menu.addAction(QIcon::fromTheme(u"document-edit"_s), QObject::tr("&Rename Group..."), [tv, group] {
@@ -535,6 +570,10 @@ std::vector<GroupState> groupStates() {
     for(const GroupNode* group: programGroups())
         states.push_back({group->name(), group->isExpanded()});
     return states;
+}
+
+std::vector<int32_t> selectedProgramIds(FileTree::View* tv) {
+    return tv ? inTreeOrder(programIdsOf(selectedNodes(tv))) : std::vector<int32_t>{};
 }
 
 } // namespace GCode

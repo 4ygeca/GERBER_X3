@@ -98,5 +98,9 @@ void layoutTree(const std::vector<GroupState>& states = {});
 void layoutAndReveal(int32_t id);
 // Группы дерева по порядку -- для проекта (Project::save).
 std::vector<GroupState> groupStates();
+// УП выделенных строк дерева tv в порядке дерева (строка многофайловой
+// программы -- вся программа) -- для «Сохранить как задание...» из меню
+// «Файл». Прочие выделенные файлы не в счёт.
+std::vector<int32_t> selectedProgramIds(FileTree::View* tv);
 
 } // namespace GCode

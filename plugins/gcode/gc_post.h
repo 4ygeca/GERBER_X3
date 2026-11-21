@@ -25,7 +25,8 @@ namespace GCode {
 // Файл объявляет глобальный объект `post` (см. scripts/posts/README.md):
 // имя, расширение, стиль комментариев, способ записи дуг, формат слов для
 // линейных строк, дуг и циклов сверления, шапка/концовка, коды
-// шпинделя/лазера, циклы сверления контроллера и единица выдержки P.
+// шпинделя/лазера, циклы сверления контроллера, единица выдержки P и смена
+// инструмента в задании (toolChange, message, maxToolNumber).
 //
 // Диалект -- это ТОЛЬКО текст. Что и когда писать (G0 на безопасную высоту,
 // врезание, переезд домой) решает C++/скрипт плагина; пост лишь говорит,
@@ -79,6 +80,10 @@ public:
     // Контекст для функций поста: что известно о программе на момент вызова.
     struct Context {
         bool laser{};
+        // Текст -- часть задания (несколько УП одним файлом, gc_job.h). Шапка
+        // задания не пускает шпиндель: оператор вот-вот будет менять
+        // инструмент, а пускает его блок смены (toolChange).
+        bool job{};
         QString name;
         QString programName;
         int spindleSpeed{};
@@ -86,6 +91,14 @@ public:
         double plungeRate{};
         QJSValue tool;       // снимок инструмента (как file.tool в скрипте)
         QJSValue properties; // свойства проекта (как file.properties)
+        // Смена инструмента в задании (toolChange): номер T, номер прежнего
+        // (0 -- смен ещё не было), первая ли это смена и сообщение оператору
+        // -- готовой строкой поста (message) и голым текстом (ASCII).
+        int toolNumber{};
+        int previousToolNumber{};
+        bool first{};
+        QString message;
+        QString messageText;
     };
 
     Post();
@@ -135,6 +148,18 @@ public:
     // -- nullopt: «G4 P» в единицах dwellUnit() пишет вызывающий.
     std::optional<QString> dwell(const Context& ctx, double seconds);
 
+    // Задание (gc_job.h). Сообщение оператору text (ASCII) строкой поста:
+    // post.message(text) -- у grblHAL «(MSG, text)», его показывает
+    // отправитель; функции нет -- обычный комментарий.
+    QString message(const QString& text);
+    // Блок смены инструмента: post.toolChange(ctx). Поля нет (пост, писанный
+    // до заданий) -- ISO-смена: spindleOff, ctx.message, «T<n> M6», spindleOn.
+    // Длин, G43/G49/G10 и касаний здесь нет и не будет: это дело отправителя.
+    QStringList toolChange(const Context& ctx);
+    // Наибольший номер T, который примет контроллер (post.maxToolNumber; у
+    // grblHAL N_TOOLS = 8, T9 -- ошибка); 0 -- предела нет.
+    int maxToolNumber() const { return maxToolNumber_; }
+
     // Итоговый текст файла: строки + нумерация N по посту.
     QString renderText(const std::vector<QString>& lines) const;
 
@@ -157,6 +182,7 @@ private:
     LineNumbers lineNumbers_;
     std::optional<Cycles> cycles_;
     DwellUnit dwellUnit_{DwellUnit::Seconds};
+    int maxToolNumber_{};
 };
 
 } // namespace GCode

@@ -171,13 +171,17 @@ public:
     // после смены такого параметра -- лениво: invalidate, а пересборка -- в
     // ensureLines у читающего. Части текста: «сохранить всё в один файл» пишет
     // шапку только у первого файла, а концовку -- только у последнего (см.
-    // sectionsText). Неполный текст свежим не считается: после него отметка
-    // stale_ взведена.
+    // sectionsText). Сведения об УП (addInfo) идут с телом: шапка и концовка
+    // без тела -- общие части задания, чужих сведений в них не нужно.
+    // Неполный текст свежим не считается: после него отметка stale_ взведена.
     enum Section : unsigned {
         Header = 1,
         Body = 2,
         Footer = 4,
         All = Header | Body | Footer,
+        // Часть задания (gc_job.h): пост получает ctx.job. Своим текстом УП
+        // такой не бывает -- он тоже «неполный».
+        Job = 8,
     };
     void regenerate(unsigned sections = All);
 
@@ -185,6 +189,37 @@ public:
     // файл». lines_ и его отметка после него прежние: кусок УП в lines_
     // показало бы окно просмотра и записал бы в себя проект.
     std::vector<QString> sectionsText(unsigned sections);
+
+    // Операция УП: под неё взяты режимы, по ней же порядок шагов задания
+    // (gc_job.h) -- лазер, резьба, прочее фрезеровка. Сверловку знает сама
+    // УП сверловки (Drilling::File): её пазы фрезеруются.
+    virtual Tool::Operation operation() const {
+        return gcp.tools.empty() ? Tool::Operation::Milling : Tool::programOperation(gcp.tool().type(), false);
+    }
+    // Сколько отверстий сверлит УП, со всеми тайлами (HITS в таблице
+    // инструментов задания); 0 -- не сверлит.
+    virtual int drillHits() const { return 0; }
+
+    // Части задания (gc_job.h) -- по текущему посту, мимо lines_, как и
+    // sectionsText. Шапка: шапка поста с ctx.job, сведения задания info
+    // (комментарии, собирает их задание) и подъём на safeZ, как у УП.
+    std::vector<QString> jobHeaderText(const std::vector<QString>& info);
+    // Смена инструмента перед шагом задания.
+    struct ToolChange {
+        int toolNumber{};
+        int previousToolNumber{}; // 0 -- это первая смена
+        bool first{};
+        QString code;    // код инструмента для УП -- он же ctx.tool.code
+        QString message; // сообщение оператору, ASCII
+    };
+    // Блок смены инструмента этой УП: отвод на safeZ, post.toolChange и снова
+    // safeZ -- до любого хода по XY. После ручного касания инструмент может
+    // стоять над самой платой, а тело следующей УП начинается переездом по XY
+    // на текущей высоте.
+    std::vector<QString> toolChangeText(const ToolChange& change);
+    // Пуск шпинделя на оборотах этой УП (post.spindleOn): между шагами одного
+    // инструмента с разными режимами -- без смены, только новые обороты.
+    QString spindleOnText();
 
     // Текст УП без комментариев -- в системный буфер обмена; устаревший
     // сперва пересобирается. Только из GUI-потока; зовёт форма, когда новая
@@ -286,6 +321,11 @@ protected:
     [[= Serial::skip]] Post* post_{};
     // Пост пересчёта, вне его -- Settings::post(), как прежде.
     Post& currentPost();
+    // Текст собирается частью задания (Section::Job): постам -- ctx.job.
+    [[= Serial::skip]] bool job_{};
+    // Сведения задания для его шапки (jobHeaderText): между шапкой поста и
+    // подъёмом на safeZ. Вне шапки задания пусто.
+    [[= Serial::skip]] std::vector<QString> jobInfo_;
 
     static inline QString lastDir;
     static inline bool redirected;

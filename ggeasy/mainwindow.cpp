@@ -18,6 +18,7 @@
 #include "aboutform.h"
 #include "abstract_file.h"
 #include "abstract_fileplugin.h"
+#include "gc_job.h"
 #include "gc_plugin.h"
 #include "gc_propertiesform.h"
 #include "gcode.h"
@@ -143,6 +144,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(ui.treeView, &FileTree::View::editGCodeFile, this, &MainWindow::editGcFile);
     connect(ui.treeView, &FileTree::View::saveGCodeFiles, this, &MainWindow::saveGCodeFiles); // NOTE unused
     connect(ui.treeView, &FileTree::View::saveSelectedGCodeFiles, this, &MainWindow::saveSelectedGCodeFiles);
+    connect(ui.treeView, &FileTree::View::saveGCodeJob, this, &MainWindow::saveGCodeJob);
 
     connect(this, &MainWindow::logMessage, this, &MainWindow::loggingHandler, Qt::QueuedConnection); // thread safe logging
 }
@@ -585,6 +587,12 @@ void MainWindow::createActionsFile() {
     action->setStatusTip(tr("Save selected toolpaths"));
     fileToolBar->addAction(QIcon::fromTheme(u"document-save-all"_s), tr("&Save Selected Tool Paths..."), this, &MainWindow::saveSelectedGCodeFiles);
 
+    // Задание -- из выделенных в дереве УП: какие УП идут одним файлом
+    // (до металлизации, после неё), решает пользователь.
+    action = fileMenu->addAction(QIcon::fromTheme(u"document-save-all"_s), tr("Save as &Job..."), this,
+        [this] { saveGCodeJob(GCode::selectedProgramIds(ui.treeView)); });
+    action->setStatusTip(tr("Save the tool paths selected in the tree as one job file of one side, with tool changes"));
+
     // Экспорт и печать -- одно окно: SVG, DXF, PDF и принтер в точном масштабе.
     action = fileMenu->addAction(QIcon::fromTheme(u"document-export"_s), tr("&Export / Print..."), this, &MainWindow::plotExport);
     action->setShortcuts(QKeySequence::Print);
@@ -950,6 +958,12 @@ void MainWindow::saveGCodeFile(int32_t id) {
 
 void MainWindow::saveGCodeFiles() { }
 
+void MainWindow::saveGCodeJob(const std::vector<int32_t>& ids) {
+    // Проверка выбора, вопрос о булавках, диалог шагов и имя файла -- там же.
+    GCode::saveJob(ids, this);
+    reactivateAfterSave(this);
+}
+
 void MainWindow::saveSelectedGCodeFiles() {
 
     if(project_->pinsPlacedMessage())
@@ -960,12 +974,21 @@ void MainWindow::saveSelectedGCodeFiles() {
         if(!gcFiles[i]->itemGroup()->isVisible())
             gcFiles.erase(gcFiles.begin() + i--);
 
-    using Key = std::pair<size_t, Side>;
+    // Один файл -- один физический инструмент одной стороны
+    // (Tool::identityKey): сверловка и фрезеровка той же фрезой с разными
+    // режимами -- тоже один файл, станку менять нечего. Было по hash2() --
+    // геометрии с шагом и глубиной прохода: режимы под операцию разводили
+    // один инструмент по разным файлам.
+    using Key = std::pair<QString, Side>;
     using GcFiles = QList<GCode::File*>;
 
     std::map<Key, GcFiles> gcFilesMap;
     for(GCode::File* file: gcFiles)
-        gcFilesMap[{file->tool().hash2(), file->side()}].append(file);
+        gcFilesMap[{file->tool().identityKey(), file->side()}].append(file);
+    // Части файла -- как шаги одного инструмента в задании: сверловка,
+    // фрезеровка, вырезка заготовки последней.
+    for(auto& [key, files]: gcFilesMap)
+        std::ranges::stable_sort(files, {}, GCode::jobPartRank);
 
     if(gcFilesMap.empty()) {
         QMessageBox::information(this, {}, QObject::tr("No selected toolpath files."));

@@ -15,6 +15,7 @@
 #include "ft_model.h"
 
 #include <QTreeView>
+#include <vector>
 
 namespace FileTree {
 
@@ -42,6 +43,9 @@ signals:
     void saveGCodeFile(int32_t id);
     void saveGCodeFiles(); // NOTE unused
     void saveSelectedGCodeFiles();
+    // «Сохранить как задание...»: УП ids (в порядке дерева) одним файлом со
+    // сменами инструмента. Пишет главное окно -- владелец диалогов.
+    void saveGCodeJob(const std::vector<int32_t>& ids);
     void editGCodeFile(int32_t id);
 
 private:

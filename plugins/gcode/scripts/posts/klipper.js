@@ -17,8 +17,14 @@ var post = {
 
     header: function(ctx) {
         var lines = ["G21", "G90"];
-        if (ctx.laser) lines.push("M5"); else lines.push("M3 S" + ctx.spindleSpeed);
+        // A job starts the spindle in its first tool change, not here.
+        if (ctx.laser) lines.push("M5"); else if (!ctx.job) lines.push("M3 S" + ctx.spindleSpeed);
         return lines;
+    },
+    // Jobs: no M6 -- a tool change is a pause after the message comment:
+    // PAUSE needs [pause_resume] in printer.cfg; RESUME continues.
+    toolChange: function(ctx) {
+        return ["M5", ctx.message, "PAUSE", "M3 S" + ctx.spindleSpeed];
     },
     footer: function(ctx) {
         return ["M5", "M84"];
