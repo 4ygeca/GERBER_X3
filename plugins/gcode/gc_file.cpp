@@ -592,7 +592,13 @@ std::vector<double> File::getDepths() {
     // конуса, и смена шага меняла глубину отверстия. Шаг же клевков G83/G73
     // (Q) -- первый из этих проходов: развёртка и цикл клюют одним шагом.
     const double total = gDepth + tool.getDepth();
-    const int count = static_cast<int>(ceil(total / tool.passDepth()));
+    // Число проходов -- с пределом. Конус сверла с углом 0 (не задан, старый
+    // tools.json) -- это tan(90°), около 1e16: без предела проходов вышли бы
+    // миллиарды, а их приведение к int -- неопределённое поведение. Нулевой
+    // шаг (бесконечность) и NaN -- туда же.
+    int count = 1;
+    if(const double passes = std::ceil(total / tool.passDepth()); passes > 1.0)
+        count = passes < 10000.0 ? static_cast<int>(passes) : 10000;
     const double depth = total / count;
     std::vector<double> depths(count);
     for(int i{}; i < count; ++i)
