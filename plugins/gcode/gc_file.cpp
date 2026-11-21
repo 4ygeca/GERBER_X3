@@ -336,11 +336,16 @@ void File::regenerate(unsigned sections) {
     // сверяет файл поста с диском (stat), а нужен пост на каждую дугу и
     // каждый комментарий.
     post_ = &App::gcSettings().post();
+    job_ = sections & Job;
     initSave();
     if(sections & Header) writeHeader();
-    addInfo();
 
     if(sections & Body) {
+        // Сведения об УП -- при её теле. Шапку и концовку без тела берёт
+        // задание (одни на весь файл), повторять в них сведения первой и
+        // последней УП незачем: они придут с их телами. Прочие вызовы тело
+        // просят всегда -- у них всё как было.
+        addInfo();
         auto* plugin = App::gCodePlugin(type());
         const QString scriptPath = plugin ? App::gcSettings().scriptPath(plugin->gcName()) : QString{};
         // Генерация -- только скриптом. Фолбэка нет: ошибка видна в самой УП
@@ -363,8 +368,9 @@ void File::regenerate(unsigned sections) {
     // расчёта (конструкторы УП), и на каждый пересчёт всех УП. Текст новой УП
     // копирует форма (copyToClipboard).
     post_ = nullptr;
+    job_ = false;
     // Без шапки или концовки это не текст УП, а кусок: читать его как
-    // программу нельзя.
+    // программу нельзя. Часть задания -- тоже (Job в sections).
     stale_ = sections != All;
 }
 
@@ -376,6 +382,57 @@ std::vector<QString> File::sectionsText(unsigned sections) {
     regenerate(sections);
     stale_ = stale;
     return std::exchange(lines_, std::move(own));
+}
+
+std::vector<QString> File::jobHeaderText(const std::vector<QString>& info) {
+    const std::lock_guard regenLock{gcRegenMutex};
+    // Сведения -- полем на время сборки: их вставляет writeHeader, между
+    // шапкой поста и подъёмом на safeZ.
+    jobInfo_ = info;
+    auto text = sectionsText(Header | Job);
+    jobInfo_.clear();
+    return text;
+}
+
+std::vector<QString> File::toolChangeText(const ToolChange& change) {
+    const std::lock_guard regenLock{gcRegenMutex};
+    // Тем же форматтером, что и УП, -- но мимо её текста: lines_ в сторону,
+    // как в sectionsText.
+    auto own = std::exchange(lines_, {});
+    post_ = &App::gcSettings().post();
+    job_ = true;
+    initSave();
+
+    Post& post = *post_;
+    Post::Context ctx = postContext();
+    ctx.toolNumber = change.toolNumber;
+    ctx.previousToolNumber = change.previousToolNumber;
+    ctx.first = change.first;
+    ctx.messageText = change.message;
+    ctx.message = post.message(change.message);
+    // Код -- тот же, что в таблице инструментов задания: у старых снимков
+    // поле code пустое, Tool::code() берёт его по геометрии.
+    ctx.tool.setProperty(u"code"_s, change.code);
+
+    const double safeZ = App::project().safeZ();
+    lines_.emplace_back(formated({g0(), z(safeZ)}));
+    lines_.append_range(post.toolChange(ctx));
+    // Та же строка ещё раз: форматтер выкинул бы её как неизменившуюся, а
+    // станок после касания стоит не там, где её писали.
+    forceWords(u"GZ");
+    lines_.emplace_back(formated({g0(), z(safeZ)}));
+    std::erase_if(lines_, std::bind(&QString::isEmpty, _1));
+
+    job_ = false;
+    post_ = nullptr;
+    return std::exchange(lines_, std::move(own));
+}
+
+QString File::spindleOnText() {
+    const std::lock_guard regenLock{gcRegenMutex};
+    Post::Context ctx = postContext();
+    ctx.job = true;
+    return App::gcSettings().post().spindleOn(ctx);
 }
 
 void File::copyToClipboard() {
@@ -425,6 +482,7 @@ Post::Context File::postContext() {
     Post& post = currentPost();
     Post::Context ctx;
     ctx.laser = toolType == Tool::Laser;
+    ctx.job = job_;
     ctx.name = shortName();
     ctx.programName = programName_;
     ctx.spindleSpeed = spindleSpeed;
@@ -472,6 +530,9 @@ void File::initSave() {
 void File::writeHeader() {
     Post& post = currentPost();
     lines_.append_range(post.header(postContext()));
+    // Шапка задания: его сведения и таблица инструментов -- сразу за шапкой
+    // поста, до первого хода (jobHeaderText).
+    lines_.append_range(jobInfo_);
     if(toolType == Tool::Laser)
         lines_.emplace_back(formated({g0(), z(0)})); // Z0 for visible in Candle
     else

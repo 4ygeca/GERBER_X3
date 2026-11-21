@@ -59,6 +59,22 @@ public:
         itemGroup()->setVisible(true);
     }
 
+    // Точки сверлятся, пазы фрезеруются вдоль путей (drilling.js) -- и режимы
+    // у них свои: сверловки и фрезеровки.
+    Tool::Operation operation() const override {
+        if(gcp.tools.empty()) return GCode::File::operation();
+        return Tool::programOperation(gcp.tool().type(), !gcp.slotPaths());
+    }
+    // Точки сверловки -- вершины первого пути первой группы, и drilling.js
+    // сверлит их на каждом тайле раскладки, если она не отключена (NotTile).
+    int drillHits() const override {
+        if(gcp.slotPaths() || gcp.toolPathss.empty() || gcp.toolPathss.front().empty()) return 0;
+        const auto points = static_cast<int>(gcp.toolPathss.front().front().size());
+        if(gcp.params.contains(GCode::Params::NotTile)) return points;
+        const Project& project = App::project();
+        return points * static_cast<int>(std::max(1u, project.stepsX()) * std::max(1u, project.stepsY()));
+    }
+
     // Пазы из проектов до появления ключа SlotPaths. Точки сверловки -- всегда
     // ОДНА незамкнутая полилиния (форма, булавки), так что несколько путей или
     // замкнутый контур -- это пазы. Одиночный прямой паз от пары отверстий не
