@@ -117,7 +117,10 @@ The scripts call `laserOn` once per tile, right AFTER the first rapid of the
 tile (`G0 X.. Y.. S0`), not before it: grbl and grblHAL light the beam on `M3`
 at once, standing still, with the modal S -- the power of the previous tile
 or of the previous program of a job. Every move with the beam on is
-`G1/G2/G3 … S<power>`, every rapid `G0 … S0`.
+`G1/G2/G3 … S<power>`, every rapid `G0 … S0`. The HLDI raster (Pocket Raster,
+type HLDI) is one continuous pass: its run-ups, turns, run-outs and the gaps
+between the exposed strokes of a row are `G1 … S0` at the feed, so the head
+keeps its speed through them and nothing outside the strokes is exposed.
 
 ## Canned drilling cycles
 
