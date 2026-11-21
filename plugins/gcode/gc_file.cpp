@@ -37,6 +37,7 @@
 #include <QJSEngine>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QTimer>
 #include <algorithm>
 #include <mutex>
@@ -247,19 +248,38 @@ void File::ensureDefaultScripts() {
     const QString scriptsDirPath = QCoreApplication::applicationDirPath() + u"/scripts"_s;
     QDir{}.mkpath(scriptsDirPath);
 
-    // Extract all embedded script resources to disk if they are missing
-    // (скрипты плагинов -- в scripts/, посты -- в scripts/posts/).
+    // Встроенные скрипты -- на диск (скрипты плагинов -- в scripts/, посты --
+    // в scripts/posts/). Источник истины -- встроенная версия: файл, которого
+    // нет, пишется, а отличающийся заменяется, прежний -- в <имя>.bak (старый
+    // .bak затирается). Иначе обновлённый GGEasy, поставленный поверх старого,
+    // так и работал бы со старыми скриптами и постами -- раньше на диск
+    // писалось лишь недостающее. Свои скрипты и посты пользователя (имён,
+    // которых среди встроенных нет) не трогаются вовсе.
     auto extract = [](const QString& resPrefix, const QString& dirPath) {
         QDir{}.mkpath(dirPath);
         const QDir resDir{resPrefix};
         for(const QString& fileName: resDir.entryList(QDir::Files)) {
+            QFile src{resPrefix + u'/' + fileName};
+            if(!src.open(QIODevice::ReadOnly)) continue;
+            const QByteArray embedded = src.readAll();
             const QString destPath = dirPath + u'/' + fileName;
-            if(!QFile::exists(destPath)) {
-                QFile src{resPrefix + u'/' + fileName};
-                QFile dst{destPath};
-                if(src.open(QIODevice::ReadOnly) && dst.open(QIODevice::WriteOnly | QIODevice::Truncate))
-                    dst.write(src.readAll());
-            }
+            if(QFile disk{destPath}; disk.exists()) {
+                if(disk.open(QIODevice::ReadOnly) && disk.readAll() == embedded) continue;
+                disk.close();
+                const QString bakPath = destPath + u".bak"_s;
+                QFile::remove(bakPath);
+                // Не убрался в .bak -- не трогать и сам файл: перезапись
+                // оставила бы пользователя без его копии.
+                if(!QFile::rename(destPath, bakPath)) {
+                    qWarning() << "GCode scripts: cannot back up" << destPath << "to" << bakPath;
+                    continue;
+                }
+                qInfo() << "GCode scripts:" << destPath << "differs from the bundled version, replaced; previous copy:" << bakPath;
+            } else
+                qInfo() << "GCode scripts: extracted" << destPath;
+            QSaveFile dst{destPath};
+            if(!dst.open(QIODevice::WriteOnly) || dst.write(embedded) != embedded.size() || !dst.commit())
+                qWarning() << "GCode scripts: cannot write" << destPath << dst.errorString();
         }
     };
     extract(u":/gcode/scripts"_s, scriptsDirPath);
