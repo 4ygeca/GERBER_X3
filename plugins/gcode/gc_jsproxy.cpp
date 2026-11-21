@@ -61,6 +61,7 @@ QJSValue GcFileProxy::properties() const { return propertiesValue(*engine_); }
 bool GcFileProxy::notTile() const { return file_->gcp.params.contains(Params::NotTile); }
 QString GcFileProxy::name() const { return file_->shortName(); }
 QString GcFileProxy::programName() const { return file_->programName_; }
+bool GcFileProxy::slotPaths() const { return file_->gcp.slotPaths(); }
 
 QJSValue GcFileProxy::cycles() const {
     // Пост живёт на своём движке: объект собирается заново на движке скрипта.

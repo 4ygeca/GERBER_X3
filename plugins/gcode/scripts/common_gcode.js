@@ -8,7 +8,7 @@
 //                       safeZ, clearence, plunge, boardThickness, copperThickness, glue,
 //                       tailing{spacingX, spacingY, stepsX, stepsY},
 //                       workRect{x, y, width, height}, home{x, y}, zero{x, y}, pins[]
-//   file.laser, file.spiralRamp, file.notTile, file.toolDiameter, ...
+//   file.laser, file.spiralRamp, file.notTile, file.slotPaths, file.toolDiameter, ...
 //   file.getDepths(), file.getToolPaths(ox, oy), file.savePathLines(...),
 //   file.startPath(x, y), file.endPath(), file.addLine(s), file.formatted([...]),
 //   file.forceWords(letters) - next formatted() writes these letters even if unchanged,
@@ -125,43 +125,50 @@ function laserTile(file, pathss) {
     }
 }
 
+// One contour pathss[i][j] milled through all depths as one entry: closed
+// contour -> spiral ramp (or plunge per level), open contour -> zigzag
+// alternating direction. Starts with startPath, ends with endPath.
+function millingProfilePath(file, pathss, i, j, depths) {
+    var path  = pathss[i][j];
+    var perim = path.perimeter;
+    file.startPath(path[0].x, path[0].y);
+    if (path.closed) {
+        if (file.spiralRamp) {
+            // Spiral: ramp down through each depth pass, then one flat finishing pass
+            for (var d = 0; d < depths.length; d++)
+                appendLines(file, file.savePathLines(i, j, false, perim, depths[d]));
+            appendLines(file, file.savePathLines(i, j, false, 0, 0));
+        } else {
+            // Plunge straight down at each step; no spiral step left to clean up
+            for (var d = 0; d < depths.length; d++) {
+                plungeTo(file, depths[d]);
+                appendLines(file, file.savePathLines(i, j, false, 0, 0));
+            }
+        }
+    } else {
+        if (file.spiralRamp) {
+            // Zigzag: alternate direction on each depth pass
+            for (var d = 0; d < depths.length; d++)
+                appendLines(file, file.savePathLines(i, j, (d & 1) !== 0, perim, depths[d]));
+            appendLines(file, file.savePathLines(i, j, (depths.length & 1) !== 0, 0, 0));
+        } else {
+            // Still alternate: plunging where the tool already stands is cheaper
+            for (var d = 0; d < depths.length; d++) {
+                plungeTo(file, depths[d]);
+                appendLines(file, file.savePathLines(i, j, (d & 1) !== 0, 0, 0));
+            }
+        }
+    }
+    file.endPath();
+}
+
 // Milling profile: closed contour -> spiral ramp (or plunge per level),
 // open contour -> zigzag alternating direction, several segments -> step-down.
 function millingProfileTile(file, pathss, depths) {
     for (var i = 0; i < pathss.length; i++) {
         var paths = pathss[i];
         if (paths.length === 1) {
-            var path  = paths[0];
-            var perim = path.perimeter;
-            file.startPath(path[0].x, path[0].y);
-            if (path.closed) {
-                if (file.spiralRamp) {
-                    // Spiral: ramp down through each depth pass, then one flat finishing pass
-                    for (var d = 0; d < depths.length; d++)
-                        appendLines(file, file.savePathLines(i, 0, false, perim, depths[d]));
-                    appendLines(file, file.savePathLines(i, 0, false, 0, 0));
-                } else {
-                    // Plunge straight down at each step; no spiral step left to clean up
-                    for (var d = 0; d < depths.length; d++) {
-                        plungeTo(file, depths[d]);
-                        appendLines(file, file.savePathLines(i, 0, false, 0, 0));
-                    }
-                }
-            } else {
-                if (file.spiralRamp) {
-                    // Zigzag: alternate direction on each depth pass
-                    for (var d = 0; d < depths.length; d++)
-                        appendLines(file, file.savePathLines(i, 0, (d & 1) !== 0, perim, depths[d]));
-                    appendLines(file, file.savePathLines(i, 0, (depths.length & 1) !== 0, 0, 0));
-                } else {
-                    // Still alternate: plunging where the tool already stands is cheaper
-                    for (var d = 0; d < depths.length; d++) {
-                        plungeTo(file, depths[d]);
-                        appendLines(file, file.savePathLines(i, 0, (d & 1) !== 0, 0, 0));
-                    }
-                }
-            }
-            file.endPath();
+            millingProfilePath(file, pathss, i, 0, depths);
         } else {
             // Multiple segments: step-down across all segments at each depth level
             file.startPath(paths[0][0].x, paths[0][0].y);

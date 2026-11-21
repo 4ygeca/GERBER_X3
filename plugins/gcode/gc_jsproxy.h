@@ -77,6 +77,9 @@ class GcFileProxy : public QObject {
     Q_PROPERTY(QJSValue cycles READ cycles CONSTANT)
     // Единица слова P выдержки (G4 и G82) у поста: "s" или "ms".
     Q_PROPERTY(QString dwellUnit READ dwellUnit CONSTANT)
+    // Пути УП -- пазы формы сверловки (Params::SlotPaths): осевые линии или
+    // контуры, по которым фрезеруют, а не точки сверловки.
+    Q_PROPERTY(bool slotPaths READ slotPaths CONSTANT)
 
     // Current depth (updated by savePath spiral logic)
     Q_PROPERTY(double z READ zVal WRITE setZ)
@@ -110,6 +113,7 @@ public:
     QString programName() const;
     QJSValue cycles() const;
     QString dwellUnit() const;
+    bool slotPaths() const;
     double zVal() const;
     void setZ(double z);
 

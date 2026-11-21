@@ -49,7 +49,29 @@ public:
 
     QIcon icon() const override { return QIcon::fromTheme(u"drill-path"_s); }
     uint32_t type() const override { return DRILLING; }
-    void createGi() override { createGiDrill(), itemGroup()->setVisible(true); }
+    // Пазы фрезеруются вдоль путей (drilling.js) -- и рисуются, как профиль:
+    // полосой в диаметр фрезы. Метки сверловки на вершинах пути лгали бы.
+    void createGi() override {
+        if(gcp.slotPaths())
+            createGiProfile();
+        else
+            createGiDrill();
+        itemGroup()->setVisible(true);
+    }
+
+    // Пазы из проектов до появления ключа SlotPaths. Точки сверловки -- всегда
+    // ОДНА незамкнутая полилиния (форма, булавки), так что несколько путей или
+    // замкнутый контур -- это пазы. Одиночный прямой паз от пары отверстий не
+    // отличить: такая УП остаётся сверловкой, как и считалась. Ключ -- до
+    // базы: её postLoad зовёт createGi().
+    void postLoad() {
+        if(!gcp.slotPaths() && !gcp.toolPathss.empty()) {
+            const Geo::Polylines& paths = gcp.toolPathss.front();
+            if(paths.size() > 1 || (paths.size() == 1 && paths.front().isClosed()))
+                gcp.params[GCode::Params::SlotPaths] = 1;
+        }
+        GCode::File::postLoad();
+    }
 
 private:
     std::vector<RowRef> rows_;

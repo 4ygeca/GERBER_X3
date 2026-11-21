@@ -1,6 +1,6 @@
 // Drilling: canned drilling cycles (G81/G82/G83/G73) through the post, or their
 // expansion into plain G0/G1 (common_gcode.js: expandDrillCycle) for controllers
-// without them.
+// without them. Slot programs of the drill form are milled along their paths.
 // Requires: common_gcode.js
 //
 // Tool fields (file.tool; a tool that has none of them behaves as the defaults):
@@ -38,6 +38,17 @@ var DRILL_CYCLE_G73    = 5;
 
 function generate(file) {
     var depths = file.getDepths();
+
+    if (file.slotPaths) {
+        // Slots: centre lines (slot no wider than the mill) or contours around
+        // them (wider slot) -- every path is milled along, like a profile.
+        forEachTile(file, function(file, pathss) {
+            for (var i = 0; i < pathss.length; i++)
+                for (var j = 0; j < pathss[i].length; j++)
+                    millingProfilePath(file, pathss, i, j, depths);
+        });
+        return;
+    }
 
     var cycle = drillCycle(file, depths);
     forEachTile(file, function(file, pathss) {
