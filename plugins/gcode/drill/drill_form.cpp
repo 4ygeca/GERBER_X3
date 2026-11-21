@@ -369,6 +369,14 @@ void Form::on_cbxFileCurrentIndexChanged() {
     header->onChecked();
 }
 
+Tool::Operation Form::operation(const Tool& tool) const { return Tool::programOperation(tool.type(), worckType == GCType::Drill); }
+
+Tool Form::resolved(const Tool& tool) const {
+    return App::toolHolder().resolve(tool, operation(tool), App::project().material());
+}
+
+Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool()); }
+
 void Form::initEditButtons() {
     if(!model)
         return;
@@ -398,8 +406,12 @@ void Form::editRowTool(int row) {
     const Tool::ID id = model->toolId(row);
 
     // Правится КОПИЯ действующего инструмента строки -- база не трогается.
+    // Действующий -- с набором режимов под операцию и материал проекта: его
+    // УП и получит, его и правят.
+    const Tool current = rowTool(model->data()[row]);
     ToolEditDialog dialog{this};
-    dialog.setTool(model->tool(row));
+    dialog.setOperation(operation(current));
+    dialog.setTool(current);
     // setTool() сам взводит признак правки (поля дёргают valueChanged) --
     // сброс: OK без единой правки ничего не меняет.
     dialog.setWindowModified(false);
@@ -414,10 +426,10 @@ void Form::editRowTool(int row) {
     // на нём держатся связь строки с базой, ключ программы и восстановление
     // при правке УП.
     tool.setId(id);
-    // Правка, совпавшая с инструментом базы, -- уже не правка.
+    // Правка, совпавшая с тем, что дала бы база (с набором режимов), -- уже не правка.
     ToolOverride toolOverride;
     const auto& tools = App::toolHolder().tools();
-    if(auto it = tools.find(id); it == tools.end() || it->second.hash() != tool.hash())
+    if(auto it = tools.find(id); it == tools.end() || resolved(it->second).hash() != tool.hash())
         toolOverride = std::move(tool);
 
     // Строка среди выделенных -- правка всем выделенным с тем же инструментом базы.
@@ -644,6 +656,7 @@ void Form::computePaths() {
     if(worckType == GCType::Drill) { // slots only
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
+        // Инструмент базы -- с набором режимов под операцию и материал проекта.
         struct Data {
             Tool tool;
             Geo::Polylines paths;
@@ -655,7 +668,7 @@ void Form::computePaths() {
         for(int i{}; auto&& row: *model) {
             if(row.toolId > Tool::ID::Null && row.useForCalc && row.isSlot) {
                 auto& data = pathsMap[toolKeyOf(row)];
-                data.tool = row.tool();
+                data.tool = rowTool(row);
                 data.toolsApertures.push_back(i);
                 for(auto& item: row.items) {
                     if(!item->isUsed()) continue;
@@ -714,7 +727,7 @@ void Form::computePaths() {
         for(int i{}; auto&& row: *model) {
             if(row.toolId > Tool::ID::Null && row.useForCalc) {
                 auto& data = pathsMap[toolKeyOf(row)];
-                data.tool = row.tool();
+                data.tool = rowTool(row);
                 const Tool::Type toolType = data.tool.type();
                 data.toolsApertures.push_back(i);
                 for(auto& item: row.items) {

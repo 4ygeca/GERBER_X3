@@ -35,6 +35,7 @@ namespace Drilling {
 
 class Model;
 class Header;
+struct Row;
 
 // Ключ программы: инструмент из базы плюс, если строка правлена только для
 // этой УП, хэш правки (0 -- инструмент базы как есть). Строки одного toolId с
@@ -83,6 +84,14 @@ private:
     QString drillGroup(const AbstractFile* srcFile) const;
 
     void initToolTable();
+    // Операция УП для инструмента: сверловка -- только в режиме сверления,
+    // лазер и резьба -- по типу, остальное -- фрезеровка.
+    Tool::Operation operation(const Tool& tool) const;
+    // Инструмент базы под операцию формы и материал проекта (наборы режимов).
+    Tool resolved(const Tool& tool) const;
+    // Действующий инструмент строки для УП: правка -- как есть, инструмент
+    // базы -- разрешённый (resolved).
+    Tool rowTool(const Row& row) const;
     // Кнопки правки инструмента в столбце Edit -- по одной на строку модели.
     void initEditButtons();
     // Правка инструмента строки только для этой УП (в базу не пишется). Та же

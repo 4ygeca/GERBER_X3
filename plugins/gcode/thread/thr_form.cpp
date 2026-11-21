@@ -455,7 +455,10 @@ void Form::computePaths() {
     GCode::File* lastCreated{}; // в буфер обмена -- как в базовой форме (fileHandler)
     for(auto [usedToolId, data]: pathsMap) {
         if(data.paths.size()) {
-            GCode::Params gcp{App::toolHolder().tool(usedToolId), dsbxDepth->value(), std::move(data.paths)};
+            // Режимы -- из набора резьбы под материал проекта (шаг резьбы --
+            // геометрия фрезы, набор его не меняет).
+            const Tool tool = App::toolHolder().resolve(App::toolHolder().tool(usedToolId), Tool::Operation::Threading, App::project().material());
+            GCode::Params gcp{tool, dsbxDepth->value(), std::move(data.paths)};
             gcp.setSide(ui->rbInside->isChecked() ? GCode::Inner : GCode::Outer);
             // Для резьбы Convent -- это не попутный/встречный (тот однозначно
             // задан геометрией винтовой линии), а сторона старта: rbTop ->

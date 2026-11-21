@@ -93,10 +93,14 @@ void DepthForm::setupUi(QWidget* Form) {
         label = new QLabel{Form};
         label->setObjectName(u"label"_s);
 
+        // Ширина -- как у меток ToolSelectorForm («Tool:», «Material:»): столбцы
+        // меток формы УП стоят ровно.
         QFontMetrics fm(font());
-        label->setMinimumWidth(std::max(
+        label->setMinimumWidth(std::max({
             fm.horizontalAdvance(QCoreApplication::translate("ToolSelectorForm", "Tool:", nullptr)),
-            fm.horizontalAdvance(QCoreApplication::translate("DepthForm", "Depth:", nullptr))));
+            fm.horizontalAdvance(QCoreApplication::translate("ToolSelectorForm", "Material:", nullptr)),
+            fm.horizontalAdvance(QCoreApplication::translate("DepthForm", "Depth:", nullptr)),
+        }));
         label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         horizontalLayout->addWidget(label);
     }
