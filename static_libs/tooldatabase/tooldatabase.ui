@@ -58,6 +58,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="pbMaterials">
+       <property name="toolTip">
+        <string>Workpiece materials for the cutting data sets</string>
+       </property>
+       <property name="text">
+        <string>Materials…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QDialogButtonBox" name="buttonBox">
        <property name="standardButtons">
         <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>

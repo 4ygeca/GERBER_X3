@@ -12,6 +12,7 @@
  ********************************************************************************/
 #include "tool_database.h"
 #include "tool_item.h"
+#include "tool_materialsdialog.h"
 #include "ui_tooldatabase.h"
 
 #include <QKeyEvent>
@@ -54,6 +55,14 @@ ToolDatabase::ToolDatabase(QWidget* parent, std::span<const Tool::Type> types)
                 QMessageBox::information(this, tr("Invalid tool"), item->tool().errorStr());
             }
         }
+    });
+
+    // Список материалов: наборы удалённых материалов уходят и из базы, и из
+    // открытой правки инструмента.
+    connect(ui->pbMaterials, &QPushButton::clicked, this, [this] {
+        MaterialsDialog dialog{this};
+        if(dialog.exec() == QDialog::Accepted)
+            ui->toolEdit->materialsChanged(dialog.removed());
     });
 
     ui->pbCopy->setIcon(QIcon::fromTheme(u"edit-copy"_s));

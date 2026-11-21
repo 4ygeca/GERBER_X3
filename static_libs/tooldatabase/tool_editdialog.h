@@ -28,6 +28,9 @@ public:
 
     Tool tool() const;
     void setTool(const Tool& tool);
+    // Операция УП, для которой правится снимок: по ней видны поля режимов
+    // (фреза в режиме сверления -- с полями цикла сверления). Зовётся до setTool.
+    void setOperation(Tool::Operation operation);
 
     // QWidget interface
 protected:

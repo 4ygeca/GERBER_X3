@@ -97,7 +97,47 @@
         </property>
        </widget>
       </item>
+      <item row="2" column="0">
+       <layout class="QHBoxLayout" name="hlayCode">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="sizeConstraint">
+         <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
+        </property>
+        <item>
+         <widget class="QLabel" name="lblCode">
+          <property name="toolTip">
+           <string>Tool code for the G-code and the sender: letters, digits, '.', '_', '-' (up to 20).
+Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).</string>
+          </property>
+          <property name="text">
+           <string>Code</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="chbxAutoCode">
+          <property name="toolTip">
+           <string>Automatic code: follows the type and geometry</string>
+          </property>
+          <property name="layoutDirection">
+           <enum>Qt::LayoutDirection::RightToLeft</enum>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
       <item row="2" column="1">
+       <widget class="QLineEdit" name="leCode"/>
+      </item>
+      <item row="3" column="1">
        <widget class="QTextEdit" name="teNote">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -107,7 +147,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="lblNote">
         <property name="text">
          <string>Note</string>
@@ -266,7 +306,7 @@
          <item row="4" column="0">
           <widget class="QLabel" name="label">
            <property name="text">
-            <string>Lenght:</string>
+            <string>Working length:</string>
            </property>
           </widget>
          </item>
@@ -307,6 +347,65 @@
        </widget>
       </item>
       <item>
+       <widget class="QWidget" name="wgtPresets" native="true">
+        <layout class="QHBoxLayout" name="hlayPresets">
+         <property name="leftMargin">
+          <number>6</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>6</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="lblPreset">
+           <property name="text">
+            <string>Cutting data:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="cbxPreset">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>1</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>Cutting data shown in the fields below: the tool's own values or a set for an operation and material.
+The fields edit the shown set; the geometry always belongs to the tool.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="tbAddPreset">
+           <property name="toolTip">
+            <string>Add cutting data for an operation and material (copies the values shown)</string>
+           </property>
+           <property name="text">
+            <string notr="true">+</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="tbRemovePreset">
+           <property name="toolTip">
+            <string>Delete the shown cutting data</string>
+           </property>
+           <property name="text">
+            <string notr="true">−</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
        <widget class="QGroupBox" name="grbxCuttingParameters">
         <property name="toolTip">
          <string/>
@@ -332,6 +431,9 @@
          </property>
          <item row="0" column="0">
           <widget class="QLabel" name="lblPass">
+           <property name="toolTip">
+            <string>Depth of one pass. For the G83/G73 cycles it is the peck depth Q.</string>
+           </property>
            <property name="text">
             <string>Pass (Ap)</string>
            </property>
@@ -339,6 +441,9 @@
          </item>
          <item row="0" column="1">
           <widget class="DoubleSpinBox" name="dsbxPass">
+           <property name="toolTip">
+            <string>Depth of one pass. For the G83/G73 cycles it is the peck depth Q.</string>
+           </property>
            <property name="suffix">
             <string> mm</string>
            </property>
@@ -536,6 +641,54 @@
             <widget class="QSpinBox" name="sbxNTeeth"/>
            </item>
           </layout>
+         </item>
+         <item row="6" column="0">
+          <widget class="QLabel" name="lblDrillCycle">
+           <property name="text">
+            <string>Drill cycle:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QComboBox" name="cbxDrillCycle">
+           <property name="toolTip">
+            <string>How the holes are drilled: a canned cycle or plain G0/G1 moves.
+Auto -- chosen by the post processor.</string>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="0">
+          <widget class="QLabel" name="lblDwell">
+           <property name="text">
+            <string>Dwell, s:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="DoubleSpinBox" name="dsbxDwell">
+           <property name="toolTip">
+            <string>Dwell at the bottom of the hole (G82)</string>
+           </property>
+           <property name="decimals">
+            <number>2</number>
+           </property>
+           <property name="maximum">
+            <double>60.000000000000000</double>
+           </property>
+           <property name="singleStep">
+            <double>0.100000000000000</double>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="1">
+          <widget class="QCheckBox" name="chbxRetractToR">
+           <property name="toolTip">
+            <string>Between holes return to the R plane (G99) instead of the initial plane (G98)</string>
+           </property>
+           <property name="text">
+            <string>Retract to R (G99)</string>
+           </property>
+          </widget>
          </item>
         </layout>
        </widget>

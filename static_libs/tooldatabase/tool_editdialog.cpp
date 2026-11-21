@@ -42,6 +42,8 @@ Tool ToolEditDialog::tool() const { return ui->toolEdit->tool_; }
 
 void ToolEditDialog::setTool(const Tool& tool) { ui->toolEdit->setTool(tool); }
 
+void ToolEditDialog::setOperation(Tool::Operation operation) { ui->toolEdit->setOperation(operation); }
+
 void ToolEditDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
     QSettings settings;

@@ -18,6 +18,8 @@
 #include <QWidget>
 #include <array>
 #include <flat_map>
+#include <optional>
+#include <set>
 
 namespace Ui {
 class ToolEditForm;
@@ -36,6 +38,12 @@ public:
     void setItem(ToolItem* item);
     void setTool(const Tool& tool);
     void setDialog();
+    // Операция УП правленного снимка (окно местной правки): по ней видны поля
+    // режимов. Зовётся до setTool.
+    void setOperation(Tool::Operation operation) { operation_ = operation; }
+    // Список материалов правили (окно «Материалы…»): наборы удалённых материалов
+    // уходят и из правки, имена в списке наборов -- новые.
+    void materialsChanged(const std::set<QString>& removed);
     enum Feeds {
         mmPerSec,
         mmPerMin,
@@ -56,15 +64,41 @@ private:
     void valueChanged(double value);
 
     ToolItem* item_{nullptr};
+    // Правка инструмента. Значения режимов в нём (и в полях) -- показанные:
+    // собственные инструмента или выбранного набора; сами наборы и
+    // собственные значения хранятся отдельно, пока показано другое.
     Tool tool_;
+    std::vector<Tool::CuttingPreset> presets_;
+    Tool::CuttingPreset defaults_;
+    int presetIndex_{-1}; // показанный набор в presets_; -1 -- собственные значения
+    std::optional<Tool::Operation> operation_;
     double feed{1.0};
-    bool dialog_{true};
+    bool dialog_{true}; // true -- в окне базы, false -- окно местной правки (setDialog)
+    QString spindleLabel_;
+    QString spindleSuffix_;
 
     void updateName();
+    void updateCode();
     void updateWarn();
     void setChanged(bool fl = true);
     void setVisibleToolWidgets(bool visible);
     void setupToolWidgets(int type);
+    // Строки полей: геометрия -- по типу, режимы -- по операции показанных
+    // значений. restoreLast -- вернуть полям прежние значения (смена типа).
+    void showRows(bool restoreLast);
+    Tool::Operation shownOperation() const;
+    // Наборы режимов
+    void rebuildPresets();
+    void updatePresetButtons();
+    void selectPreset(int index);
+    void storeShown();
+    void loadCutFields();
+    void loadDrillFields();
+    void addPreset();
+    void removePreset();
+    // Инструмент для базы: собственные значения режимов и все наборы.
+    Tool assembled();
+    void warnDuplicateCode(const Tool& tool);
     using Key = decltype(&Tool::angle);
 
     void updateDsbxAngle(double val);
