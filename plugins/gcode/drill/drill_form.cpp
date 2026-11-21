@@ -685,6 +685,16 @@ void Form::computePaths() {
     // сами, мимо fileHandler(), и раскладывают дерево здесь же, в конце.
     int32_t revealId = -1;
 
+    // Очередь прогонов к Create не пуста в одном случае: прогон отменили, а
+    // Create нажали снова, пока он ещё не прислал файл (кнопка «Cancel» снова
+    // «Create» сразу после отмены). Он досчитывается -- его файл уйдёт в
+    // корзину; не начатые прогоны того клика больше не нужны.
+    const bool runInFlight = !pendingRuns_.empty();
+    if(runInFlight) {
+        pendingRuns_.erase(std::next(pendingRuns_.begin()), pendingRuns_.end());
+        pendingRuns_.front().discard = true;
+    }
+
     if(worckType == GCType::Drill) { // slots only
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
@@ -839,49 +849,27 @@ void Form::computePaths() {
                 for(int row: val.toolsApertures)
                     model->setCreate(row, false);
             }
-            if(val.paths.size()) {
-                switch(worckType) {
-                case GCType::Profile: {
-                    const QString programName = programTag(val.tool, key);
-                    std::vector<int32_t> replaced;
-                    if(auto it = createdProfileFileIds_.find(key);
-                        it != createdProfileFileIds_.end() && App::project().file(it->second))
-                        replaced = {it->second};
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Profile, key, programName, std::move(replaced)});
-                    fileName_ = programName;
-                    gcp = {};
-                    gcp.setConvent(ui->rbConventional->isChecked());
-                    gcp.setSide(side);
-                    gcp.tools = {val.tool};
-                    gcp.params[GCode::Params::Depth] = dsbxDepth->value();
-                    gcp.closedCurves = Geo::Polygons{val.paths};
-                    setCreator(new Profile::Creator);
-                    fileCount = 1;
-                    emit createToolpath(&gcp);
-                } break;
-                case GCType::Pocket: {
-                    const QString programName = programTag(val.tool, key);
-                    std::vector<int32_t> replaced;
-                    if(auto it = createdPocketFileIds_.find(key);
-                        it != createdPocketFileIds_.end() && App::project().file(it->second))
-                        replaced = {it->second};
-                    pendingRuns_.push_back({rowRefs(val.toolsApertures), GCType::Pocket, key, programName, std::move(replaced)});
-                    fileName_ = programName;
-                    gcp = {};
-                    gcp.setConvent(ui->rbConventional->isChecked());
-                    gcp.setSide(GCode::Inner);
-                    gcp.tools = {val.tool};
-                    gcp.params[GCode::Params::Depth] = dsbxDepth->value();
-                    gcp.closedCurves = Geo::Polygons{val.paths};
-                    setCreator(new PocketOffset::Creator);
-                    fileCount = 1;
-                    emit createToolpath(&gcp);
-                } break;
-                default: continue;
-                }
+            if(val.paths.size() && (worckType == GCType::Profile || worckType == GCType::Pocket)) {
+                auto& createdIds = worckType == GCType::Profile ? createdProfileFileIds_ : createdPocketFileIds_;
+                std::vector<int32_t> replaced;
+                if(auto it = createdIds.find(key); it != createdIds.end() && App::project().file(it->second))
+                    replaced = {it->second};
+                GCode::Params runGcp;
+                runGcp.setConvent(ui->rbConventional->isChecked());
+                runGcp.setSide(worckType == GCType::Profile ? side : GCode::Inner);
+                runGcp.tools = {val.tool};
+                runGcp.params[GCode::Params::Depth] = dsbxDepth->value();
+                runGcp.closedCurves = Geo::Polygons{val.paths};
+                pendingRuns_.push_back({rowRefs(val.toolsApertures), worckType, key, programTag(val.tool, key), std::move(replaced), std::move(runGcp)});
             }
         }
     }
+
+    // Прогоны профиля и кармана -- по одному (см. PendingRun): первый --
+    // сейчас, следующие -- по мере прихода файлов. Пока досчитывается
+    // отменённый, первый запустит его файл.
+    if(!runInFlight && !pendingRuns_.empty())
+        startRun();
 
     if(revealId > -1) {
         GCode::layoutAndReveal(revealId);
@@ -914,44 +902,65 @@ void Form::uncheckRows(const std::vector<RowRef>& rows) {
             }
 }
 
+void Form::startRun() {
+    PendingRun& run = pendingRuns_.front();
+    // Общие поля базы -- этого прогона: по ним startProgress() подписывает
+    // полосу, а createToolpath забирает параметры в рабочий поток.
+    fileName_ = run.programName;
+    gcp = std::move(run.gcp);
+    if(run.worckType == GCType::Profile)
+        setCreator(new Profile::Creator);
+    else
+        setCreator(new PocketOffset::Creator);
+    fileCount = 1;
+    emit createToolpath(&gcp);
+}
+
 void Form::fileHandler(GCode::File* file_) {
-    // Асинхронная ветка Profile/Pocket по отверстиям кладёт свой контекст в
-    // pendingRuns_ FIFO; синхронные ветки (пазы, простые точки) сюда не
-    // попадают вовсе -- pendingRuns_ для их файлов пуст.
+    // Сюда приходят только профиль и карман по отверстиям, и голова очереди --
+    // прогон, приславший этот файл (см. PendingRun). Синхронные ветки (пазы,
+    // простые точки) добавляют УП сами, мимо fileHandler().
     PendingRun run;
     const bool isAsyncRun = !pendingRuns_.empty();
     if(isAsyncRun) {
         run = std::move(pendingRuns_.front());
         pendingRuns_.pop_front();
+        if(run.discard) {
+            // Прогон отменённого клика: его файл в проект не идёт, а за ним
+            // ждёт своей очереди новый Create.
+            delete file_;
+            if(!pendingRuns_.empty()) startRun();
+            return;
+        }
         fileName_ = run.programName;
-        // Все прогоны клика досчитаны ещё до первого fileReady, и общие поля
-        // формы к этому времени держат последний из них. Что заменить -- своё,
-        // из очереди (иначе файл первого прогона заменял бы УП последнего), и
-        // файл у прогона один: база по fileCount == 0 убирает лишнее и
-        // раскладывает дерево -- для каждого прогона, а не только для первого.
+        // Что заменить -- своё, из очереди, и файл у прогона один: база по
+        // fileCount == 0 убирает лишнее и раскладывает дерево -- для каждого
+        // прогона.
         replacedIds_ = std::move(run.replacedIds);
         fileCount = 1;
     }
-
-    // Профиль и карман считает чужой Creator, а результат приходит асинхронно:
-    // галки снимаем только теперь, когда успех (file_ != nullptr) уже известен.
-    if(file_)
-        uncheckRows(run.rows);
-
-    if(auto* drillFile = dynamic_cast<File*>(file_); drillFile) {
-        drillFile->setRows(std::move(run.rows));
-        drillFile->setWorckType(static_cast<int>(worckType));
-        drillFile->setSrcFileId(file ? file->id() : -1);
-    }
-    // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
-    // и пазам. Разложит и покажет база, в конце прогона.
-    if(file_) file_->setGroup(drillGroup(file));
 
     // Файл отменённого прогона база удаляет -- после её вызова трогать file_
     // можно, только если он принят. Принятый уже в проекте и со своим id; по
     // имени программы id не найти: имя -- инструмент, и у УП из другого файла
     // сверловки или из фигур оно то же.
     const bool accepted = file_ && !canceled();
+
+    // Профиль и карман считает чужой Creator, а результат приходит асинхронно:
+    // галки снимаем только теперь, когда успех уже известен -- файл есть, и
+    // прогон не отменён.
+    if(accepted)
+        uncheckRows(run.rows);
+
+    if(auto* drillFile = dynamic_cast<File*>(file_); drillFile) {
+        drillFile->setRows(std::move(run.rows));
+        drillFile->setWorckType(static_cast<int>(run.worckType));
+        drillFile->setSrcFileId(file ? file->id() : -1);
+    }
+    // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
+    // и пазам. Разложит и покажет база, в конце прогона.
+    if(file_) file_->setGroup(drillGroup(file));
+
     GCode::Form::fileHandler(file_);
 
     if(isAsyncRun && accepted) {
@@ -964,6 +973,15 @@ void Form::fileHandler(GCode::File* file_) {
                 programs.push_back(std::move(entry));
         }
     }
+
+    // Следующий прогон -- только теперь, когда этот досчитан. Отмена уносит и
+    // все не начатые прогоны своего клика.
+    if(canceled())
+        pendingRuns_.clear();
+    if(!pendingRuns_.empty())
+        startRun();
+    else
+        header->onChecked(); // галки сняты: «Create» и общая галка -- по таблице
 }
 
 void Form::editFile(GCode::File* file_) {
