@@ -93,7 +93,11 @@ QString Tool::codeAuto() const {
 
 bool Tool::fillMissingCode() {
     if(!data.code.isEmpty()) return false;
-    setCode(codeAuto());
+    // Типа без автоматического кода код так и останется пустым: «досоздано»
+    // -- только то, что взято, иначе tools.json переписывался бы на каждом запуске.
+    const QString code = codeAuto();
+    if(code.isEmpty()) return false;
+    setCode(code);
     return true;
 }
 

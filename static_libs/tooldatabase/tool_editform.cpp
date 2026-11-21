@@ -585,6 +585,18 @@ void ToolEditForm::materialsChanged(const std::set<QString>& removed) {
     rebuildPresets(); // имена материалов могли смениться
 }
 
+// Набор режимов годен для УП: те же нули, что ловит isValid() у собственных
+// значений инструмента, -- по операции набора.
+static bool cuttingPresetComplete(const Tool::CuttingPreset& preset) {
+    switch(preset.operation) {
+    case Tool::Operation::Drilling : return preset.passDepth > 0.0 && preset.plungeRate > 0.0;
+    case Tool::Operation::Milling  : return preset.passDepth > 0.0 && preset.feedRate > 0.0 && preset.stepover > 0.0 && preset.plungeRate > 0.0;
+    case Tool::Operation::Laser    : return preset.feedRate > 0.0 && preset.stepover > 0.0;
+    case Tool::Operation::Threading: return preset.feedRate > 0.0 && preset.plungeRate > 0.0; // шаг резьбы -- геометрия
+    }
+    return true;
+}
+
 Tool ToolEditForm::assembled() {
     storeShown();
     Tool tool{tool_};
@@ -660,6 +672,16 @@ void ToolEditForm::on_pbApply_clicked() {
     const Tool tool = assembled(); // собственные значения режимов + наборы
     if(!tool.isValid())
         return;
+    // Нули показанного набора ловит мигание полей выше, а набор, правленный
+    // раньше и сменённый на другой, ушёл бы в базу с нулевой подачей или
+    // проходом -- и в УП: F0 или проходы по 0 мм.
+    for(const Tool::CuttingPreset& preset: tool.presets())
+        if(!cuttingPresetComplete(preset)) {
+            QMessageBox::warning(this, tr("Cutting data"),
+                tr("The cutting data \"%1\" have a zero feed, pass depth or stepover. Fill them in before applying.")
+                    .arg(App::toolHolder().presetName(preset)));
+            return;
+        }
     item_->setName(tool.name());
     item_->setNote(tool.note());
     item_->tool() = tool;
