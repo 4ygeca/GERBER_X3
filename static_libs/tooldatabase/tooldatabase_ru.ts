@@ -4,7 +4,7 @@
 <context>
     <name>DepthForm</name>
     <message>
-        <location filename="tool_selectorform.cpp" line="240"/>
+        <location filename="tool_selectorform.cpp" line="241"/>
         <source>Depth:</source>
         <translation>Глубина:</translation>
     </message>
@@ -58,12 +58,12 @@ Delete the material together with them?</source>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="tool.cpp" line="281"/>
+        <location filename="tool.cpp" line="286"/>
         <source>No valid tool...!!!</source>
         <translation>Инструмент не задан...!!!</translation>
     </message>
     <message>
-        <location filename="tool.h" line="93"/>
+        <location filename="tool.h" line="95"/>
         <source>Default</source>
         <translation>По умолчанию</translation>
     </message>
@@ -71,22 +71,22 @@ Delete the material together with them?</source>
 <context>
     <name>Tool</name>
     <message>
-        <location filename="tool.cpp" line="160"/>
+        <location filename="tool.cpp" line="165"/>
         <source>Drilling</source>
         <translation>Сверловка</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="161"/>
+        <location filename="tool.cpp" line="166"/>
         <source>Milling</source>
         <translation>Фрезеровка</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="162"/>
+        <location filename="tool.cpp" line="167"/>
         <source>Laser</source>
         <translation>Лазер</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="163"/>
+        <location filename="tool.cpp" line="168"/>
         <source>Threading</source>
         <translation>Резьба</translation>
     </message>
@@ -450,12 +450,24 @@ Auto -- chosen by the post processor.</source>
         <translation>Скорость врезания</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="816"/>
+        <location filename="tooleditform.ui" line="810"/>
+        <source>Checked -- M4: the laser power follows the actual speed, the exposure stays even at corners, accelerations and decelerations.
+Unchecked -- M3: constant power, the same S at any speed: corners and slow segments get more exposure.</source>
+        <translation>Галка стоит — M4: мощность лазера следует за фактической скоростью, засветка остаётся равномерной в углах, на разгонах и торможениях.
+Без галки — M3: постоянная мощность, одно и то же S при любой скорости: углы и медленные участки засвечиваются сильнее.</translation>
+    </message>
+    <message>
+        <location filename="tooleditform.ui" line="814"/>
+        <source>Dynamic power (M4)</source>
+        <translation>Динамическая мощность (M4)</translation>
+    </message>
+    <message>
+        <location filename="tooleditform.ui" line="827"/>
         <source>Apply</source>
         <translation>Применить</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="169"/>
+        <location filename="tool_editform.cpp" line="175"/>
         <source>If the offset value is more than 50%, unmilled areas are possible.
 These errors do not appear in the visualization.</source>
         <comment>При значении отступа более 50% возможны не отфрезерованные участки. Эти ошибки не отображаются в визуализации.</comment>
@@ -501,43 +513,43 @@ These errors do not appear in the visualization.</source>
         <translation>G73 ломка стружки</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="419"/>
+        <location filename="tool_editform.cpp" line="427"/>
         <source>Laser Power (S)</source>
         <translation>Мощность лазера (S)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="427"/>
+        <location filename="tool_editform.cpp" line="435"/>
         <source>Tool defaults</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="509"/>
-        <location filename="tool_editform.cpp" line="531"/>
+        <location filename="tool_editform.cpp" line="524"/>
+        <location filename="tool_editform.cpp" line="546"/>
         <source>New cutting data</source>
         <translation>Новые режимы резания</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="519"/>
+        <location filename="tool_editform.cpp" line="534"/>
         <source>Operation:</source>
         <translation>Операция:</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="520"/>
+        <location filename="tool_editform.cpp" line="535"/>
         <source>Material:</source>
         <translation>Материал:</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="532"/>
+        <location filename="tool_editform.cpp" line="547"/>
         <source>Cutting data for &quot;%1&quot; already exist.</source>
         <translation>Режимы для «%1» уже есть.</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="621"/>
+        <location filename="tool_editform.cpp" line="636"/>
         <source>Duplicate tool code</source>
         <translation>Повтор кода инструмента</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="622"/>
+        <location filename="tool_editform.cpp" line="637"/>
         <source>The code &quot;%1&quot; is also used by:
 %2
 
@@ -548,37 +560,37 @@ The code goes into the G-code, and the sender finds the tool by it.</source>
 Код попадает в G-код, по нему отправитель находит инструмент.</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="680"/>
+        <location filename="tool_editform.cpp" line="695"/>
         <source>Cutting data</source>
         <translation>Режимы резания</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="681"/>
+        <location filename="tool_editform.cpp" line="696"/>
         <source>The cutting data &quot;%1&quot; have a zero feed, pass depth or stepover. Fill them in before applying.</source>
         <translation>В режимах «%1» нулевая подача, глубина прохода или шаг. Заполните их перед применением.</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="705"/>
+        <location filename="tool_editform.cpp" line="720"/>
         <source>End Mill (Ø%1 mm)</source>
         <translation>Концевая фреза (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="706"/>
+        <location filename="tool_editform.cpp" line="721"/>
         <source>Engrave (%2° %1 mm tip)</source>
         <translation>Гравёр (%2° %1 мм кончик)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="707"/>
+        <location filename="tool_editform.cpp" line="722"/>
         <source>Drill (Ø%1 mm)</source>
         <translation>Сверло (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="708"/>
+        <location filename="tool_editform.cpp" line="723"/>
         <source>Laser (Ø%1 mm)</source>
         <translation>Лазер (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="709"/>
+        <location filename="tool_editform.cpp" line="724"/>
         <source>Thread (Ø%1 mm)</source>
         <translation>Резьба (Ø%1 мм)</translation>
     </message>
@@ -586,48 +598,48 @@ The code goes into the G-code, and the sender finds the tool by it.</source>
 <context>
     <name>ToolHolder</name>
     <message>
-        <location filename="tool.cpp" line="514"/>
+        <location filename="tool.cpp" line="520"/>
         <source>unknown (%1)</source>
         <translation>неизвестный (%1)</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="519"/>
-        <location filename="tool_editform.cpp" line="516"/>
+        <location filename="tool.cpp" line="525"/>
+        <location filename="tool_editform.cpp" line="531"/>
         <source>Any material</source>
         <translation>Любой материал</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="533"/>
+        <location filename="tool.cpp" line="539"/>
         <source>FR4</source>
         <translation>FR4</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="534"/>
+        <location filename="tool.cpp" line="540"/>
         <source>Aluminium</source>
         <translation>Алюминий</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="535"/>
+        <location filename="tool.cpp" line="541"/>
         <source>Stainless steel</source>
         <translation>Нержавеющая сталь</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="536"/>
+        <location filename="tool.cpp" line="542"/>
         <source>Film</source>
         <translation>Плёнка</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="537"/>
+        <location filename="tool.cpp" line="543"/>
         <source>Plastic</source>
         <translation>Пластик</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="538"/>
+        <location filename="tool.cpp" line="544"/>
         <source>Photoresist</source>
         <translation>Фоторезист</translation>
     </message>
     <message>
-        <location filename="tool.cpp" line="539"/>
+        <location filename="tool.cpp" line="545"/>
         <source>Solder mask</source>
         <translation>Паяльная маска</translation>
     </message>
@@ -643,59 +655,59 @@ The code goes into the G-code, and the sender finds the tool by it.</source>
 <context>
     <name>ToolSelectorForm</name>
     <message>
-        <location filename="tool_selectorform.cpp" line="157"/>
+        <location filename="tool_selectorform.cpp" line="158"/>
         <source>Edited for this toolpath only (the tool database is not changed)</source>
         <translation>Изменён только для этой УП (база инструментов не меняется)</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="159"/>
+        <location filename="tool_selectorform.cpp" line="160"/>
         <source>Cutting data: %1</source>
         <translation>Режимы: %1</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="161"/>
+        <location filename="tool_selectorform.cpp" line="162"/>
         <source>Cutting data: tool defaults</source>
         <translation>Режимы: значения инструмента по умолчанию</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="171"/>
+        <location filename="tool_selectorform.cpp" line="172"/>
         <source>Project material (%1)</source>
         <translation>Материал проекта (%1)</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="171"/>
+        <location filename="tool_selectorform.cpp" line="172"/>
         <source>not set</source>
         <translation>не задан</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="238"/>
-        <location filename="tool_selectorform.cpp" line="314"/>
+        <location filename="tool_selectorform.cpp" line="239"/>
+        <location filename="tool_selectorform.cpp" line="315"/>
         <source>Tool:</source>
         <translation>Инструмент:</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="239"/>
-        <location filename="tool_selectorform.cpp" line="317"/>
+        <location filename="tool_selectorform.cpp" line="240"/>
+        <location filename="tool_selectorform.cpp" line="318"/>
         <source>Material:</source>
         <translation>Материал:</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="310"/>
+        <location filename="tool_selectorform.cpp" line="311"/>
         <source>Form</source>
         <translation>Форма</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="312"/>
+        <location filename="tool_selectorform.cpp" line="313"/>
         <source>Tool %1:</source>
         <translation>Инструмент %1:</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="315"/>
+        <location filename="tool_selectorform.cpp" line="316"/>
         <source>Edit</source>
         <translation>Редактировать</translation>
     </message>
     <message>
-        <location filename="tool_selectorform.cpp" line="316"/>
+        <location filename="tool_selectorform.cpp" line="317"/>
         <source>Select</source>
         <translation>Выбрать</translation>
     </message>

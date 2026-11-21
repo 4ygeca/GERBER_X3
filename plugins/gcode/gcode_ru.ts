@@ -750,73 +750,73 @@ Already calculated toolpaths keep their cutting data.</source>
         <translation>Группа %1</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="210"/>
+        <location filename="gc_node.cpp" line="226"/>
         <source>Save as &amp;Job...</source>
         <translation>Сохранить как &amp;задание...</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="226"/>
+        <location filename="gc_node.cpp" line="242"/>
         <source>New Group</source>
         <translation>Новая группа</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="226"/>
-        <location filename="gc_node.cpp" line="470"/>
+        <location filename="gc_node.cpp" line="242"/>
+        <location filename="gc_node.cpp" line="486"/>
         <source>Group name:</source>
         <translation>Имя группы:</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="233"/>
+        <location filename="gc_node.cpp" line="249"/>
         <source>&amp;Group Selected...</source>
         <translation>&amp;Сгруппировать выделенные...</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="234"/>
+        <location filename="gc_node.cpp" line="250"/>
         <source>&amp;Move to Group</source>
         <translation>&amp;Переместить в группу</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="245"/>
+        <location filename="gc_node.cpp" line="261"/>
         <source>&amp;New Group...</source>
         <translation>&amp;Новая группа...</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="247"/>
+        <location filename="gc_node.cpp" line="263"/>
         <source>&amp;Remove from Group</source>
         <translation>&amp;Убрать из группы</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="372"/>
+        <location filename="gc_node.cpp" line="388"/>
         <source>&amp;Save Toolpath</source>
         <translation>&amp;Сохранить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="377"/>
+        <location filename="gc_node.cpp" line="393"/>
         <source>&amp;Hide other</source>
         <translation>&amp;Скрыть остальные</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="381"/>
+        <location filename="gc_node.cpp" line="397"/>
         <source>&amp;Show source</source>
         <translation>&amp;Показать источник</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="389"/>
+        <location filename="gc_node.cpp" line="405"/>
         <source>&amp;Delete Toolpath</source>
         <translation>&amp;Удалить траекторию</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="468"/>
+        <location filename="gc_node.cpp" line="484"/>
         <source>&amp;Rename Group...</source>
         <translation>П&amp;ереименовать группу...</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="470"/>
+        <location filename="gc_node.cpp" line="486"/>
         <source>Rename Group</source>
         <translation>Переименование группы</translation>
     </message>
     <message>
-        <location filename="gc_node.cpp" line="476"/>
+        <location filename="gc_node.cpp" line="492"/>
         <source>&amp;Ungroup</source>
         <translation>&amp;Разгруппировать</translation>
     </message>
@@ -934,9 +934,11 @@ Already calculated toolpaths keep their cutting data.</source>
     <message>
         <location filename="gc_job.cpp" line="172"/>
         <source>No tool paths are selected.
-Select the tool paths of the job in the tree: several with Ctrl or Shift, or a whole group.</source>
+Mark the tool paths of the job with their checkboxes in the tree, or select several with Ctrl or Shift, or a whole group.</source>
+        <oldsource>No tool paths are selected.
+Select the tool paths of the job in the tree: several with Ctrl or Shift, or a whole group.</oldsource>
         <translation>Не выбрано ни одной УП.
-Выделите УП задания в дереве: несколько — с Ctrl или Shift, или целую группу.</translation>
+Отметьте УП задания галочками в дереве или выделите несколько — с Ctrl или Shift, или целую группу.</translation>
     </message>
     <message>
         <location filename="gc_job.cpp" line="195"/>
@@ -958,22 +960,22 @@ Save them as separate jobs.</source>
 Сохраните их разными заданиями.</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="329"/>
+        <location filename="gc_job.cpp" line="332"/>
         <source>Save as Job</source>
         <translation>Сохранить как задание</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="344"/>
+        <location filename="gc_job.cpp" line="347"/>
         <source>Save Job</source>
         <translation>Сохранить задание</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="346"/>
+        <location filename="gc_job.cpp" line="349"/>
         <source>GCode (*.%1)</source>
         <translation>УП (*.%1)</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="366"/>
+        <location filename="gc_job.cpp" line="369"/>
         <source>Cannot write the job file &quot;%1&quot;.
 %2</source>
         <translation>Не удалось записать файл задания «%1».

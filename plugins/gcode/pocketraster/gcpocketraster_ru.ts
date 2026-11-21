@@ -24,42 +24,42 @@
         <translation>Карман растровый</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="229"/>
+        <location filename="pocketraster_form.cpp" line="233"/>
         <source>Raster border</source>
         <translation>Граница растра</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="317"/>
+        <location filename="pocketraster_form.cpp" line="332"/>
         <source>The raster ends about 1 mm beyond the selected objects.</source>
         <translation>Растр кончается примерно в 1 мм за выделенными объектами.</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="319"/>
+        <location filename="pocketraster_form.cpp" line="334"/>
         <source>Not set: the raster ends about 1 mm beyond the selected objects.</source>
         <translation>Не задана: растр кончается примерно в 1 мм за выделенными объектами.</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="347"/>
+        <location filename="pocketraster_form.cpp" line="362"/>
         <source>Board outline: %1, contours: %2. The raster ends at the innermost contour around the selected objects.</source>
         <translation>Контур платы: %1, контуров: %2. Растр кончается на самом внутреннем контуре вокруг выделенных объектов.</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="389"/>
+        <location filename="pocketraster_form.cpp" line="404"/>
         <source>Selected objects outside the outline: %1, there the raster ends about 1 mm beyond the selected objects.</source>
         <translation>Выделенных объектов вне контура: %1, там растр кончается примерно в 1 мм за выделенными объектами.</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="391"/>
+        <location filename="pocketraster_form.cpp" line="406"/>
         <source>Selected objects outside the outline: %1, there the raster goes up to the board border (violet frame).</source>
         <translation>Выделенных объектов вне контура: %1, там растр идёт до границы платы (фиолетовой рамки).</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="396"/>
+        <location filename="pocketraster_form.cpp" line="411"/>
         <source>Board outline: %1, innermost contour around the selection (contours: %2 of %3), %4 × %5 mm</source>
         <translation>Контур платы: %1, самый внутренний контур вокруг выделенного (контуров: %2 из %3), %4 × %5 мм</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="410"/>
+        <location filename="pocketraster_form.cpp" line="425"/>
         <source>Board outline: %1, no contour encloses the selected objects: the raster ends about 1 mm beyond them, %2 × %3 mm</source>
         <translation>Контур платы: %1, ни один контур не охватывает выделенные объекты: растр кончается примерно в 1 мм за ними, %2 × %3 мм</translation>
     </message>
@@ -68,12 +68,12 @@
         <translation type="vanished">Слой контура: %1, %2 × %3 мм</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="418"/>
+        <location filename="pocketraster_form.cpp" line="433"/>
         <source>No board outline layer: the raster ends about 1 mm beyond the selected objects.</source>
         <translation>Слоя контура платы нет: растр кончается примерно в 1 мм за выделенными объектами.</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="419"/>
+        <location filename="pocketraster_form.cpp" line="434"/>
         <source>No board outline layer is loaded: the raster ends about 1 mm beyond the selected objects.
 
 Continue?</source>
@@ -82,12 +82,12 @@ Continue?</source>
 Продолжить?</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="427"/>
+        <location filename="pocketraster_form.cpp" line="442"/>
         <source>Board border (violet frame), %1 × %2 mm</source>
         <translation>Граница платы (фиолетовая рамка), %1 × %2 мм</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="439"/>
+        <location filename="pocketraster_form.cpp" line="454"/>
         <source>Some selected objects lie outside the board outline layer, and the board border (violet frame) is not set: the raster ends about 1 mm beyond the selected objects.
 
 Continue?</source>
@@ -96,7 +96,7 @@ Continue?</source>
 Продолжить?</translation>
     </message>
     <message>
-        <location filename="pocketraster_form.cpp" line="445"/>
+        <location filename="pocketraster_form.cpp" line="460"/>
         <source>The board border is not set: the raster ends about 1 mm beyond the selected objects.
 Set it with &quot;Set Board Border&quot; or load the board outline layer.
 
@@ -228,16 +228,28 @@ otherwise about 1 mm beyond the selected objects.</oldsource>
     </message>
     <message>
         <location filename="pocketrasterform.ui" line="322"/>
+        <source>After all the raster lines, trace the contours of the exposed area with the beam: sharp edges without the steps of the raster lines.
+For the plain raster and for HLDI.</source>
+        <translation>После всех строк растра обвести лучом контуры засвечиваемой области: чёткие края без ступенек от строк растра.
+И для обычного растра, и для HLDI.</translation>
+    </message>
+    <message>
+        <location filename="pocketrasterform.ui" line="326"/>
+        <source>Outline the contour after the raster</source>
+        <translation>Обвести контур после растра</translation>
+    </message>
+    <message>
+        <location filename="pocketrasterform.ui" line="333"/>
         <source>Acceleration:</source>
         <translation>Ускорение:</translation>
     </message>
     <message>
-        <location filename="pocketrasterform.ui" line="335"/>
+        <location filename="pocketrasterform.ui" line="346"/>
         <source>Raster Angle:</source>
         <translation>Угол растра:</translation>
     </message>
     <message>
-        <location filename="pocketrasterform.ui" line="348"/>
+        <location filename="pocketrasterform.ui" line="359"/>
         <source> °</source>
         <translation> °</translation>
     </message>
