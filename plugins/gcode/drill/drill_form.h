@@ -22,6 +22,7 @@ class DrillForm;
 }
 
 class QCheckBox;
+class ToolDatabase;
 
 namespace Drilling {
 
@@ -99,6 +100,13 @@ private:
     // правка уходит и остальным выделенным строкам с тем же инструментом базы,
     // если сама строка среди выделенных.
     void editRowTool(int row);
+    // Открыть базу на инструменте строки (подсветить его), как «Выбрать» в
+    // формах фрезеровки. Строка без инструмента -- база как есть.
+    void selectRowTool(ToolDatabase& tdb, int row) const;
+    // Строка, чей инструмент подсветить в базе при выборе для нескольких строк:
+    // preferred (строка под курсором), если у неё есть инструмент, иначе первая
+    // из indexes с инструментом; -1 -- такой нет.
+    int toolRowOf(const QModelIndexList& indexes, int preferred = -1) const;
 
     void on_cbxFileCurrentIndexChanged();
     void on_doubleClicked(const QModelIndex& current);

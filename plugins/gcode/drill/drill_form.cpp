@@ -445,6 +445,30 @@ void Form::editRowTool(int row) {
         model->setToolOverride(r, toolOverride);
 }
 
+void Form::selectRowTool(ToolDatabase& tdb, int row) const {
+    if(!model || row < 0 || row >= model->rowCount() || model->toolId(row) <= Tool::ID::Null)
+        return;
+    // Ни правки, ни инструмента в базе (его удалили) -- подсвечивать нечего, а
+    // Row::tool() -- это .at().
+    if(!model->hasOverride(row) && !App::toolHolder().tools().contains(model->toolId(row)))
+        return;
+    // Как ToolSelectorForm::on_pbSelect_clicked: по uid, а у снимка без uid --
+    // по id, если под ним тот же инструмент. Правка строки -- копия инструмента
+    // базы с его uid, по ней база и находится.
+    if(const Tool* found = App::toolHolder().findTool(model->tool(row)))
+        tdb.setCurrentTool(found->id());
+}
+
+int Form::toolRowOf(const QModelIndexList& indexes, int preferred) const {
+    if(!model) return -1;
+    if(preferred > -1 && preferred < model->rowCount() && model->toolId(preferred) > Tool::ID::Null)
+        return preferred;
+    for(const QModelIndex& index: indexes)
+        if(model->toolId(index.row()) > Tool::ID::Null)
+            return index.row();
+    return -1;
+}
+
 void Form::on_doubleClicked(const QModelIndex& current) {
     if(current.column() == Model::Tool) {
         // Тот же выбор типов, что в контекстном меню: паз -- концевая фреза,
@@ -454,6 +478,7 @@ void Form::on_doubleClicked(const QModelIndex& current) {
             : (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill}
                                            : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
         ToolDatabase tdb(this, tools);
+        selectRowTool(tdb, current.row());
         if(tdb.exec()) {
             const Tool tool(tdb.tool());
             model->setToolId(current.row(), tool.id());
@@ -476,7 +501,9 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
     if(selectedIndexes().isEmpty())
         return;
     QMenu menu;
-    menu.addAction(QIcon::fromTheme(u"view-form"_s), tr("&Select Tool"), [this] {
+    // База -- на инструменте строки под курсором (иначе первой выделенной с ним).
+    const int toolRow = toolRowOf(selectedIndexes(), ui->toolTable->indexAt(pos).row());
+    menu.addAction(QIcon::fromTheme(u"view-form"_s), tr("&Select Tool"), [this, toolRow] {
         bool flag = true;
         for(QModelIndex current: selectedIndexes()) {
             flag = model->isSlot(current.row());
@@ -491,6 +518,7 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
             tools = (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill} : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
 
         ToolDatabase tdb(this, tools);
+        selectRowTool(tdb, toolRow);
         if(tdb.exec()) {
             const Tool tool(tdb.tool());
             for(QModelIndex current: selectedIndexes()) {
@@ -567,6 +595,7 @@ void Form::customContextMenuRequested(const QPoint& pos) {
         else
             tools = (worckType == GCType::Drill) ? std::vector<Tool::Type>{Tool::Drill, Tool::EndMill} : std::vector<Tool::Type>{Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
         ToolDatabase tdb(this, tools);
+        selectRowTool(tdb, toolRowOf(selectedIndexes()));
         if(tdb.exec()) {
             const Tool tool(tdb.tool());
             for(QModelIndex current: selectedIndexes()) {
