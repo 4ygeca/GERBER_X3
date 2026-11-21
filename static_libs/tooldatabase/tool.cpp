@@ -119,6 +119,7 @@ Tool::CuttingPreset Tool::cuttingData() const {
         .drillCycle = data.drillCycle,
         .dwell = data.dwell,
         .retractToR = data.retractToR,
+        .laserDynamic = data.laserDynamic,
     };
 }
 
@@ -134,6 +135,7 @@ void Tool::setCuttingData(const CuttingPreset& preset) {
     data.drillCycle = preset.drillCycle;
     data.dwell = preset.dwell;
     data.retractToR = preset.retractToR;
+    data.laserDynamic = preset.laserDynamic;
 }
 
 std::vector<Tool::Operation> Tool::operations(Type type) {
@@ -311,6 +313,7 @@ size_t Tool::hash() const {
     push_back(data.drillCycle);
     push_back(data.dwell);
     push_back(data.retractToR);
+    push_back(data.laserDynamic);
     push_back(data.id);
     return hash_ = qHash(hashData);
 }

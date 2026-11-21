@@ -94,6 +94,7 @@ private:
     void storeShown();
     void loadCutFields();
     void loadDrillFields();
+    void loadLaserFields();
     void addPreset();
     void removePreset();
     // Инструмент для базы: собственные значения режимов и все наборы.

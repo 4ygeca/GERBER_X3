@@ -804,6 +804,17 @@ Auto -- chosen by the post processor.</string>
            </property>
           </widget>
          </item>
+         <item row="3" column="1">
+          <widget class="QCheckBox" name="chbxLaserDynamic">
+           <property name="toolTip">
+            <string>Checked -- M4: the laser power follows the actual speed, the exposure stays even at corners, accelerations and decelerations.
+Unchecked -- M3: constant power, the same S at any speed: corners and slow segments get more exposure.</string>
+           </property>
+           <property name="text">
+            <string>Dynamic power (M4)</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>

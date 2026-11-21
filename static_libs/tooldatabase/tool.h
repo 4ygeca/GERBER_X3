@@ -76,6 +76,8 @@ public:
         int drillCycle{};
         double dwell{};
         bool retractToR{};
+        // У набора без ключа (tools.json прежней версии) -- M4, как было всегда.
+        bool laserDynamic{true};
 
         void read(const QJsonObject& json);
         void write(QJsonObject& json) const;
@@ -113,6 +115,10 @@ private:
         double dwell{0.};       // выдержка на дне, с (G82)
         bool retractToR{false}; // G99: между отверстиями -- на плоскость R, а не на исходную
         QString material;       // uid материала, чей набор режимов применён к ЭТОМУ снимку; пусто -- свои значения
+        // Режим мощности лазера: true -- M4, мощность следует за фактической
+        // скоростью (так лазер включался всегда); false -- M3, постоянная.
+        // Скрипты читают file.tool.laserDynamic (laserTile в common_gcode.js).
+        bool laserDynamic{true};
     } data;
 
 public:
@@ -197,6 +203,9 @@ public:
     // material
     QString material() const { return data.material; }
     void setMaterial(const QString& material) { resetHash(), data.material = material; }
+    // laserDynamic -- M4 (мощность по скорости) или M3 (постоянная)
+    bool laserDynamic() const { return data.laserDynamic; }
+    void setLaserDynamic(bool dynamic) { resetHash(), data.laserDynamic = dynamic; }
 
     // Наборы режимов (только у инструментов базы; в hash() не входят).
     const std::vector<CuttingPreset>& presets() const { return presets_; }

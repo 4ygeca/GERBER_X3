@@ -144,6 +144,12 @@ ToolEditForm::ToolEditForm(QWidget* parent)
         tool_.setRetractToR(retract);
         setChanged();
     });
+    // Режим мощности лазера (M4/M3) -- такой же режим резания, как мощность S:
+    // у собственных значений и у каждого набора свой.
+    connect(ui->chbxLaserDynamic, &QCheckBox::toggled, this, [this](bool dynamic) {
+        tool_.setLaserDynamic(dynamic);
+        setChanged();
+    });
 
     // Наборы режимов «операция x материал»
     ui->tbAddPreset->setIcon(QIcon::fromTheme(u"list-add"_s));
@@ -236,6 +242,7 @@ void ToolEditForm::setTool(const Tool& tool) {
     tool_.setFeedRate(tool.feedRate());
     tool_.setPlungeRate(tool.plungeRate());
     loadDrillFields();
+    loadLaserFields();
 
     for(DoubleSpinBox* dsbx: dsbxList)
         dsbx->setProperty("lastVal", qFuzzyIsNull(dsbx->value()) ? QVariant{} : QVariant{dsbx->value()});
@@ -411,6 +418,7 @@ void ToolEditForm::showRows(bool restoreLast) {
     case Tool::Operation::Laser:
         show(ui->formFeedSpeeds, ui->dsbxFeedRate, 100000.);
         showPair(ui->formCutParam, ui->hlayStepover, ui->dsbxStepover, diameter);
+        ui->formFeedSpeeds->setRowVisible(ui->chbxLaserDynamic, true);
         break;
     }
 
@@ -490,6 +498,7 @@ void ToolEditForm::loadCutFields() {
     if(tool_.type() != Tool::ThreadMill)
         tool_.setPassDepth(passDepth);
     loadDrillFields();
+    loadLaserFields();
     updateWarn();
 }
 
@@ -501,6 +510,12 @@ void ToolEditForm::loadDrillFields() {
     ui->cbxDrillCycle->setCurrentIndex(std::max(0, ui->cbxDrillCycle->findData(tool_.drillCycle())));
     ui->dsbxDwell->setValue(tool_.dwell());
     ui->chbxRetractToR->setChecked(tool_.retractToR());
+}
+
+void ToolEditForm::loadLaserFields() {
+    // Как и поля сверловки -- вслед за tool_, без правки.
+    const QSignalBlocker blocker{ui->chbxLaserDynamic};
+    ui->chbxLaserDynamic->setChecked(tool_.laserDynamic());
 }
 
 void ToolEditForm::addPreset() {

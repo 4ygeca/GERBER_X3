@@ -135,6 +135,7 @@ void ToolSelectorForm::setSnapshot(const Tool& tool) {
         probe.setDrillCycle(fromBase.drillCycle());
         probe.setDwell(fromBase.dwell());
         probe.setRetractToR(fromBase.retractToR());
+        probe.setLaserDynamic(fromBase.laserDynamic());
         probe.setMaterial(fromBase.material());
     }
     edited_ = probe.hash() != fromBase.hash();
