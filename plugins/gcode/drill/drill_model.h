@@ -14,8 +14,11 @@
 #include <QAbstractTableModel>
 #include <QIcon>
 #include <array>
+#include <map>
 #include <optional>
 #include <vector>
+
+class QJsonArray;
 
 namespace Drilling {
 
@@ -59,8 +62,46 @@ constexpr bool canProcess(Tool::Type type, Mode mode) {
 // Какие инструменты строка принимает из базы. Паз -- только концевую фрезу: его
 // фрезеруют и при сверловке (вдоль пути). Сверловка отверстий -- сверло или
 // фреза (врезание). Карман и профиль -- то же, что их собственные формы:
-// фреза, гравёр, лазер.
+// фреза, гравёр, лазер, -- и сверло: выбранное, оно переводит строку на
+// сверловку (Model::setToolId). Без него сверлить отверстия, которые решили
+// было фрезеровать, можно было только в два шага: сперва режим, потом сверло.
 std::vector<Tool::Type> toolTypes(Mode mode, bool slot);
+
+// Подходит ли инструмент этого типа строке, когда его выбирают из базы сразу
+// нескольким строкам: паз -- только концевая фреза, отверстиям -- то, что
+// умеет их режим, и сверло всегда (переведёт строку на сверловку). Всё, что
+// предлагает toolTypes(), подходит.
+constexpr bool toolFits(Tool::Type type, Mode mode, bool slot) {
+    if(slot) return type == Tool::EndMill;
+    return type == Tool::Drill || canProcess(type, mode);
+}
+
+// Операция УП для инструмента строки: сверловка -- только в режиме сверловки и
+// не у паза (пазы фрезеруются вдоль, drilling.js -- millingProfilePath),
+// лазер и резьба -- по типу, остальное -- фрезеровка. Под неё берутся режимы.
+inline Tool::Operation operationOf(Tool::Type type, Mode mode, bool slot) {
+    return Tool::programOperation(type, mode == Mode::Drilling && !slot);
+}
+
+// Порядок инструментов в дереве базы: id -> место при обходе дерева сверху
+// вниз. Дерево (папки-наборы и порядок в них) хранит не ToolHolder, а окно
+// базы -- ключом "tree" в tools.json (ToolModel::exportTools).
+using TreeOrder = std::map<Tool::ID, int>;
+TreeOrder toolTreeOrder(const QJsonArray& tree);
+// То же из tools.json, который читает база (ToolHolder::readTools); нет файла
+// или дерева -- пусто.
+TreeOrder toolTreeOrder();
+
+// Инструмент базы для строки -- «Подобрать инструменты» и автоподбор при
+// показе файла. Только строкам в режиме сверловки: фреза под карман или
+// профиль должна быть меньше отверстия, а насколько -- решает пользователь.
+// Кандидаты -- в пределах 5% диаметра: отверстию -- сверло или концевая фреза
+// (врезание), пазу -- только концевая фреза (его фрезеруют вдоль). Из них --
+// по порядку: сверло раньше фрезы; точный диаметр раньше близкого; заданная
+// длина рабочей части (больше 1 мм) раньше незаданной (1 мм по умолчанию), а
+// та раньше 0.1 мм -- так помечают сломанное сверло; дальше -- порядок в дереве
+// базы, затем меньший id. Null -- подходящего нет.
+Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, const TreeOrder& order = {});
 
 struct Row {
     // Row(QString&& name = {},
@@ -97,6 +138,9 @@ class Model : public QAbstractTableModel {
     Q_OBJECT
 
     std::vector<Row> data_;
+    // Материал, под который форма берёт режимы строк (её выбор или материал
+    // проекта), -- для подсказки, чьи режимы у инструмента строки.
+    QString material_;
 
 signals:
     void set(int, bool);
@@ -140,6 +184,9 @@ public:
     void setToolId(int row, Tool::ID id, ToolOverride toolOverride = {});
     // Правка инструмента только для этой УП; nullopt -- снова инструмент из базы.
     void setToolOverride(int row, ToolOverride toolOverride);
+    // Материал режимов строк (uid; пусто -- без материала): подсказки столбца
+    // Tool -- по нему.
+    void setMaterial(const QString& material);
     // void setType(int type_) { type = type_; }
 
     static QString modeName(Drilling::Mode mode);

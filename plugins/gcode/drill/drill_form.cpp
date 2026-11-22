@@ -24,6 +24,7 @@
 // #include "file.h"
 // #include "gi_point.h"
 // #include "gi_preview.h"
+#include "ft_model.h"
 #include "gc_node.h"
 #include "graphicsview.h"
 // #include "project.h"
@@ -46,7 +47,9 @@
 #include <QWheelEvent>
 #include <QWidget>
 #include <algorithm>
+#include <optional>
 #include <set>
+#include <span>
 
 namespace Drilling {
 
@@ -114,25 +117,124 @@ static Mode modeOf(GCType type, bool conventional) {
     }
 }
 
-// Группа в дереве по умолчанию: все УП одного файла сверловки (сверловка,
-// пазы, профиль и карман по отверстиям) -- в одну группу с его именем. Новые
-// УП ложатся туда же, где уже лежат прежние УП этого файла: так они находят
-// группу и после переименования. Сверловка и пазы помнят свой файл сами
-// (srcFileId), профиль и карман -- чужие File без этого поля, их форма
-// помнит в srcPrograms_. Заменяемой на месте УП группу оставит
-// File::initFrom -- её мог переложить пользователь.
+// Файл сверловки, из которого форма посчитала эту УП: у сверловки и пазов --
+// поле srcFileId, у кармана и профиля по отверстиям -- ключ SrcFileParam (их
+// File чужие). Не УП формы, или карман и профиль из проектов до этого ключа --
+// nullopt.
+static std::optional<int32_t> sourceOf(const GCode::File* program) {
+    if(auto* drill = dynamic_cast<const File*>(program)) return drill->srcFileId();
+    const auto& params = program->params().params;
+    if(auto it = params.find(SrcFileParam); it != params.end()) return static_cast<int32_t>(it->second.toInt());
+    return std::nullopt;
+}
+
+// Инструмент, под который посчитана УП (MultiToolIndex). Params::tool()
+// индексирует без проверки, а УП без инструмента бывают (отладочные).
+static const Tool* programTool(const GCode::Params& params) {
+    const auto it = params.params.find(GCode::Params::MultiToolIndex);
+    const qsizetype index = it != params.params.end() ? it->second.toInt() : 0;
+    return 0 <= index && index < std::ssize(params.tools) ? &params.tools[index] : nullptr;
+}
+
+// Режим кармана и профиля по отверстиям -- по типу их УП и направлению.
+static std::optional<Mode> holeMillingMode(const GCode::File* program) {
+    const GCode::Params& params = program->params();
+    const bool conventional = params.params.contains(GCode::Params::Convent) && params.convent();
+    if(program->type() == PocketOffset::POCKET_OFFSET) return modeOf(GCType::Pocket, conventional);
+    if(program->type() == Profile::PROFILE) return modeOf(GCType::Profile, conventional);
+    return std::nullopt;
+}
+
+// Ключ, под которым форма посчитала бы эту УП снова, -- тот, что получат её
+// строки при правке (editFile): инструмент правлен только для этой УП или его
+// в базе уже нет -- строка берёт копию из УП, и в ключе хэш копии. Файл
+// сверловки неизвестен (не УП формы, карман и профиль до SrcFileParam) --
+// nullopt.
+static std::optional<ProgramKey> programKeyOf(const GCode::File* program) {
+    const Tool* tool = programTool(program->params());
+    if(!tool) return std::nullopt;
+    auto toolKey = [tool](bool edited) {
+        const bool copy = edited || !App::toolHolder().tools().contains(tool->id());
+        return ToolKey{tool->id(), copy ? tool->hash() : size_t{}};
+    };
+    const GCode::Params& params = program->params();
+    if(auto* drill = dynamic_cast<const File*>(program)) {
+        // Карман и профиль формы до режимов у строк (Drilling::File с worckType
+        // кармана или профиля) -- УП другой обработки: теперь их считают чужие
+        // File, и заменять ими сверловку нельзя.
+        const auto type = static_cast<GCType>(drill->worckType());
+        if(type == GCType::Pocket || type == GCType::Profile) return std::nullopt;
+        return ProgramKey{drill->srcFileId(), Mode::Drilling, params.slotPaths(), toolKey(r::any_of(drill->rows(), &RowRef::overridden))};
+    }
+    const auto source = params.params.find(SrcFileParam);
+    const std::optional<Mode> mode = holeMillingMode(program);
+    if(source == params.params.end() || !mode) return std::nullopt;
+    return ProgramKey{static_cast<int32_t>(source->second.toInt()), *mode, false, toolKey(params.params.contains(ToolEditedParam))};
+}
+
+// Карман или профиль по отверстиям из проекта до SrcFileParam: файл сверловки у
+// такой УП неизвестен, и узнаётся она по имени (programTag и modeTag --
+// инструмент, правка, режим), инструменту и обработке. Формы кармана и профиля
+// пишут источник (GrItems) -- их УП так не спутать.
+static bool isLegacyHoleMilling(const GCode::File* program, const ProgramKey& key, const QString& programName) {
+    const GCode::Params& params = program->params();
+    if(programName.isEmpty() || program->programName() != programName
+        || params.params.contains(SrcFileParam) || params.params.contains(GCode::Params::GrItems))
+        return false;
+    const Tool* tool = programTool(params);
+    return tool && tool->id() == key.tool.id && holeMillingMode(program) == key.mode;
+}
+
+ProgramMatch matchProgram(const GCode::File* program, const ProgramKey& key, const QString& programName) {
+    if(!program) return ProgramMatch::None;
+    if(const std::optional<ProgramKey> found = programKeyOf(program))
+        return *found == key ? ProgramMatch::Exact : ProgramMatch::None;
+    return isLegacyHoleMilling(program, key, programName) ? ProgramMatch::Legacy : ProgramMatch::None;
+}
+
+// Лишние УП -- вместе с их строками в дереве: файл живёт ровно столько,
+// сколько его узел (так же убирает лишние и GCode::Form::fileHandler).
+static void removePrograms(std::span<const int32_t> ids) {
+    for(int32_t id: ids)
+        if(auto* stale = App::project().file(id)) App::fileModel().removeNode(stale->node());
+}
+
+QString Form::group() const { return leName->text().trimmed(); }
+
+// Группа по умолчанию: все УП одного файла сверловки (сверловка, пазы, профиль
+// и карман по отверстиям) -- в одну группу с его именем. Если УП этого файла
+// уже лежат в группе, то в неё же: так она находится и после переименования.
 QString Form::drillGroup(const AbstractFile* srcFile) const {
     if(!srcFile) return {}; // окружности-фигуры, а не файл -- без группы
-    for(const File* sibling: App::project().files<File>())
-        if(sibling->srcFileId() == srcFile->id() && !sibling->group().isEmpty())
-            return sibling->group();
-    if(auto it = srcPrograms_.find(srcFile->id()); it != srcPrograms_.end())
-        for(const auto& [id, programName]: it->second)
-            // id в проекте переиспользуются -- сверяется и имя программы.
-            if(auto* sibling = dynamic_cast<const GCode::File*>(App::project().file(id));
-                sibling && sibling->programName() == programName && !sibling->group().isEmpty())
-                return sibling->group();
+    for(const GCode::File* program: App::project().files<GCode::File>())
+        if(!program->group().isEmpty() && sourceOf(program) == srcFile->id())
+            return program->group();
     return srcFile->shortName();
+}
+
+std::vector<int32_t> Form::programsOf(const QString& group, const ProgramKey& key, const QString& programName) const {
+    std::vector<int32_t> ids, legacy;
+    for(const GCode::File* program: App::project().files<GCode::File>()) {
+        if(program->group() != group)
+            continue;
+        switch(matchProgram(program, key, programName)) {
+        case ProgramMatch::Exact : ids.push_back(program->id()); break;
+        case ProgramMatch::Legacy: legacy.push_back(program->id()); break;
+        case ProgramMatch::None  : break;
+        }
+    }
+    // Карман и профиль из проектов до SrcFileParam: файл сверловки у них
+    // неизвестен. Одна такая УП в группе -- она и есть прежняя УП этого ключа.
+    // Несколько -- это УП разных файлов (PTH и NPTH в одной группе), и какая из
+    // них этого файла, не понять: заменить можно чужую. Тогда новая ляжет
+    // рядом, а прежние останутся; лишними такие УП не считаются никогда.
+    if(ids.empty() && legacy.size() == 1)
+        ids = std::move(legacy);
+    // Открытая на правку УП (editFile) -- первой: «Обновить» заменяет её саму,
+    // с её строкой в дереве и id, а лишними уходят копии.
+    if(auto it = r::find(ids, fileId); it != ids.end())
+        std::rotate(ids.begin(), it, std::next(it));
+    return ids;
 }
 
 /////////////////////////////////////////////
@@ -153,6 +255,7 @@ Form::Form(GCode::Plugin* plugin)
         MySettings settings;
         settings.beginGroup(u"DrillForm"_s);
         settings.getValue(ui->chbxZoomToSelected);
+        materialChoice_ = settings.value(u"material"_s).toString();
         // Режим, сторона и направление на всю форму ушли в строки таблицы
         // (столбец Mode) -- их прежние ключи больше не читаются. Не переносятся
         // нарочно: режим прошлой формы по умолчанию для всех строк оставил бы
@@ -161,6 +264,34 @@ Form::Form(GCode::Plugin* plugin)
             settings.remove(key);
         settings.endGroup();
     }
+
+    // Имя программы у сверловки ничего не значило: УП зовутся по инструменту и
+    // режиму. Поле -- группа (папка в дереве УП), и подпись -- о том же.
+    // Строки сетки базы -- договор с наследниками (см. GCode::Form): подпись
+    // поля имени -- в строке 4.
+    if(QLayoutItem* item = grid->itemAtPosition(4, 0))
+        if(auto* label = qobject_cast<QLabel*>(item->widget())) label->setText(tr("Group:"));
+    leName->setPlaceholderText(tr("No group"));
+    leName->setToolTip(tr("Group (folder in the toolpath tree) for all toolpaths of this Create.\n"
+                          "Toolpaths of the same file, mode and tool already in this group are updated in place,\n"
+                          "a new name makes a new group, an empty one puts the toolpaths outside groups."));
+
+    // Материал режимов -- как у выбора инструмента в формах фрезеровки
+    // (ToolSelectorForm): материал проекта или выбранный здесь.
+    updateMaterials();
+    resolvedMaterial_ = effectiveMaterial();
+    // activated -- только выбор пользователя; список перестраивает и сама форма.
+    connect(ui->cbxMaterial, &QComboBox::activated, this, [this](int index) {
+        materialChoice_ = ui->cbxMaterial->itemData(index).toString();
+        resolveRows();
+    });
+    // Материал проекта сменился (свойства G-кода, открытие и закрытие проекта):
+    // форма, что за ним следует, берёт режимы строк под новый материал.
+    if(auto* project = App::project.ptr())
+        connect(project, &Project::materialChanged, this, [this] {
+            updateMaterials(); // имя материала проекта в первой строке
+            resolveRows();
+        });
 
     //
     connect(ui->pbPickUpTools, &QPushButton::clicked, this, &Form::pickUpTool);
@@ -177,6 +308,7 @@ Form::~Form() {
     MySettings settings;
     settings.beginGroup(u"DrillForm"_s);
     settings.setValue(ui->chbxZoomToSelected);
+    settings.setValue(u"material"_s, materialChoice_);
     settings.endGroup();
 
     // for (auto* var : App::grView().items<Gi::DataSolid>())
@@ -383,6 +515,11 @@ void Form::on_cbxFileCurrentIndexChanged() {
         return;
     }
 
+    // Группа -- за файлом: где уже лежат его УП, а нет их -- его имя. Правка УП
+    // (editFile) ставит потом группу самой УП. Файла уже нет в проекте -- его
+    // указатель в списке висит, и читать его нельзя.
+    leName->setText(file && App::project().contains(file) ? drillGroup(file) : QString{});
+    if(model) model->setMaterial(effectiveMaterial());
     pickUpTool();
 
     delete ui->toolTable->model();
@@ -403,12 +540,55 @@ void Form::on_cbxFileCurrentIndexChanged() {
     header->onChecked();
 }
 
-Tool::Operation Form::operation(const Tool& tool, Mode mode, bool slot) const {
-    return Tool::programOperation(tool.type(), mode == Mode::Drilling && !slot);
-}
+Tool::Operation Form::operation(const Tool& tool, Mode mode, bool slot) const { return operationOf(tool.type(), mode, slot); }
 
 Tool Form::resolved(const Tool& tool, Mode mode, bool slot) const {
-    return App::toolHolder().resolve(tool, operation(tool, mode, slot), App::project().material());
+    return App::toolHolder().resolve(tool, operation(tool, mode, slot), effectiveMaterial());
+}
+
+QString Form::effectiveMaterial() const {
+    if(!materialChoice_.isEmpty()) return materialChoice_;
+    return App::project.ptr() ? App::project().material() : QString{};
+}
+
+void Form::updateMaterials() {
+    const QSignalBlocker blocker{ui->cbxMaterial};
+    ui->cbxMaterial->clear();
+    const QString project = App::project.ptr() ? App::project().material() : QString{};
+    ui->cbxMaterial->addItem(tr("Project material (%1)").arg(project.isEmpty() ? tr("not set") : App::toolHolder().materialName(project)), QString{});
+    for(const auto& material: App::toolHolder().materials())
+        ui->cbxMaterial->addItem(material.name, material.uid);
+    int index = materialChoice_.isEmpty() ? 0 : ui->cbxMaterial->findData(materialChoice_);
+    if(index < 0) { // выбранный здесь материал удалили из списка базы -- выбор остаётся
+        ui->cbxMaterial->addItem(App::toolHolder().materialName(materialChoice_), materialChoice_);
+        index = ui->cbxMaterial->count() - 1;
+    }
+    ui->cbxMaterial->setCurrentIndex(index);
+}
+
+void Form::resolveRows() {
+    const QString before = std::exchange(resolvedMaterial_, effectiveMaterial());
+    if(!model)
+        return;
+    model->setMaterial(resolvedMaterial_);
+    if(before == resolvedMaterial_)
+        return;
+    // Режимы строк считаются при каждом Create (rowTool) -- хранить в строках
+    // нечего. Но УП строки, чьи режимы от материала зависят, теперь другая:
+    // снова к расчёту, как при смене режима или инструмента.
+    const auto& tools = App::toolHolder().tools();
+    for(int row{}; row < model->rowCount(); ++row) {
+        const Row& data = model->data()[row];
+        if(data.toolId <= Tool::ID::Null || data.toolOverride)
+            continue; // правка «только для этой УП» -- своими значениями
+        const auto it = tools.find(data.toolId);
+        if(it == tools.end())
+            continue;
+        const Tool::Operation rowOperation = operation(it->second, data.mode, data.isSlot);
+        if(App::toolHolder().resolve(it->second, rowOperation, before).hash()
+            != App::toolHolder().resolve(it->second, rowOperation, resolvedMaterial_).hash())
+            header->set(row, true);
+    }
 }
 
 Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool(), row.mode, row.isSlot); }
@@ -525,10 +705,7 @@ void Form::setRowsTool(const std::vector<int>& rows, const Tool& tool) {
         // Паз -- только концевой фрезой: его фрезеруют и при сверловке. Строке
         // отверстий -- то, что умеет её режим, и сверло всегда: строку в
         // режиме фрезеровки оно переводит на сверловку (Model::setToolId).
-        const bool fits = model->isSlot(row)
-            ? tool.type() == Tool::EndMill
-            : tool.type() == Tool::Drill || canProcess(tool.type(), model->mode(row));
-        if(!fits) {
+        if(!toolFits(tool.type(), model->mode(row), model->isSlot(row))) {
             refused.append(model->data()[row].name.back());
             continue;
         }
@@ -589,7 +766,7 @@ void Form::editRowTool(int row) {
 
     // Правится КОПИЯ действующего инструмента строки -- база не трогается.
     // Действующий -- с набором режимов под операцию строки (её режим) и
-    // материал проекта: его УП и получит, его и правят.
+    // материал формы: его УП и получит, его и правят.
     const bool slot = model->data()[row].isSlot;
     const Mode mode = model->mode(row);
     const Tool current = rowTool(model->data()[row]);
@@ -659,12 +836,14 @@ void Form::on_doubleClicked(const QModelIndex& current) {
     const int row = current.row();
     const Model* const tableModel = model;
     // Что строка принимает в своём режиме: паз -- концевую фрезу, сверловка --
-    // сверло или фрезу, карман и профиль -- фрезу, гравёр, лазер (не сверло).
+    // сверло или фрезу, карман и профиль -- фрезу, гравёр, лазер и сверло
+    // (оно переведёт строку на сверловку).
     ToolDatabase tdb(this, toolTypes(model->mode(row), model->isSlot(row)));
     selectRowTool(tdb, row);
     // Пока была открыта база, таблицу могли перестроить.
     if(tdb.exec() && model == tableModel)
         setRowsTool({row}, tdb.tool());
+    updateMaterials(); // материалы могли править в окне базы
 }
 
 void Form::on_selectionChanged(const QItemSelection& selected, const QItemSelection& deselected) {
@@ -696,6 +875,7 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
         selectRowTool(tdb, toolRow);
         if(tdb.exec() && model == tableModel)
             setRowsTool(rows, tdb.tool());
+        updateMaterials(); // материалы могли править в окне базы
     });
 
     // Правка "только для этой УП": строка под курсором, иначе первая выделенная
@@ -760,6 +940,7 @@ void Form::customContextMenuRequested(const QPoint& pos) {
         selectRowTool(tdb, toolRowOf(selectedIndexes()));
         if(tdb.exec() && model == tableModel)
             setRowsTool(all, tdb.tool());
+        updateMaterials(); // материалы могли править в окне базы
     });
     menu.addAction(QIcon::fromTheme(u"list-remove"_s), tr("&Remove Tool for everyone"), [this] {
         ui->toolTable->selectAll();
@@ -772,39 +953,32 @@ void Form::customContextMenuRequested(const QPoint& pos) {
     menu.exec(ui->toolTable->horizontalHeader()->mapToGlobal(pos));
 }
 
+// Подбор -- и при показе файла, и кнопкой. Прежде кнопка подбирала только
+// строкам без инструмента, а после показа файла он был уже у всех -- нажатие
+// не меняло ничего. Теперь она возвращает строкам автоматический выбор: и
+// выбранное вручную, и правку «только для этой УП» -- тоже. А брал прежний
+// подбор первый подходящий по диаметру инструмент в порядке базы -- по
+// убыванию id (Tools -- std::greater), сверло или фрезу без разбора: фрезы
+// заводят обычно после свёрл, у них id больше, и отверстие под размер фрезы
+// получало фрезу.
 void Form::pickUpTool() {
     if(!model) return;
-
-    const double k = 0.05; // 5%
-    int ctr{};
-    for(const auto& row: model->data()) {
-        // model->setToolId(ctr++, 3);
-        // continue;
-        // Подбор по диаметру отверстия -- только сверловке. Фреза под карман
-        // или профиль должна быть меньше отверстия, а сверло в такую строку
-        // перевело бы её на сверловку -- выбор режима пропал бы молча.
-        if(row.mode != Mode::Drilling) {
-            ++ctr;
+    // Каждый раз заново: базу могли править, пока форма открыта.
+    const TreeOrder order = toolTreeOrder();
+    const auto& tools = App::toolHolder().tools();
+    for(int row{}; row < model->rowCount(); ++row) {
+        const Row& data = model->data()[row];
+        // Строки кармана и профиля pickTool() не подбирает: фреза под них
+        // должна быть меньше отверстия, а насколько -- решает пользователь.
+        const Tool::ID id = pickTool(data.mode, data.isSlot, data.diameter, tools, order);
+        // Подходящего нет -- строка остаётся как была: выбранное вручную под
+        // отверстие без своего сверла (3.0 под 3.2) кнопка не стирает.
+        if(id <= Tool::ID::Null)
             continue;
-        }
-        const double drillDiameterMin = row.diameter * (1.0 - k);
-        const double drillDiameterMax = row.diameter * (1.0 + k);
-
-        auto isFit = [&, this](auto& tool) -> bool {
-            const auto diameter = tool.getDiameter(dsbxDepth->value());
-            return drillDiameterMin <= diameter && drillDiameterMax >= diameter;
-        };
-        auto set = !row.isSlot ? std::set{Tool::Drill, Tool::EndMill} : std::set{Tool::EndMill};
-        auto filter = v::filter([&set](auto& t) { return set.contains(t.second.type()); });
-        for(auto& [id, tool]: App::toolHolder().tools() | filter) {
-            qWarning() << tool;
-            if(model->toolId(ctr) < Tool::ID::Tool && isFit(tool)) {
-                model->setToolId(ctr, id);
-                break;
-            }
-        }
-
-        ++ctr;
+        // Уже он, и без правки -- менять нечего (и галку тоже).
+        if(id == data.toolId && !data.toolOverride)
+            continue;
+        model->setToolId(row, id); // новый выбор сбрасывает и правку
     }
 }
 
@@ -847,14 +1021,24 @@ void Form::computePaths() {
         pendingRuns_.front().discard = true;
     }
 
-    // УП сверловки -- в проект: на место прежней УП того же ключа за этот показ
-    // формы, иначе новой. Галки строк снимаются только теперь, когда УП по ним
-    // реально получилась.
-    auto place = [this, &revealId](const ProgramKey& key, File* gcode, const std::vector<int>& rows) {
-        if(auto it = createdFileIds_.find(key); it != createdFileIds_.end() && App::project().file(it->second))
-            App::project().replaceFile(it->second, gcode);
-        else
-            createdFileIds_[key] = App::project().addFile(gcode);
+    // Все УП этого Create -- в группу из поля имени (пусто -- вне групп), она
+    // заводится, если её нет. Новое имя -- новая группа: УП прежней остаются
+    // где были.
+    const QString programGroup = group();
+
+    // УП сверловки -- в проект: на место УП того же ключа в этой группе, иначе
+    // новой. Та могла остаться и от прошлого показа формы, и от прошлого
+    // сеанса работы с проектом; её копии оттуда же (прежде каждый показ формы
+    // клал свою) -- лишние. Галки строк снимаются только теперь, когда УП по
+    // ним реально получилась.
+    auto place = [this, &revealId, &programGroup](const ProgramKey& key, File* gcode, const std::vector<int>& rows) {
+        gcode->setGroup(programGroup);
+        if(const std::vector<int32_t> same = programsOf(programGroup, key); !same.empty()) {
+            App::project().replaceFile(same.front(), gcode);
+            removePrograms(std::span{same}.subspan(1));
+        } else {
+            App::project().addFile(gcode);
+        }
         if(gcode->id() > -1) revealId = gcode->id();
         for(int row: rows)
             model->setCreate(row, false);
@@ -869,7 +1053,7 @@ void Form::computePaths() {
     { // Сверловка, пазы: фрезеруются вдоль путей (drilling.js)
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
-        // Инструмент базы -- с набором режимов под операцию и материал проекта.
+        // Инструмент базы -- с набором режимов под операцию и материал формы.
         struct Data {
             Tool tool;
             Geo::Polylines paths;
@@ -913,7 +1097,6 @@ void Form::computePaths() {
                     programTag(data.tool, key)
                     + u"_T"_s + indexes(data.toolsApertures));
                 if(file) gcode->setSide(file->side());
-                gcode->setGroup(drillGroup(file));
                 place({srcFileId, Mode::Drilling, true, key}, gcode, data.toolsApertures);
             }
         }
@@ -963,7 +1146,6 @@ void Form::computePaths() {
                 gcode->setSrcFileId(file ? file->id() : -1);
                 gcode->setFileName(programTag(val.tool, key) + /*type_ +*/ indexes(val.toolsApertures));
                 if(file) gcode->setSide(file->side());
-                gcode->setGroup(drillGroup(file));
                 place({srcFileId, Mode::Drilling, false, key}, gcode, val.toolsApertures);
             }
         }
@@ -1001,18 +1183,20 @@ void Form::computePaths() {
                 continue;
             const auto& [mode, key] = modeKey;
             const ProgramKey programKey{srcFileId, mode, false, key};
-            std::vector<int32_t> replaced;
-            if(auto it = createdFileIds_.find(programKey); it != createdFileIds_.end() && App::project().file(it->second))
-                replaced = {it->second};
             GCode::Params runGcp;
             runGcp.setConvent(isConventional(mode));
             // Отверстие обрабатывается только изнутри: и карман, и профиль.
             runGcp.setSide(GCode::Inner);
             runGcp.tools = {data.tool};
             runGcp.params[GCode::Params::Depth] = dsbxDepth->value();
+            // Свой файл сверловки и правку инструмента УП несёт сама: её File
+            // чужой, полей сверловки у него нет, а узнать её форма должна и в
+            // следующих сеансах (programsOf, drillGroup).
+            runGcp.params[SrcFileParam] = srcFileId;
+            if(key.hash) runGcp.params[ToolEditedParam] = 1;
             runGcp.closedCurves = Geo::Polygons{data.paths};
             pendingRuns_.push_back({rowRefs(data.toolsApertures), programKey, programTag(data.tool, key) + modeTag(mode),
-                std::move(replaced), std::move(runGcp)});
+                programGroup, std::move(runGcp)});
         }
     }
 
@@ -1084,10 +1268,12 @@ void Form::fileHandler(GCode::File* file_) {
             return;
         }
         fileName_ = run.programName;
-        // Что заменить -- своё, из очереди, и файл у прогона один: база по
-        // fileCount == 0 убирает лишнее и раскладывает дерево -- для каждого
-        // прогона.
-        replacedIds_ = std::move(run.replacedIds);
+        // Что заменить -- УП ключа прогона в его группе, какими они стали к
+        // приходу файла (заменяемую могли за это время удалить или переложить).
+        // Файл у прогона один: база заменит первую, а по fileCount == 0 уберёт
+        // остальные (копии из прежних сеансов) и разложит дерево -- для
+        // каждого прогона.
+        replacedIds_ = programsOf(run.group, run.key, run.programName);
         fileCount = 1;
     }
 
@@ -1109,22 +1295,12 @@ void Form::fileHandler(GCode::File* file_) {
         drillFile->setWorckType(static_cast<int>(isPocket(run.key.mode) ? GCType::Pocket : GCType::Profile));
         drillFile->setSrcFileId(srcFileId);
     }
-    // Профиль и карман по отверстиям -- в группу файла сверловки, к сверловке
-    // и пазам. Разложит и покажет база, в конце прогона. Файл -- прогона, а не
-    // выбранный в форме сейчас: пока прогон ждал очереди, выбрать могли другой.
-    if(file_) file_->setGroup(drillGroup(srcFileId > -1 ? App::project().file(srcFileId) : nullptr));
+    // Профиль и карман по отверстиям -- в группу своего Create, к сверловке и
+    // пазам. Разложит и покажет база, в конце прогона. Группа -- прогона, а не
+    // в поле сейчас: пока прогон ждал очереди, её могли сменить.
+    if(file_) file_->setGroup(run.group);
 
     GCode::Form::fileHandler(file_);
-
-    if(isAsyncRun && accepted) {
-        createdFileIds_[run.key] = file_->id();
-        if(srcFileId > -1) {
-            auto& programs = srcPrograms_[srcFileId];
-            std::pair<int32_t, QString> entry{file_->id(), file_->programName()};
-            if(std::find(programs.begin(), programs.end(), entry) == programs.end()) // замена на месте -- тот же id
-                programs.push_back(std::move(entry));
-        }
-    }
 
     // Следующий прогон -- только теперь, когда этот досчитан. Отмена уносит и
     // все не начатые прогоны своего клика.
@@ -1185,22 +1361,16 @@ void Form::editFile(GCode::File* file_) {
             model->setCreate(static_cast<int>(i), mine && it->second->useForCalc);
         }
         header->onChecked();
-
-        // «Обновить» заменяет эту самую УП, а не кладёт рядом копию: свои УП
-        // форма помнит по ключу (createdFileIds_), а на правку из дерева
-        // открывается с чистой памятью (showEvent). Ключ -- тот, что
-        // computePaths() даст её строкам. Только если в форме -- её файл: на
-        // чужом (свой закрыт) строки с теми же именами -- другие отверстия.
-        const int32_t srcFileId = file ? file->id() : -1;
-        if(mode == Mode::Drilling && srcFileId == drillFile->srcFileId())
-            for(const Row& row: rows)
-                if(row.toolId > Tool::ID::Null && byName.contains(row.name.join(u'|'))) {
-                    createdFileIds_[{srcFileId, Mode::Drilling, params.slotPaths(), toolKeyOf(row)}] = drillFile->id();
-                    break;
-                }
     }
 
     GCode::Form::editFile(file_);
+
+    // Поле имени -- группа, база же поставила туда имя программы. Группа --
+    // этой УП: «Обновить» заменит её на месте -- programsOf найдёт её там по
+    // ключу, который computePaths() даст её строкам (programKeyOf). Только
+    // если в форме -- её файл: на чужом (свой закрыт) строки с теми же именами
+    // -- другие отверстия, и ключ у них другой.
+    leName->setText(drillFile->group());
 }
 
 void Form::updateName() { }

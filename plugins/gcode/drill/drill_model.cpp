@@ -17,15 +17,84 @@
 #include "tool_pch.h"
 
 #include <QBitmap>
+#include <QCoreApplication>
 #include <QDebug>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPainter>
+#include <climits>
+#include <cmath>
+#include <tuple>
 
 namespace Drilling {
 
 std::vector<Tool::Type> toolTypes(Mode mode, bool slot) {
     if(slot) return {Tool::EndMill};
     if(mode == Mode::Drilling) return {Tool::Drill, Tool::EndMill};
-    return {Tool::EndMill, Tool::Engraver, Tool::Laser};
+    return {Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
+}
+
+TreeOrder toolTreeOrder(const QJsonArray& tree) {
+    // Узлы дерева -- обходом сверху вниз (ToolModel::exportTools): место узла
+    // в массиве и есть его место в дереве. Папки мест не занимают.
+    TreeOrder order;
+    for(const QJsonValue& value: tree)
+        if(const QJsonObject node = value.toObject(); node.value(u"tool"_s).toBool())
+            order.try_emplace(static_cast<Tool::ID>(node.value(u"id"_s).toInt()), static_cast<int>(order.size()));
+    return order;
+}
+
+TreeOrder toolTreeOrder() {
+    // Тот же файл и тот же запасной путь, что у базы (ToolHolder::readTools).
+    QFile file{App::settingsPath() + u"/tools.json"_s};
+    if(!file.exists())
+        file.setFileName(QCoreApplication::applicationDirPath() + u"/tools.json"_s);
+    if(!file.open(QIODevice::ReadOnly))
+        return {};
+    return toolTreeOrder(QJsonDocument::fromJson(file.readAll()).object().value(u"tree"_s).toArray());
+}
+
+Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, const TreeOrder& order) {
+    if(mode != Mode::Drilling || !(diameter > 0.0))
+        return Tool::ID::Null;
+    // Близкий -- как и прежде, в пределах 5% диаметра. Точный -- с запасом на
+    // перевод из дюймов (0.0315" -- 0.8001 мм): размеры свёрл идут шагом не
+    // мельче 0.01 мм, двух разных свёрл этот запас не спутает. (Не near/far:
+    // на Windows это макросы windef.h.)
+    constexpr double nearShare = 0.05;
+    constexpr double exactDelta = 0.005;
+    // Длина рабочей части: больше 1 мм -- задана, 1 мм -- значение по
+    // умолчанию (не задана), 0.1 мм и меньше -- пометка сломанного сверла.
+    constexpr double eps = 1e-9;
+    auto lengthRank = [](double length) {
+        if(length > 1.0 + eps) return 0;
+        return length > 0.1 + eps ? 1 : 2;
+    };
+    // Меньше -- лучше; сравниваются по порядку (см. объявление).
+    using Rank = std::tuple<int, int, int, int, int32_t>;
+    std::optional<Rank> best;
+    Tool::ID picked{Tool::ID::Null};
+    for(const auto& [id, tool]: tools) {
+        int typeRank{};
+        if(tool.type() == Tool::Drill && !slot)
+            typeRank = 0;
+        else if(tool.type() == Tool::EndMill)
+            typeRank = 1;
+        else
+            continue;
+        // Границы -- теми же выражениями, что и прежде: инструмент ровно на 5%
+        // больше отверстия по-прежнему подходит.
+        if(!(diameter * (1.0 - nearShare) <= tool.diameter() && tool.diameter() <= diameter * (1.0 + nearShare)))
+            continue;
+        const auto place = order.find(id);
+        const Rank rank{typeRank, std::abs(tool.diameter() - diameter) <= exactDelta ? 0 : 1, lengthRank(tool.lenght()),
+            place != order.end() ? place->second : INT_MAX, std::to_underlying(id)};
+        if(!best || rank < *best)
+            best = rank, picked = id;
+    }
+    return picked;
 }
 
 Model::Model(size_t rowCount, QObject* parent)
@@ -97,6 +166,13 @@ void Model::setToolOverride(int row, ToolOverride toolOverride) {
     // выборе из базы (галку взводит Header по сигналу set).
     emit set(row, true);
     emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
+}
+
+void Model::setMaterial(const QString& material) {
+    if(material_ == material) return;
+    material_ = material;
+    // Режимы инструментов базы теперь из другого набора -- подсказки устарели.
+    if(rowCount()) emit dataChanged(createIndex(0, Tool), createIndex(rowCount() - 1, Tool), {Qt::ToolTipRole});
 }
 
 void Model::setCreate(int row, bool create) {
@@ -180,14 +256,25 @@ QVariant Model::data(const QModelIndex& index, int role) const {
                     return QVariant::fromValue(font);
                 }
                 break;
-            case Qt::ToolTipRole:
+            case Qt::ToolTipRole: {
+                // Откуда у инструмента режимы -- как у выбора инструмента в
+                // формах фрезеровки (ToolSelectorForm): правка, набор под
+                // операцию строки и материал формы или свои значения.
+                QString tip;
                 if(edited) {
-                    QString tip = tr("Edited for this toolpath only (the tool database is not changed)");
-                    if(!effective.note().isEmpty())
-                        tip += u"\n\n"_s + effective.note();
-                    return tip;
+                    tip = tr("Edited for this toolpath only (the tool database is not changed)");
+                } else {
+                    const ::Tool::Operation operation = operationOf(effective.type(), data_[row].mode, data_[row].isSlot);
+                    const ::Tool resolved = App::toolHolder().resolve(effective, operation, material_);
+                    if(!resolved.material().isEmpty() || effective.preset(operation, {}))
+                        tip = tr("Cutting data: %1").arg(App::toolHolder().presetName({.operation = operation, .material = resolved.material()}));
+                    else
+                        tip = tr("Cutting data: tool defaults");
                 }
-                break;
+                if(!effective.note().isEmpty())
+                    tip += u"\n\n"_s + effective.note();
+                return tip;
+            }
             case Qt::UserRole: return +data_[row].toolId;
             default          : break;
             }

@@ -63,8 +63,42 @@
    </item>
    <item row="7" column="0" colspan="2">
     <widget class="QPushButton" name="pbPickUpTools">
+     <property name="toolTip">
+      <string>Pick the tools of the drilling rows again by the hole diameter: a drill before an end mill, the exact diameter, a set working length, the order in the tool database.
+Tools chosen or edited by hand are replaced. Pocket and profile rows and rows without a suitable tool stay as they are.</string>
+     </property>
      <property name="text">
       <string>Pick Up Tools</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="lblMaterial">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Material:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QComboBox" name="cbxMaterial">
+     <property name="toolTip">
+      <string>Material for the cutting data of the rows: the project material (G-Code Properties) or the one chosen here.
+A tool edited for this toolpath only keeps its own values.</string>
+     </property>
+     <property name="sizeAdjustPolicy">
+      <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
+     </property>
+     <property name="minimumContentsLength">
+      <number>8</number>
      </property>
     </widget>
    </item>
