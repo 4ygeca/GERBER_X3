@@ -26,6 +26,8 @@
 #include <QUuid>
 #include <QtMath>
 #include <app.h>
+#include <cmath>
+#include <optional>
 #include <set>
 
 int toolId = qRegisterMetaType<Tool>("Tool");
@@ -65,6 +67,119 @@ bool Tool::isValidCode(const QString& code) {
     return re.match(code).hasMatch();
 }
 
+// Знак кода -- только ASCII: код идёт и в сообщение оператору, где кириллица
+// не годится, и в комментарии, где скобка или ';' обрезали бы строку.
+static bool isToolCodeChar(QChar c) {
+    const char16_t u = c.unicode();
+    return (u >= u'A' && u <= u'Z') || (u >= u'a' && u <= u'z') || (u >= u'0' && u <= u'9') || u == u'.' || u == u'_' || u == u'-';
+}
+
+// Поле формата по типу; у типа без кода -- nullptr.
+static auto codeFormatField(Tool::Type type) -> QString Tool::CodeFormat::* {
+    switch(type) {
+    case Tool::Drill     : return &Tool::CodeFormat::drill;
+    case Tool::EndMill   : return &Tool::CodeFormat::endmill;
+    case Tool::Engraver  : return &Tool::CodeFormat::engraver;
+    case Tool::Laser     : return &Tool::CodeFormat::laser;
+    case Tool::ThreadMill: return &Tool::CodeFormat::threadmill;
+    default              : return nullptr;
+    }
+}
+
+QString Tool::CodeFormat::pattern(Type type) const {
+    const auto field = codeFormatField(type);
+    return field ? this->*field : QString{};
+}
+
+void Tool::CodeFormat::setPattern(Type type, const QString& pattern) {
+    if(const auto field = codeFormatField(type))
+        this->*field = pattern;
+}
+
+void Tool::CodeFormat::read(const QJsonObject& json) {
+    for_each_field(*this, [&json](QString& field, std::string_view name) {
+        if(const QString text = json.value(QLatin1StringView{name}).toString(); !text.isEmpty())
+            field = text;
+    });
+}
+
+void Tool::CodeFormat::write(QJsonObject& json) const {
+    for_each_field(*this, [&json](const QString& field, std::string_view name) { json[QLatin1StringView{name}] = field; });
+}
+
+QString Tool::codeFormatPattern() {
+    // Вложенных [ ] нет: «часть в части» ничего не добавляет к правилу «пишется,
+    // если все значения заданы», а читать такой шаблон труднее.
+    return uR"((?:[A-Za-z0-9._-]|\{[DLdlA]\}|\[(?:[A-Za-z0-9._-]|\{[DLdlA]\})*\])*)"_s;
+}
+
+QString Tool::codeFromPattern(const QString& pattern, double diameter, double length, double angle) {
+    // Числа -- в тысячных: столько знаков держит поле диаметра, и погрешность
+    // double в код не попадает (0.1 + 0.2 -- это 0.3).
+    const qint64 diameter3 = std::llround(diameter * 1000.0);
+    const qint64 length3 = std::llround(length * 1000.0);
+    // Знаков после подразумеваемой точки -- сколько нужно диаметру, но не
+    // меньше одного: 0.35 -> 2, 0.8 и 1 -> 1, 0.125 -> 3.
+    int places = 3;
+    qint64 scaled = diameter3;
+    while(places > 1 && scaled % 10 == 0)
+        scaled /= 10, --places;
+    // До places + 1 цифры -- нулём впереди: 0.35 -> 035, 0.5 -> 05. Без него
+    // 0.35 и 3.5 дали бы одно и то же 35.
+    const QString implied = QString::number(scaled).rightJustified(places + 1, u'0');
+    // Длина -- всегда в десятых мм, от точности диаметра не зависит: L50 у
+    // сверла 0.35 и у сверла 1 -- это 5 мм.
+    const qint64 length10 = (length3 + (length3 < 0 ? -50 : 50)) / 100;
+
+    struct Value {
+        QString text;
+        bool set; // значение задано -- часть [ ] с ним пишется
+    };
+    // 1.0 -- прежнее значение длины по умолчанию, а 0.1 у сломанного сверла
+    // хранит его режимы до замены: длиной ни то ни другое не является.
+    const bool hasDiameter = diameter3 > 0, hasLength = length3 > 1000, hasAngle = std::llround(angle * 1000.0) > 0;
+    auto placeholder = [&](QChar key) -> std::optional<Value> {
+        switch(key.unicode()) {
+        case u'D': return Value{implied, hasDiameter};
+        case u'L': return Value{QString::number(length10), hasLength};
+        case u'd': return Value{toolCodeNumber(diameter), hasDiameter};
+        case u'l': return Value{toolCodeNumber(length), hasLength};
+        case u'A': return Value{toolCodeNumber(angle), hasAngle};
+        default  : return std::nullopt;
+        }
+    };
+
+    QString code;
+    QString part; // необязательная часть, пока не закрыта
+    bool inPart{}, partSet{};
+    for(qsizetype i{}; i < pattern.size(); ++i) {
+        const QChar c = pattern[i];
+        if(c == u'[' && !inPart) {
+            inPart = partSet = true;
+            part.clear();
+            continue;
+        }
+        if(c == u']' && inPart) {
+            if(partSet) code += part;
+            inPart = false;
+            continue;
+        }
+        QString text{c};
+        if(c == u'{' && i + 2 < pattern.size() && pattern[i + 2] == u'}') {
+            if(const auto value = placeholder(pattern[i + 1])) {
+                text = value->text;
+                partSet = partSet && value->set;
+                i += 2;
+            }
+        }
+        (inPart ? part : code) += text;
+    }
+    if(inPart && partSet)
+        code += part;
+    code.removeIf([](QChar c) { return !isToolCodeChar(c); });
+    return code.left(MaxCodeLength);
+}
+
 QString Tool::newUid() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 
 QString Tool::identityKey() const {
@@ -75,28 +190,24 @@ QString Tool::identityKey() const {
 
 QString Tool::code() const { return data.code.isEmpty() ? codeAuto() : data.code; }
 
-QString Tool::codeAuto() const {
-    // Длина рабочей части в коде -- только заданная: у старых инструментов
-    // везде прежнее значение по умолчанию 1.0, длиной оно не является.
-    const QString length = data.lenght > 1.0 ? u'x' + toolCodeNumber(data.lenght) : QString{};
-    QString code;
-    switch(data.type) {
-    case Tool::Drill     : code = u'D' + toolCodeNumber(data.diameter) + length; break;
-    case Tool::EndMill   : code = u'E' + toolCodeNumber(data.diameter) + length; break;
-    case Tool::Engraver  : code = u'V' + toolCodeNumber(data.diameter) + u'A' + toolCodeNumber(data.angle); break;
-    case Tool::Laser     : code = u'L' + toolCodeNumber(data.diameter); break;
-    case Tool::ThreadMill: code = u'T' + toolCodeNumber(data.diameter) + length; break;
-    default              : break;
-    }
-    return code.left(MaxCodeLength);
+QString Tool::codeAuto() const { return codeAuto(App::toolHolder().codeFormat()); }
+
+QString Tool::codeAuto(const CodeFormat& format) const {
+    if(QString code = codeFromPattern(format.pattern(data.type), data.diameter, data.lenght, data.angle); !code.isEmpty())
+        return code;
+    // Всё в [ ] без значений или одни недопустимые знаки -- код по шаблону по
+    // умолчанию. У типа без кода (группа) пусто и там.
+    return codeFromPattern(CodeFormat{}.pattern(data.type), data.diameter, data.lenght, data.angle);
 }
 
-bool Tool::fillMissingCode() {
-    if(!data.code.isEmpty()) return false;
-    // Типа без автоматического кода код так и останется пустым: «досоздано»
-    // -- только то, что взято, иначе tools.json переписывался бы на каждом запуске.
-    const QString code = codeAuto();
-    if(code.isEmpty()) return false;
+bool Tool::recomputeAutoCode(const CodeFormat& format) {
+    if(!data.autoCode && !data.code.isEmpty())
+        return false;
+    // Типа без автоматического кода код так и останется пустым: «сменился» --
+    // только взятый, иначе tools.json переписывался бы на каждом запуске.
+    const QString code = codeAuto(format);
+    if(code.isEmpty() || code == data.code)
+        return false;
     setCode(code);
     return true;
 }
@@ -379,7 +490,12 @@ void ToolHolder::readTools() {
 bool ToolHolder::readTools(const QJsonObject& json) {
     bool generated{};
 
-    if(!std::exchange(materialsRead_, true)) {
+    if(!std::exchange(rootRead_, true)) {
+        // Формат кода. Нет ключа (первый запуск, прежний tools.json) -- шаблоны
+        // по умолчанию; переписывать файл ради этого незачем: в отличие от имён
+        // материалов они от языка интерфейса не зависят.
+        codeFormat_ = {};
+        codeFormat_.read(json.value(u"codeFormat"_s).toObject());
         if(json.contains(u"materials"_s)) {
             materials_.clear();
             std::set<QString> uids;
@@ -424,7 +540,9 @@ bool ToolHolder::readTools(const QJsonObject& json) {
         if(tool.uid().isEmpty() || uids.contains(tool.uid()))
             tool.setUid(Tool::newUid()), generated = true;
         uids.insert(tool.uid());
-        if(tool.fillMissingCode())
+        // Код по формату базы: у старого tools.json его нет вовсе, а
+        // автоматический мог быть посчитан прежним форматом (D0.8x9, E1x6).
+        if(tool.recomputeAutoCode(codeFormat_))
             generated = true;
         tool.updatePath();
         tools_.try_emplace(tool.id(), tool);
@@ -460,6 +578,22 @@ void ToolHolder::writeTools(QJsonObject& json) {
             {u"name"_s, material.name},
         });
     json[u"materials"_s] = materialArray;
+
+    // Формат кода -- всегда, и шаблоны по умолчанию тоже: по нему настраивают
+    // и шаблоны кодов отправителя (плагин ncSender), в файле он на виду.
+    QJsonObject codeFormat;
+    codeFormat_.write(codeFormat);
+    json[u"codeFormat"_s] = codeFormat;
+}
+
+bool ToolHolder::setCodeFormat(const Tool::CodeFormat& format) {
+    codeFormat_ = format;
+    // Коды следуют за форматом так же, как за геометрией: только автоматические.
+    bool changed{};
+    for(auto& [id, tool]: tools_)
+        if(tool.recomputeAutoCode(codeFormat_))
+            changed = true;
+    return changed;
 }
 
 void ToolHolder::persist(QJsonObject json) {

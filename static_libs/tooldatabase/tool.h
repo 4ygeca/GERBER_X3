@@ -90,6 +90,40 @@ public:
     static QString codePattern(); // для валидатора: [A-Za-z0-9._-]{0,20}
     static bool isValidCode(const QString& code);
 
+    // Шаблоны автоматического кода по типам (tools.json, ключ "codeFormat";
+    // правятся в окне «Формат кода…» базы). Подстановки:
+    //   {D} -- диаметр без точки: точка подразумевается, знаков после неё
+    //          столько, сколько нужно диаметру (1..3), у диаметра меньше 1 мм
+    //          впереди 0: 0.35 -> 035, 0.5 -> 05, 1 -> 10, 1.96 -> 196;
+    //   {L} -- длина рабочей части в десятых мм, от точности диаметра не
+    //          зависит: 5 -> 50, 10 -> 100;
+    //   {d}, {l} -- диаметр и длина с точкой, кратко: 0.8, 9 (прежний D0.8x9);
+    //   {A} -- угол: 30, 22.5.
+    // [ ] -- необязательная часть: пишется, только если у всех подстановок в
+    // ней есть значение (длина больше 1 мм, угол больше 0). Имена полей --
+    // ключи json.
+    struct CodeFormat {
+        QString drill{u"D{D}[L{L}]"_s};
+        QString endmill{u"M{D}[L{L}]"_s};
+        QString engraver{u"V{D}A{A}[L{L}]"_s};
+        QString laser{u"L{D}"_s};
+        QString threadmill{u"T{D}[L{L}]"_s};
+
+        // У типа без кода (группа) -- пусто.
+        QString pattern(Type type) const;
+        void setPattern(Type type, const QString& pattern);
+        // Нет ключа, не строка или пусто -- шаблон по умолчанию.
+        void read(const QJsonObject& json);
+        void write(QJsonObject& json) const;
+        bool operator==(const CodeFormat&) const = default;
+    };
+    // Для валидатора шаблона: знаки кода, подстановки и [ ] без вложенных.
+    static QString codeFormatPattern();
+    // Код по шаблону для геометрии: знаки вне [A-Za-z0-9._-] выброшены, не
+    // длиннее MaxCodeLength. Шаблон из tools.json мог быть правлен руками --
+    // разбор терпимый: незнакомое -- как есть, незакрытая [ -- до конца.
+    static QString codeFromPattern(const QString& pattern, double diameter, double length, double angle);
+
 private:
     struct {
         QString name{QObject::tr("Default")};
@@ -185,14 +219,19 @@ public:
     void setCode(const QString& code) { resetHash(), data.code = code; }
     bool autoCode() const { return data.autoCode; }
     void setAutoCode(bool autoCode) { resetHash(), data.autoCode = autoCode; }
-    // Код по геометрии: D0.8x9, E1x6, V0.1A30, L0.05, T1x6.
+    // Код по геометрии и формату базы (ToolHolder::codeFormat), по умолчанию:
+    // D08L90, D035L50, M10, V02A30, L005, T10L60.
     QString codeAuto() const;
+    // То же по данному формату. Шаблон, давший пустой код, -- по шаблону по
+    // умолчанию: без кода отправителю инструмент не найти.
+    QString codeAuto(const CodeFormat& format) const;
     // Код следует за геометрией (autoCode) -- пересчитать.
     void updateAutoCode() {
         if(data.autoCode) setCode(codeAuto());
     }
-    // Кода нет вовсе (старый tools.json) -- взять автоматический. true -- взят.
-    bool fillMissingCode();
+    // Код по формату: автоматический -- пересчитать, пустой (старый
+    // tools.json) -- взять. Заданный вручную не трогается. true -- сменился.
+    bool recomputeAutoCode(const CodeFormat& format);
     // drillCycle, dwell, retractToR
     int drillCycle() const { return data.drillCycle; }
     void setDrillCycle(int cycle) { resetHash(), data.drillCycle = cycle; }
@@ -280,7 +319,8 @@ public:
 private:
     Tools tools_;
     std::vector<Material> materials_;
-    bool materialsRead_{}; // список уже прочитан: повторное чтение tools.json (окно базы) его не трогает
+    Tool::CodeFormat codeFormat_;
+    bool rootRead_{}; // материалы и формат кода уже прочитаны: повторное чтение tools.json (окно базы) их не трогает
     ToolHolder(const ToolHolder&) = delete;
     ToolHolder& operator=(const ToolHolder&) = delete;
     ToolHolder(ToolHolder&&) = delete;
@@ -295,9 +335,16 @@ public:
     // снимка без uid -- по id, если совпали тип и имя. Нет -- nullptr.
     const Tool* findTool(const Tool& snapshot) const;
     void readTools();
-    // true -- что-то досоздано (uid, коды, список материалов): старый tools.json.
+    // true -- что-то досоздано (uid, коды, список материалов) или код
+    // пересчитан по формату: старый tools.json, его надо переписать.
     bool readTools(const QJsonObject& json);
     void writeTools(QJsonObject& json);
+
+    // Формат автоматического кода (tools.json, ключ "codeFormat").
+    const Tool::CodeFormat& codeFormat() const { return codeFormat_; }
+    // Новый формат: коды инструментов базы с autoCode -- по нему, заданные
+    // вручную остаются. true -- какой-то код сменился.
+    bool setCodeFormat(const Tool::CodeFormat& format);
 
     // Материалы
     const std::vector<Material>& materials() const { return materials_; }
