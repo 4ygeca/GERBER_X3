@@ -345,7 +345,6 @@ void ToolEditForm::showRows(bool restoreLast) {
     ui->formGeometry->setRowVisible(ui->lblUnits, true);
     ui->formGeometry->setRowVisible(ui->dsbxDiameter, true);
     ui->formFeedSpeeds->setRowVisible(ui->dsbxSpindleSpeed, true);
-    ui->formCutParam->setRowVisible(ui->label_2, true); // Vc и число зубьев
 
     // Значения полей возвращаются только при смене типа. Смена набора режимов
     // ставит в поля значения самого набора (loadCutFields).
@@ -625,16 +624,6 @@ Tool ToolEditForm::assembled() {
             presets.push_back(preset);
     tool.setPresets(std::move(presets));
     return tool;
-}
-
-void ToolEditForm::codeFormatChanged() {
-    // Коды базы уже пересчитаны (ToolHolder::setCodeFormat). Код правки -- за
-    // ними, и это не правка: признак изменения остаётся как был.
-    const bool fl1 = parentWidget()->isWindowModified();
-    const bool fl2 = ui->pbApply->isEnabled();
-    updateCode();
-    parentWidget()->setWindowModified(fl1);
-    ui->pbApply->setEnabled(fl2);
 }
 
 void ToolEditForm::valueChanged(double val) {

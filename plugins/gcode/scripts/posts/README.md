@@ -312,8 +312,9 @@ WARNING <text>                                optional (tool numbers wrapped)
   tenths of a millimetre -- `D035L50` (drill 0.35, 5 mm), `D05L100`, `D05`
   (no length), `M08L90` (end mill 0.8, 9 mm), `M196L80`, `V02A30`
   (engraver 0.2, 30°), `L005` (laser 0.05), `T10L60`. The format is
-  configurable in GGEasy (*Code format…* in the tool database); the code
-  patterns of a sender plugin must follow it.
+  set once in GGEasy's `tools.json` (key `codeFormat`: one pattern per tool
+  type -- `{D}`, `{L}`, `{d}`, `{l}`, `{A}`, `[ ]` for an optional part);
+  the code patterns of a sender plugin must follow it.
 - `<diameter>` -- digits, a point (whatever the locale) and 2 or 3
   decimals: `0.80`, `1.00`, `0.125`.
 - `<type>` -- `DRILL`, `ENDMILL`, `ENGRAVER`, `LASER` or `THREADMILL`.

@@ -109,7 +109,7 @@
          <widget class="QLabel" name="lblCode">
           <property name="toolTip">
            <string>Tool code for the G-code and the sender: letters, digits, '.', '_', '-' (up to 20).
-Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are set by &quot;Code format…&quot; in the tool database).</string>
+Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are in tools.json, key &quot;codeFormat&quot;).</string>
           </property>
           <property name="text">
            <string>Code</string>
@@ -632,30 +632,13 @@ The fields edit the shown set; the geometry always belongs to the tool.</string>
           </layout>
          </item>
          <item row="5" column="0">
-          <widget class="QLabel" name="label_2">
-           <property name="text">
-            <string>Vc</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="1">
-          <layout class="QHBoxLayout" name="horizontalLayout_2">
-           <item>
-            <widget class="QDoubleSpinBox" name="dsbxVc"/>
-           </item>
-           <item>
-            <widget class="QSpinBox" name="sbxNTeeth"/>
-           </item>
-          </layout>
-         </item>
-         <item row="6" column="0">
           <widget class="QLabel" name="lblDrillCycle">
            <property name="text">
             <string>Drill cycle:</string>
            </property>
           </widget>
          </item>
-         <item row="6" column="1">
+         <item row="5" column="1">
           <widget class="QComboBox" name="cbxDrillCycle">
            <property name="toolTip">
             <string>How the holes are drilled: a canned cycle or plain G0/G1 moves.
@@ -663,14 +646,14 @@ Auto -- chosen by the post processor.</string>
            </property>
           </widget>
          </item>
-         <item row="7" column="0">
+         <item row="6" column="0">
           <widget class="QLabel" name="lblDwell">
            <property name="text">
             <string>Dwell, s:</string>
            </property>
           </widget>
          </item>
-         <item row="7" column="1">
+         <item row="6" column="1">
           <widget class="DoubleSpinBox" name="dsbxDwell">
            <property name="toolTip">
             <string>Dwell at the bottom of the hole (G82)</string>
@@ -686,7 +669,7 @@ Auto -- chosen by the post processor.</string>
            </property>
           </widget>
          </item>
-         <item row="8" column="1">
+         <item row="7" column="1">
           <widget class="QCheckBox" name="chbxRetractToR">
            <property name="toolTip">
             <string>Between holes return to the R plane (G99) instead of the initial plane (G98)</string>
