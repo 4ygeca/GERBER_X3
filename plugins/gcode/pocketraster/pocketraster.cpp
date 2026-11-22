@@ -167,7 +167,10 @@ void Creator::createRasterAccLaser(const Tool& tool, const double depth, const d
         }
         laserPath = Geo::clipOpen(Geo::ClipType_::Intersection, {zPath}, region); // laser on
         if(laserPath.empty()) return;
-        addAcc(laserPath, gcp.params[AccDistance].toDouble()); // add laser off paths
+        // Без ключа -- змейкой: так считались все УП до выбора направления.
+        // Не operator[]: тот вписал бы ключ в параметры и прежним УП.
+        const bool unidirectional = gcp.params.contains(Unidirectional) && gcp.params.at(Unidirectional).toBool();
+        addAcc(laserPath, gcp.params[AccDistance].toDouble(), unidirectional); // add laser off paths
     }
 
     if(!qFuzzyIsNull(angle)) // поворот обратно
@@ -190,7 +193,7 @@ void Creator::createRasterAccLaser(const Tool& tool, const double depth, const d
     }
 }
 
-void Creator::addAcc(Geo::Polylines& src, const double accDistance) {
+void Creator::addAcc(Geo::Polylines& src, const double accDistance, const bool unidirectional) {
     Geo::Polylines pPath;
     pPath.reserve(src.size() * 2 + 1);
     std::sort(src.begin(), src.end(),
@@ -259,7 +262,13 @@ void Creator::addAcc(Geo::Polylines& src, const double accDistance) {
         for(size_t i{}; i < src.size(); ++i) {
             if(yLast != src[i].front().y()) {
                 adder(paths);
-                reverse = !reverse;
+                // Однонаправленный: и следующая строка -- слева направо. Разгон
+                // и выбег adder ставит по ходу отрезков, и между строками выходит
+                // возврат без луча: выбег за конец строки, назад к началу разгона
+                // следующей, разгон. Все строки проходятся одинаково: люфт и
+                // запаздывание луча не сдвигают края засветки через строку, как
+                // у змейки, но проход примерно вдвое дольше.
+                if(!unidirectional) reverse = !reverse;
                 yLast = src[i].front().y();
                 paths = Geo::Polylines{format(src[i])};
             } else {

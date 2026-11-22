@@ -29,6 +29,11 @@ public:
     static inline const QString Border = u"Border"_s;
     static inline const QString Fast = u"Fast"_s;
     static inline const QString Pass = u"Pass"_s;
+    // Растр HLDI однонаправленный: все строки засвечиваются в одну сторону,
+    // между строками -- возврат без луча. Ключ только у таких УП: без него
+    // строки идут змейкой, как считались все прежние. Попутное/встречное
+    // (Params::Convent) засветке ни к чему, и выбор этот -- свой.
+    static inline const QString Unidirectional = u"Unidirectional"_s;
     static inline const QString UseAngle = u"UseAngle"_s;
 
     enum {
@@ -45,7 +50,10 @@ protected:
 private:
     void createRaster(const Tool& tool, const double depth, const double angle, const int prPass);
     void createRasterAccLaser(const Tool& tool, const double depth, const double angle, const int prPass);
-    void addAcc(Geo::Polylines& src, const double accDistance);
+    // Засвечиваемые отрезки строк -> один проход головки: чётные пути -- ходы
+    // без луча (разгоны, развороты или возвраты, промежутки, выбег), нечётные
+    // -- отрезки. unidirectional -- каждая строка слева направо, иначе змейкой.
+    void addAcc(Geo::Polylines& src, const double accDistance, const bool unidirectional);
 };
 
 // Объект file.ext в pocketraster.js: чем растр этой УП пишется.
@@ -54,7 +62,8 @@ class RasterApi final : public QObject {
     // Растр HLDI (Params Fast, только лазер): первая группа путей -- ОДИН
     // непрерывный проход головки, в нём нечётные пути -- засвечиваемые
     // отрезки, чётные -- ходы с выключенным лучом между ними (Creator::addAcc:
-    // разгоны, развороты, промежутки внутри строки, выбег). Так же их рисует
+    // разгоны, развороты -- у однонаправленного возвраты к началу следующей
+    // строки, -- промежутки внутри строки, выбег). Так же их рисует
     // createGiLaser. Вторая группа, если есть, -- обводка контура.
     Q_PROPERTY(bool hldi READ hldi CONSTANT)
 
