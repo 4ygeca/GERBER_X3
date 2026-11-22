@@ -197,7 +197,7 @@ G0Z20                             the safe height, as after every header
 G0Z20                             before the first step of every tool: up to safeZ,
 M61 Q0                            the post's toolChange(ctx) block
 M5
-(MSG, T1 D0.8 DRILL D=0.80)
+(MSG, T1 D08L90 DRILL D=0.80)
 T1 M6
 M3 S12000
 G0Z20                             and safeZ again before any XY move
@@ -250,7 +250,7 @@ M2
 | `tool`               | the tool snapshot; `tool.code` is always set (the tool code, or the automatic one) |
 | `spindleSpeed`       | the speed of the step |
 | `message`            | the operator message line, already in the post's dialect (`message`) |
-| `messageText`        | the message text itself, ASCII: `T2 D1x10 DRILL D=1.00` |
+| `messageText`        | the message text itself, ASCII: `T2 D10L100 DRILL D=1.00` |
 
 An empty array writes no tool change commands at all. Without `toolChange`
 the core writes `spindleOff`, the message, `T<n> M6` and `spindleOn`.
@@ -291,8 +291,16 @@ WARNING <text>                                optional (tool numbers wrapped)
   way an old reader would misread (new optional lines do not change it).
 - `<k>`, `<n>`, `<count>`, `<holes>` -- decimal integers, `<n>` from 1.
 - `<code>` -- `[A-Za-z0-9._-]{1,20}`, the tool code of the tool database
-  (the automatic code such as `D0.8x9`, `E1`, `V0.1A30`, `L0.05`, `T1x6`
-  when it is not set).
+  (the automatic code when it is not set). The default automatic code is
+  the type letter (D drill, M end mill, V engraver, L laser, T thread mill),
+  the diameter without the point and the working length after `L` when it
+  is set: the diameter has as many decimals after the implied point as it
+  needs (at least one) and a leading `0` below 1 mm, the length is in
+  tenths of a millimetre -- `D035L50` (drill 0.35, 5 mm), `D05L100`, `D05`
+  (no length), `M08L90` (end mill 0.8, 9 mm), `M196L80`, `V02A30`
+  (engraver 0.2, 30°), `L005` (laser 0.05), `T10L60`. The format is
+  configurable in GGEasy (*Code format…* in the tool database); the code
+  patterns of a sender plugin must follow it.
 - `<diameter>` -- digits, a point (whatever the locale) and 2 or 3
   decimals: `0.80`, `1.00`, `0.125`.
 - `<type>` -- `DRILL`, `ENDMILL`, `ENGRAVER`, `LASER` or `THREADMILL`.
