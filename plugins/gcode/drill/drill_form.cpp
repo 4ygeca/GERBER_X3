@@ -272,9 +272,14 @@ void Form::initToolTable() {
     });
     connect(header, &Header::onChecked, [this](int /*idx*/) {
         if(model) {
-            int fl{};
+            // fl -- отмеченные (общая галка), ready -- те, что пойдут в расчёт:
+            // галка без инструмента только подсвечивает отверстия.
+            int fl{}, ready{};
             for(int i{}; i < model->rowCount(); ++i)
-                if(model->useForCalc(i)) ++fl;
+                if(model->useForCalc(i)) {
+                    ++fl;
+                    if(model->toolId(i) > Tool::ID::Null) ++ready;
+                }
             if(1) { // NOTE CheckBox behavior #112
                 header->checkBoxState = !fl ? Qt::Unchecked : (fl == model->rowCount() ? Qt::Checked : Qt::PartiallyChecked);
                 checkBox->setCheckState(header->checkBoxState);
@@ -283,7 +288,7 @@ void Form::initToolTable() {
                                             : (fl == model->rowCount() ? Qt::Checked
                                                                        : Qt::PartiallyChecked));
             }
-            pbCreate->setEnabled(fl);
+            pbCreate->setEnabled(ready);
         }
     });
 }

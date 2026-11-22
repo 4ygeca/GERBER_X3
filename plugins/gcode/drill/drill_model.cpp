@@ -59,8 +59,10 @@ bool Model::setMode(int row, Drilling::Mode mode) {
 }
 
 void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
-    if(data_[row].toolId != id)
-        data_[row].useForCalc = id > Tool::ID::Null;
+    // Назначили инструмент -- строка сразу к расчёту. Сняли -- галка остаётся,
+    // как стояла: она же подсветка отверстий, а УП без инструмента не строится.
+    if(data_[row].toolId != id && id > Tool::ID::Null)
+        data_[row].useForCalc = true;
     data_[row].toolId = id;
     // Правка -- вместе с id и ДО updateTool(): превью берёт действующий
     // инструмент, а инструмента восстановленной УП в базе может уже не быть.
@@ -98,8 +100,9 @@ void Model::setToolOverride(int row, ToolOverride toolOverride) {
 }
 
 void Model::setCreate(int row, bool create) {
-    if(data_[row].toolId == Tool::ID::Null)
-        return;
+    // Галка ставится и строке без инструмента: ею подсвечивают отверстия на
+    // плате, чтобы понять, что это за отверстия. УП строится только для строк
+    // с инструментом (computePaths).
     data_[row].useForCalc = create;
     for(auto item: data_[row].items) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, create);
@@ -110,9 +113,9 @@ void Model::setCreate(int row, bool create) {
 }
 
 void Model::setCreate(bool create) {
+    // Всем строкам, и без инструмента тоже, -- с подсветкой их отверстий.
     for(int row{}; row < rowCount(); ++row)
-        data_[row].useForCalc = create && data_[row].toolId != Tool::ID::Null;
-    emit dataChanged(createIndex(0, 0), createIndex(rowCount() - 1, ColumnCount - 1));
+        setCreate(row, create);
 }
 
 int Model::rowCount(const QModelIndex& /*parent*/) const { return static_cast<int>(data_.size()); }
