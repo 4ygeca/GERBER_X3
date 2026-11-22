@@ -82,8 +82,6 @@ private:
 
     void updateName();
     void updateCode();
-    // Тот же код у других инструментов базы -- подсказка рядом с полем.
-    void updateCodeHint();
     void updateWarn();
     void setChanged(bool fl = true);
     void setVisibleToolWidgets(bool visible);

@@ -120,14 +120,7 @@ ToolEditForm::ToolEditForm(QWidget* parent)
     connect(ui->leCode, &QLineEdit::textChanged, this, [this](const QString& code) {
         tool_.setCode(code);
         setChanged();
-        updateCodeHint();
     });
-    // Подсказка о повторе кода -- серым, как текст-подсказка пустого поля:
-    // это сведения, не предупреждение.
-    QPalette hintPalette = ui->lblCodeHint->palette();
-    hintPalette.setColor(QPalette::WindowText, hintPalette.color(QPalette::PlaceholderText));
-    ui->lblCodeHint->setPalette(hintPalette);
-    ui->lblCodeHint->setVisible(false);
     connect(ui->leCode, &QLineEdit::textEdited, this, [this] { ui->chbxAutoCode->setChecked(false); });
     connect(ui->chbxAutoCode, &QCheckBox::toggled, this, [this](bool checked) { tool_.setAutoCode(checked); });
     connect(ui->chbxAutoCode, &QCheckBox::clicked, this, [this](bool checked) {
@@ -298,7 +291,6 @@ void ToolEditForm::setVisibleToolWidgets(bool visible) {
         w->setVisible(visible);
     // Наборы режимов правятся только в базе: у снимка в окне местной правки их нет.
     ui->wgtPresets->setVisible(visible && dialog_);
-    updateCodeHint(); // у группы кода нет -- и подсказки тоже
     setMinimumWidth(width());
 }
 
@@ -635,31 +627,6 @@ Tool ToolEditForm::assembled() {
     return tool;
 }
 
-void ToolEditForm::updateCodeHint() {
-    // Одинаковый код -- не ошибка: две фрезы одной геометрии под разные
-    // материалы -- обычное дело. Прежде «Применить» предупреждало окном, теперь
-    // -- только строка под полем: она ничего не держит и ни о чём не спрашивает.
-    QStringList same;
-    if(const QString code = tool_.code(); !code.isEmpty() && !ui->leCode->isHidden()) {
-        // По возрастанию id, как в дереве базы. Сам инструмент -- по личности:
-        // у снимка в окне местной правки uid базы, а id мог устареть.
-        for(const auto& [id, other]: App::toolHolder().tools() | v::reverse) {
-            const bool self = tool_.uid().isEmpty() ? id == tool_.id() : other.uid() == tool_.uid();
-            if(!self && other.code().compare(code, Qt::CaseInsensitive) == 0)
-                same.push_back(u"%1 [%2]"_s.arg(other.name(), QString::number(+id)));
-        }
-    }
-    ui->lblCodeHint->setVisible(!same.isEmpty());
-    if(same.isEmpty())
-        return;
-    // В строке -- первые три, в подсказке -- все: одинаковых свёрл бывает много.
-    QStringList shown = same.mid(0, 3);
-    if(same.size() > shown.size())
-        shown.push_back(u"…"_s);
-    ui->lblCodeHint->setText(tr("Same code as: %1").arg(shown.join(u", "_s)));
-    ui->lblCodeHint->setToolTip(tr("Same code as: %1").arg(u'\n' + same.join(u'\n')));
-}
-
 void ToolEditForm::codeFormatChanged() {
     // Коды базы уже пересчитаны (ToolHolder::setCodeFormat). Код правки -- за
     // ними, и это не правка: признак изменения остаётся как был.
@@ -668,7 +635,6 @@ void ToolEditForm::codeFormatChanged() {
     updateCode();
     parentWidget()->setWindowModified(fl1);
     ui->pbApply->setEnabled(fl2);
-    updateCodeHint(); // коды других инструментов тоже сменились
 }
 
 void ToolEditForm::valueChanged(double val) {
@@ -764,8 +730,6 @@ void ToolEditForm::updateCode() {
     // Код по геометрии из tool_: поля пишут в него до этого вызова.
     if(ui->chbxAutoCode->isChecked())
         ui->leCode->setText(tool_.codeAuto());
-    // Пустое поле -- тоже автоматический код (Tool::code), он идёт за геометрией.
-    updateCodeHint();
 }
 
 void ToolEditForm::updateDsbxAngle(double val) {
