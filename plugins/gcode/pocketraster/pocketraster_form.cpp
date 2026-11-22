@@ -160,6 +160,10 @@ Form::Form(GCode::Plugin* plugin)
     settings.getValue(ui->dsbxAngle);
     settings.getValue(ui->rbClimb);
     settings.getValue(ui->rbConventional);
+    // Направление HLDI помнится само по себе. Впервые -- двунаправленный:
+    // змейкой HLDI шёл всегда.
+    settings.getValue(ui->rbBidirectional, true);
+    settings.getValue(ui->rbUnidirectional);
     settings.getValue(ui->rbFast);
     settings.getValue(ui->rbInside);
     settings.getValue(ui->rbNormal);
@@ -176,10 +180,13 @@ Form::Form(GCode::Plugin* plugin)
     connect(ui->rbConventional, &QRadioButton::clicked, this, &Form::rb_clicked);
     connect(ui->rbInside, &QRadioButton::clicked, this, &Form::rb_clicked);
     connect(ui->rbOutside, &QRadioButton::clicked, this, &Form::rb_clicked);
-    // Фрезеровка/HLDI -- только граница: rb_clicked() перебил бы имя УП
-    // именем по умолчанию, а от типа оно не зависит.
+    // Фрезеровка/HLDI -- только граница и переключатели направления:
+    // rb_clicked() перебил бы имя УП именем по умолчанию, а от типа оно не
+    // зависит.
     connect(ui->rbFast, &QRadioButton::clicked, this, &Form::updateBorder);
     connect(ui->rbNormal, &QRadioButton::clicked, this, &Form::updateBorder);
+    connect(ui->rbFast, &QRadioButton::clicked, this, &Form::updateDirection);
+    connect(ui->rbNormal, &QRadioButton::clicked, this, &Form::updateDirection);
     connect(ui->cbxBorder, &QComboBox::currentIndexChanged, this, &Form::updateBorder);
     // Рамку задали кнопкой или авторасстановкой, открыли проект.
     connect(&App::project(), &Project::layoutFrameUpdate, this, &Form::updateBorder);
@@ -202,6 +209,8 @@ Form::~Form() {
     settings.setValue(ui->dsbxAngle);
     settings.setValue(ui->rbClimb);
     settings.setValue(ui->rbConventional);
+    settings.setValue(ui->rbBidirectional);
+    settings.setValue(ui->rbUnidirectional);
     settings.setValue(ui->rbFast);
     settings.setValue(ui->rbInside);
     settings.setValue(ui->rbNormal);
@@ -253,6 +262,9 @@ void Form::computePaths() {
     if(ui->rbFast->isChecked()) {
         gcp.params[Creator::Fast] = true;
         gcp.params[Creator::AccDistance] = (tool.feedRate_mmPerSec() * tool.feedRate_mmPerSec()) / (2 * ui->dsbxAcc->value());
+        // Однонаправленный -- ключом. Без него змейка: двунаправленная УП
+        // остаётся ровно такой, какой была до выбора направления.
+        if(ui->rbUnidirectional->isChecked()) gcp.params[Creator::Unidirectional] = true;
     }
 
     fileCount = 1;
@@ -273,8 +285,20 @@ void Form::updateName() {
 
     leName->setText(names[side]);
     // HLDI могло только что погаснуть (не лазер) -- setChecked сигнала clicked
-    // не шлёт, и граница узнаёт об этом отсюда.
+    // не шлёт, и граница с направлением узнают об этом отсюда.
+    updateDirection();
     updateBorder();
+}
+
+void Form::updateDirection() {
+    // Растру HLDI попутное/встречное фрезы ни к чему: у него направление --
+    // в одну ли сторону засвечиваются строки. У этой пары своя группа кнопок,
+    // и выбор каждой пары остаётся при ней, пока видна другая.
+    const bool hldi = ui->rbFast->isChecked();
+    ui->rbClimb->setVisible(!hldi);
+    ui->rbConventional->setVisible(!hldi);
+    ui->rbBidirectional->setVisible(hldi);
+    ui->rbUnidirectional->setVisible(hldi);
 }
 
 void Form::updatePixmap() {
@@ -494,6 +518,10 @@ void Form::editFile(GCode::File* file) {
     if(!params.tools.empty()) ui->toolHolder1->setTool(params.tool());
     const bool fast = value(Creator::Fast).toBool();
     (fast ? ui->rbFast : ui->rbNormal)->setChecked(true);
+    // Направление HLDI -- только у растра HLDI. Без ключа он двунаправленный:
+    // змейкой считались все УП до выбора, и «Обновить» пересчитает её той же
+    // змейкой. У прочих УП выбор HLDI остаётся как был.
+    if(fast) (value(Creator::Unidirectional).toBool() ? ui->rbUnidirectional : ui->rbBidirectional)->setChecked(true);
 
     if(params.params.contains(Creator::UseAngle)) ui->dsbxAngle->setValue(value(Creator::UseAngle).toDouble());
     // Обводка лазера -- галкой: «First» старых УП обводил тоже после растра.

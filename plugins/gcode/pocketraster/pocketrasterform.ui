@@ -248,6 +248,35 @@ Without the outline: the board border, otherwise about 1 mm beyond the selected 
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QRadioButton" name="rbBidirectional">
+          <property name="toolTip">
+           <string>The rows are exposed in both directions, as a snake: the shortest pass.</string>
+          </property>
+          <property name="text">
+           <string>Bidirectional</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+          <attribute name="buttonGroup">
+           <string notr="true">bgHldiDirection</string>
+          </attribute>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="rbUnidirectional">
+          <property name="toolTip">
+           <string>Every row is exposed in the same direction, with a return without the beam between the rows: the edges of all rows line up (backlash and the beam lag do not shift every other row), the pass takes about twice as long.</string>
+          </property>
+          <property name="text">
+           <string>Unidirectional</string>
+          </property>
+          <attribute name="buttonGroup">
+           <string notr="true">bgHldiDirection</string>
+          </attribute>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -380,4 +409,7 @@ For the plain raster and for HLDI.</string>
  </customwidgets>
  <resources/>
  <connections/>
+ <buttongroups>
+  <buttongroup name="bgHldiDirection"/>
+ </buttongroups>
 </ui>
