@@ -972,7 +972,7 @@ void Form::pickUpTool() {
         const Row& data = model->data()[row];
         // Строки кармана и профиля pickTool() не подбирает: фреза под них
         // должна быть меньше отверстия, а насколько -- решает пользователь.
-        const Tool::ID id = pickTool(data.mode, data.isSlot, data.diameter, tools, order);
+        const Tool::ID id = pickTool(data.mode, data.isSlot, data.diameter, dsbxDepth->value(), tools, order);
         // Подходящего нет -- строка остаётся как была: выбранное вручную под
         // отверстие без своего сверла (3.0 под 3.2) кнопка не стирает.
         if(id <= Tool::ID::Null)

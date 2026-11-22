@@ -56,7 +56,7 @@ TreeOrder toolTreeOrder() {
     return toolTreeOrder(QJsonDocument::fromJson(file.readAll()).object().value(u"tree"_s).toArray());
 }
 
-Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, const TreeOrder& order) {
+Tool::ID pickTool(Mode mode, bool slot, double diameter, double depth, const Tools& tools, const TreeOrder& order) {
     if(mode != Mode::Drilling || !(diameter > 0.0))
         return Tool::ID::Null;
     // Близкий -- как и прежде, в пределах 5% диаметра. Точный -- с запасом на
@@ -65,24 +65,16 @@ Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, con
     // на Windows это макросы windef.h.)
     constexpr double nearShare = 0.05;
     constexpr double exactDelta = 0.005;
-    // Длина рабочей части: больше 1 мм -- задана, 1 мм -- значение по
-    // умолчанию (не задана), 0.1 мм и меньше -- пометка сломанного сверла.
-    constexpr double eps = 1e-9;
-    auto lengthRank = [](double length) {
-        if(length > 1.0 + eps) return 0;
-        return length > 0.1 + eps ? 1 : 2;
-    };
-    // Меньше -- лучше; сравниваются по порядку (см. объявление).
-    using Rank = std::tuple<int, int, int, int, int32_t>;
+    constexpr double eps = 1e-6;
+    // Меньше -- лучше; сравниваются по порядку: тип (сверло раньше фрезы),
+    // точный диаметр раньше близкого, порядок в дереве базы, id.
+    using Rank = std::tuple<int, int, int, int32_t>;
     std::optional<Rank> best;
     Tool::ID picked{Tool::ID::Null};
     for(const auto& [id, tool]: tools) {
         int typeRank{};
-        // Сломанное сверло (длина 0.1 -- пометка, чтобы не терять его режимы
-        // до замены) физически не годится: живая фреза того же диаметра --
-        // раньше него. Вручную его выбрать можно.
         if(tool.type() == Tool::Drill && !slot)
-            typeRank = lengthRank(tool.lenght()) == 2 ? 2 : 0;
+            typeRank = 0;
         else if(tool.type() == Tool::EndMill)
             typeRank = 1;
         else
@@ -91,8 +83,16 @@ Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, con
         // больше отверстия по-прежнему подходит.
         if(!(diameter * (1.0 - nearShare) <= tool.diameter() && tool.diameter() <= diameter * (1.0 + nearShare)))
             continue;
+        // Достанет ли: рабочая часть должна быть не короче глубины резания --
+        // глубины УП плюс, у сверла, конуса вершины (getDepths() идёт на всю
+        // эту глубину). Фрезой с рабочей частью 2 мм отверстие глубиной 5 мм
+        // не сделать. Сломанное сверло (длина 0.1) и неизмеренная длина (0)
+        // отпадают по этому же правилу, без особых случаев.
+        const double need = depth + (tool.type() == Tool::Drill ? tool.getDepth() : 0.0);
+        if(tool.lenght() + eps < need)
+            continue;
         const auto place = order.find(id);
-        const Rank rank{typeRank, std::abs(tool.diameter() - diameter) <= exactDelta ? 0 : 1, lengthRank(tool.lenght()),
+        const Rank rank{typeRank, std::abs(tool.diameter() - diameter) <= exactDelta ? 0 : 1,
             place != order.end() ? place->second : INT_MAX, std::to_underlying(id)};
         if(!best || rank < *best)
             best = rank, picked = id;
