@@ -19,7 +19,9 @@ function generate(file) {
 // the exposed strokes, the even ones -- moves with the beam off between them
 // (PocketRaster::Creator::addAcc): the run-up to the first stroke, the run-out,
 // the turn to the next row and its run-up (all of them beyond the exposed
-// area), the gaps between the strokes of a row (unexposed areas inside the
+// area; a unidirectional raster -- every row in the same direction -- has
+// instead the run-out, the return back over the board and the run-up of the
+// next row), the gaps between the strokes of a row (unexposed areas inside the
 // board), the run-out after the last stroke. The off moves are G1 at the same
 // feed with S0, not G0: the head keeps its speed through them -- the run-up is
 // there exactly so that every stroke is exposed at the full feed, a G0 would

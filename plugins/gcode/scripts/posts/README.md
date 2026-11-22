@@ -122,6 +122,19 @@ type HLDI) is one continuous pass: its run-ups, turns, run-outs and the gaps
 between the exposed strokes of a row are `G1 … S0` at the feed, so the head
 keeps its speed through them and nothing outside the strokes is exposed.
 
+For HLDI the "Direction" group of the form is "Bidirectional" / "Unidirectional"
+instead of "Climb" / "Conventional" (those mean nothing to an exposure).
+Bidirectional -- the default and every HLDI program made before the choice --
+is the snake: the rows alternate their direction. Unidirectional (the program
+parameter `Unidirectional`, absent -- bidirectional) exposes every row in the
+same direction, left to right in the frame of the raster angle: after a row
+the head runs out, returns over the board with the beam off (`G1 … S0` at the
+feed, straight to the run-up start of the next row) and runs up again. Backlash
+and the lag of the beam then shift every row the same way, and the edges of the
+exposed areas stay straight instead of serrated every other row; the price is
+about twice the time of the pass. The script sees the same structure either
+way (even paths of the pass -- moves with the beam off, odd ones -- strokes).
+
 ## Canned drilling cycles
 
 `cycles` lists the canned cycles the controller has. A missing key (or an
