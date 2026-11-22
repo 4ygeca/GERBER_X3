@@ -25,7 +25,7 @@ namespace Drilling {
 std::vector<Tool::Type> toolTypes(Mode mode, bool slot) {
     if(slot) return {Tool::EndMill};
     if(mode == Mode::Drilling) return {Tool::Drill, Tool::EndMill};
-    return {Tool::EndMill, Tool::Engraver, Tool::Laser};
+    return {Tool::Drill, Tool::EndMill, Tool::Engraver, Tool::Laser};
 }
 
 Model::Model(size_t rowCount, QObject* parent)

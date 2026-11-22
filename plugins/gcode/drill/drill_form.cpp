@@ -525,10 +525,7 @@ void Form::setRowsTool(const std::vector<int>& rows, const Tool& tool) {
         // Паз -- только концевой фрезой: его фрезеруют и при сверловке. Строке
         // отверстий -- то, что умеет её режим, и сверло всегда: строку в
         // режиме фрезеровки оно переводит на сверловку (Model::setToolId).
-        const bool fits = model->isSlot(row)
-            ? tool.type() == Tool::EndMill
-            : tool.type() == Tool::Drill || canProcess(tool.type(), model->mode(row));
-        if(!fits) {
+        if(!toolFits(tool.type(), model->mode(row), model->isSlot(row))) {
             refused.append(model->data()[row].name.back());
             continue;
         }
@@ -659,7 +656,8 @@ void Form::on_doubleClicked(const QModelIndex& current) {
     const int row = current.row();
     const Model* const tableModel = model;
     // Что строка принимает в своём режиме: паз -- концевую фрезу, сверловка --
-    // сверло или фрезу, карман и профиль -- фрезу, гравёр, лазер (не сверло).
+    // сверло или фрезу, карман и профиль -- фрезу, гравёр, лазер и сверло
+    // (оно переведёт строку на сверловку).
     ToolDatabase tdb(this, toolTypes(model->mode(row), model->isSlot(row)));
     selectRowTool(tdb, row);
     // Пока была открыта база, таблицу могли перестроить.
