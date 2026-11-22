@@ -160,6 +160,8 @@ PropertiesForm::~PropertiesForm() {
 
 void PropertiesForm::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    // Развернули окно программы: правка продолжается, снимок для отката -- прежний.
+    if(event->spontaneous()) return;
     committed_ = false;
     snapshot_ = {
         .safeZ = ui->dsbxSafeZ->value(),
@@ -184,6 +186,8 @@ void PropertiesForm::showEvent(QShowEvent* event) {
 
 void PropertiesForm::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    // Свернули окно программы -- панель не закрыли: начатую правку не откатывать.
+    if(event->spontaneous()) return;
     if(!committed_) applySnapshot(snapshot_);
     // Скрытой форме править нечего: начатая правка (и откат снимка в поле с
     // фокусом) -- в пересчёт сейчас, не дожидаясь ухода фокуса.

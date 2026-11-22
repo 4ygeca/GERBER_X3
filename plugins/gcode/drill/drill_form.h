@@ -202,6 +202,9 @@ protected:
     bool autoEnterEditMode() const override { return false; }
     // QWidget interface
     void showEvent(QShowEvent* event) override {
+        // Окно программы развернули после сворачивания -- файл, инструменты
+        // строк и память УП те же: таблица не пересобирается (см. hideEvent).
+        if(event->spontaneous()) return GCode::Form::showEvent(event);
         updateFiles();
         createdFileIds_.clear();
         // Очередь прогонов не сбрасывается: форму закрывают и во время счёта

@@ -78,6 +78,8 @@ protected:
     void updateName() override;
     // QWidget interface
     void showEvent(QShowEvent* event) override {
+        // Развернули окно программы -- форма та же (см. hideEvent).
+        if(event->spontaneous()) return GCode::Form::showEvent(event);
         updateFiles();
         createdFileIds_.clear();
         // Базовая, а не event->accept(): в GCode::Form::showEvent сбрасывается

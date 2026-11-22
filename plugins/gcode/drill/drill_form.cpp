@@ -1201,6 +1201,10 @@ void Form::editFile(GCode::File* file_) {
 void Form::updateName() { }
 
 void Form::hideEvent(QHideEvent* event) { // NOTE clean and hide pr gi
+    // Свернули окно программы (spontaneous) -- форма не закрыта: таблица с
+    // выбранным файлом и инструментами строк остаётся. Прежде она удалялась,
+    // и после разворачивания форма начинала с первого файла без инструментов.
+    if(event->spontaneous()) return QWidget::hideEvent(event);
     delete ui->toolTable->model();
     model = nullptr;
     event->accept();

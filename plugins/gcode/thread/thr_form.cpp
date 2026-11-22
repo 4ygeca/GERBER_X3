@@ -498,6 +498,8 @@ void Form::computePaths() {
 void Form::updateName() { }
 
 void Form::hideEvent(QHideEvent* event) { // NOTE clean and hide pr gi
+    // Свернули окно программы (spontaneous) -- форма не закрыта, таблица остаётся.
+    if(event->spontaneous()) return QWidget::hideEvent(event);
     delete ui->toolTable->model();
     model = nullptr;
     event->accept();
