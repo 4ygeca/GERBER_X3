@@ -770,39 +770,32 @@ void Form::customContextMenuRequested(const QPoint& pos) {
     menu.exec(ui->toolTable->horizontalHeader()->mapToGlobal(pos));
 }
 
+// Подбор -- и при показе файла, и кнопкой. Прежде кнопка подбирала только
+// строкам без инструмента, а после показа файла он был уже у всех -- нажатие
+// не меняло ничего. Теперь она возвращает строкам автоматический выбор: и
+// выбранное вручную, и правку «только для этой УП» -- тоже. А брал прежний
+// подбор первый подходящий по диаметру инструмент в порядке базы -- по
+// убыванию id (Tools -- std::greater), сверло или фрезу без разбора: фрезы
+// заводят обычно после свёрл, у них id больше, и отверстие под размер фрезы
+// получало фрезу.
 void Form::pickUpTool() {
     if(!model) return;
-
-    const double k = 0.05; // 5%
-    int ctr{};
-    for(const auto& row: model->data()) {
-        // model->setToolId(ctr++, 3);
-        // continue;
-        // Подбор по диаметру отверстия -- только сверловке. Фреза под карман
-        // или профиль должна быть меньше отверстия, а сверло в такую строку
-        // перевело бы её на сверловку -- выбор режима пропал бы молча.
-        if(row.mode != Mode::Drilling) {
-            ++ctr;
+    // Каждый раз заново: базу могли править, пока форма открыта.
+    const TreeOrder order = toolTreeOrder();
+    const auto& tools = App::toolHolder().tools();
+    for(int row{}; row < model->rowCount(); ++row) {
+        const Row& data = model->data()[row];
+        // Строки кармана и профиля pickTool() не подбирает: фреза под них
+        // должна быть меньше отверстия, а насколько -- решает пользователь.
+        const Tool::ID id = pickTool(data.mode, data.isSlot, data.diameter, tools, order);
+        // Подходящего нет -- строка остаётся как была: выбранное вручную под
+        // отверстие без своего сверла (3.0 под 3.2) кнопка не стирает.
+        if(id <= Tool::ID::Null)
             continue;
-        }
-        const double drillDiameterMin = row.diameter * (1.0 - k);
-        const double drillDiameterMax = row.diameter * (1.0 + k);
-
-        auto isFit = [&, this](auto& tool) -> bool {
-            const auto diameter = tool.getDiameter(dsbxDepth->value());
-            return drillDiameterMin <= diameter && drillDiameterMax >= diameter;
-        };
-        auto set = !row.isSlot ? std::set{Tool::Drill, Tool::EndMill} : std::set{Tool::EndMill};
-        auto filter = v::filter([&set](auto& t) { return set.contains(t.second.type()); });
-        for(auto& [id, tool]: App::toolHolder().tools() | filter) {
-            qWarning() << tool;
-            if(model->toolId(ctr) < Tool::ID::Tool && isFit(tool)) {
-                model->setToolId(ctr, id);
-                break;
-            }
-        }
-
-        ++ctr;
+        // Уже он, и без правки -- менять нечего (и галку тоже).
+        if(id == data.toolId && !data.toolOverride)
+            continue;
+        model->setToolId(row, id); // новый выбор сбрасывает и правку
     }
 }
 

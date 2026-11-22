@@ -14,8 +14,11 @@
 #include <QAbstractTableModel>
 #include <QIcon>
 #include <array>
+#include <map>
 #include <optional>
 #include <vector>
+
+class QJsonArray;
 
 namespace Drilling {
 
@@ -72,6 +75,26 @@ constexpr bool toolFits(Tool::Type type, Mode mode, bool slot) {
     if(slot) return type == Tool::EndMill;
     return type == Tool::Drill || canProcess(type, mode);
 }
+
+// Порядок инструментов в дереве базы: id -> место при обходе дерева сверху
+// вниз. Дерево (папки-наборы и порядок в них) хранит не ToolHolder, а окно
+// базы -- ключом "tree" в tools.json (ToolModel::exportTools).
+using TreeOrder = std::map<Tool::ID, int>;
+TreeOrder toolTreeOrder(const QJsonArray& tree);
+// То же из tools.json, который читает база (ToolHolder::readTools); нет файла
+// или дерева -- пусто.
+TreeOrder toolTreeOrder();
+
+// Инструмент базы для строки -- «Подобрать инструменты» и автоподбор при
+// показе файла. Только строкам в режиме сверловки: фреза под карман или
+// профиль должна быть меньше отверстия, а насколько -- решает пользователь.
+// Кандидаты -- в пределах 5% диаметра: отверстию -- сверло или концевая фреза
+// (врезание), пазу -- только концевая фреза (его фрезеруют вдоль). Из них --
+// по порядку: сверло раньше фрезы; точный диаметр раньше близкого; заданная
+// длина рабочей части (больше 1 мм) раньше незаданной (1 мм по умолчанию), а
+// та раньше 0.1 мм -- так помечают сломанное сверло; дальше -- порядок в дереве
+// базы, затем меньший id. Null -- подходящего нет.
+Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, const TreeOrder& order = {});
 
 struct Row {
     // Row(QString&& name = {},
