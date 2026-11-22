@@ -79,6 +79,8 @@ private:
 
     void updateName();
     void updateCode();
+    // Тот же код у других инструментов базы -- подсказка рядом с полем.
+    void updateCodeHint();
     void updateWarn();
     void setChanged(bool fl = true);
     void setVisibleToolWidgets(bool visible);
@@ -99,7 +101,6 @@ private:
     void removePreset();
     // Инструмент для базы: собственные значения режимов и все наборы.
     Tool assembled();
-    void warnDuplicateCode(const Tool& tool);
     using Key = decltype(&Tool::angle);
 
     void updateDsbxAngle(double val);
