@@ -168,6 +168,13 @@ void Model::setToolOverride(int row, ToolOverride toolOverride) {
     emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
 }
 
+void Model::setMaterial(const QString& material) {
+    if(material_ == material) return;
+    material_ = material;
+    // Режимы инструментов базы теперь из другого набора -- подсказки устарели.
+    if(rowCount()) emit dataChanged(createIndex(0, Tool), createIndex(rowCount() - 1, Tool), {Qt::ToolTipRole});
+}
+
 void Model::setCreate(int row, bool create) {
     // Галка ставится и строке без инструмента: ею подсвечивают отверстия на
     // плате, чтобы понять, что это за отверстия. УП строится только для строк
@@ -249,14 +256,25 @@ QVariant Model::data(const QModelIndex& index, int role) const {
                     return QVariant::fromValue(font);
                 }
                 break;
-            case Qt::ToolTipRole:
+            case Qt::ToolTipRole: {
+                // Откуда у инструмента режимы -- как у выбора инструмента в
+                // формах фрезеровки (ToolSelectorForm): правка, набор под
+                // операцию строки и материал формы или свои значения.
+                QString tip;
                 if(edited) {
-                    QString tip = tr("Edited for this toolpath only (the tool database is not changed)");
-                    if(!effective.note().isEmpty())
-                        tip += u"\n\n"_s + effective.note();
-                    return tip;
+                    tip = tr("Edited for this toolpath only (the tool database is not changed)");
+                } else {
+                    const ::Tool::Operation operation = operationOf(effective.type(), data_[row].mode, data_[row].isSlot);
+                    const ::Tool resolved = App::toolHolder().resolve(effective, operation, material_);
+                    if(!resolved.material().isEmpty() || effective.preset(operation, {}))
+                        tip = tr("Cutting data: %1").arg(App::toolHolder().presetName({.operation = operation, .material = resolved.material()}));
+                    else
+                        tip = tr("Cutting data: tool defaults");
                 }
-                break;
+                if(!effective.note().isEmpty())
+                    tip += u"\n\n"_s + effective.note();
+                return tip;
+            }
             case Qt::UserRole: return +data_[row].toolId;
             default          : break;
             }

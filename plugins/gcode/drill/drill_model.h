@@ -76,6 +76,13 @@ constexpr bool toolFits(Tool::Type type, Mode mode, bool slot) {
     return type == Tool::Drill || canProcess(type, mode);
 }
 
+// Операция УП для инструмента строки: сверловка -- только в режиме сверловки и
+// не у паза (пазы фрезеруются вдоль, drilling.js -- millingProfilePath),
+// лазер и резьба -- по типу, остальное -- фрезеровка. Под неё берутся режимы.
+inline Tool::Operation operationOf(Tool::Type type, Mode mode, bool slot) {
+    return Tool::programOperation(type, mode == Mode::Drilling && !slot);
+}
+
 // Порядок инструментов в дереве базы: id -> место при обходе дерева сверху
 // вниз. Дерево (папки-наборы и порядок в них) хранит не ToolHolder, а окно
 // базы -- ключом "tree" в tools.json (ToolModel::exportTools).
@@ -131,6 +138,9 @@ class Model : public QAbstractTableModel {
     Q_OBJECT
 
     std::vector<Row> data_;
+    // Материал, под который форма берёт режимы строк (её выбор или материал
+    // проекта), -- для подсказки, чьи режимы у инструмента строки.
+    QString material_;
 
 signals:
     void set(int, bool);
@@ -174,6 +184,9 @@ public:
     void setToolId(int row, Tool::ID id, ToolOverride toolOverride = {});
     // Правка инструмента только для этой УП; nullopt -- снова инструмент из базы.
     void setToolOverride(int row, ToolOverride toolOverride);
+    // Материал режимов строк (uid; пусто -- без материала): подсказки столбца
+    // Tool -- по нему.
+    void setMaterial(const QString& material);
     // void setType(int type_) { type = type_; }
 
     static QString modeName(Drilling::Mode mode);

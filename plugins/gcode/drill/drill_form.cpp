@@ -153,6 +153,7 @@ Form::Form(GCode::Plugin* plugin)
         MySettings settings;
         settings.beginGroup(u"DrillForm"_s);
         settings.getValue(ui->chbxZoomToSelected);
+        materialChoice_ = settings.value(u"material"_s).toString();
         // Режим, сторона и направление на всю форму ушли в строки таблицы
         // (столбец Mode) -- их прежние ключи больше не читаются. Не переносятся
         // нарочно: режим прошлой формы по умолчанию для всех строк оставил бы
@@ -161,6 +162,23 @@ Form::Form(GCode::Plugin* plugin)
             settings.remove(key);
         settings.endGroup();
     }
+
+    // Материал режимов -- как у выбора инструмента в формах фрезеровки
+    // (ToolSelectorForm): материал проекта или выбранный здесь.
+    updateMaterials();
+    resolvedMaterial_ = effectiveMaterial();
+    // activated -- только выбор пользователя; список перестраивает и сама форма.
+    connect(ui->cbxMaterial, &QComboBox::activated, this, [this](int index) {
+        materialChoice_ = ui->cbxMaterial->itemData(index).toString();
+        resolveRows();
+    });
+    // Материал проекта сменился (свойства G-кода, открытие и закрытие проекта):
+    // форма, что за ним следует, берёт режимы строк под новый материал.
+    if(auto* project = App::project.ptr())
+        connect(project, &Project::materialChanged, this, [this] {
+            updateMaterials(); // имя материала проекта в первой строке
+            resolveRows();
+        });
 
     //
     connect(ui->pbPickUpTools, &QPushButton::clicked, this, &Form::pickUpTool);
@@ -177,6 +195,7 @@ Form::~Form() {
     MySettings settings;
     settings.beginGroup(u"DrillForm"_s);
     settings.setValue(ui->chbxZoomToSelected);
+    settings.setValue(u"material"_s, materialChoice_);
     settings.endGroup();
 
     // for (auto* var : App::grView().items<Gi::DataSolid>())
@@ -383,6 +402,7 @@ void Form::on_cbxFileCurrentIndexChanged() {
         return;
     }
 
+    if(model) model->setMaterial(effectiveMaterial());
     pickUpTool();
 
     delete ui->toolTable->model();
@@ -403,12 +423,55 @@ void Form::on_cbxFileCurrentIndexChanged() {
     header->onChecked();
 }
 
-Tool::Operation Form::operation(const Tool& tool, Mode mode, bool slot) const {
-    return Tool::programOperation(tool.type(), mode == Mode::Drilling && !slot);
-}
+Tool::Operation Form::operation(const Tool& tool, Mode mode, bool slot) const { return operationOf(tool.type(), mode, slot); }
 
 Tool Form::resolved(const Tool& tool, Mode mode, bool slot) const {
-    return App::toolHolder().resolve(tool, operation(tool, mode, slot), App::project().material());
+    return App::toolHolder().resolve(tool, operation(tool, mode, slot), effectiveMaterial());
+}
+
+QString Form::effectiveMaterial() const {
+    if(!materialChoice_.isEmpty()) return materialChoice_;
+    return App::project.ptr() ? App::project().material() : QString{};
+}
+
+void Form::updateMaterials() {
+    const QSignalBlocker blocker{ui->cbxMaterial};
+    ui->cbxMaterial->clear();
+    const QString project = App::project.ptr() ? App::project().material() : QString{};
+    ui->cbxMaterial->addItem(tr("Project material (%1)").arg(project.isEmpty() ? tr("not set") : App::toolHolder().materialName(project)), QString{});
+    for(const auto& material: App::toolHolder().materials())
+        ui->cbxMaterial->addItem(material.name, material.uid);
+    int index = materialChoice_.isEmpty() ? 0 : ui->cbxMaterial->findData(materialChoice_);
+    if(index < 0) { // выбранный здесь материал удалили из списка базы -- выбор остаётся
+        ui->cbxMaterial->addItem(App::toolHolder().materialName(materialChoice_), materialChoice_);
+        index = ui->cbxMaterial->count() - 1;
+    }
+    ui->cbxMaterial->setCurrentIndex(index);
+}
+
+void Form::resolveRows() {
+    const QString before = std::exchange(resolvedMaterial_, effectiveMaterial());
+    if(!model)
+        return;
+    model->setMaterial(resolvedMaterial_);
+    if(before == resolvedMaterial_)
+        return;
+    // Режимы строк считаются при каждом Create (rowTool) -- хранить в строках
+    // нечего. Но УП строки, чьи режимы от материала зависят, теперь другая:
+    // снова к расчёту, как при смене режима или инструмента.
+    const auto& tools = App::toolHolder().tools();
+    for(int row{}; row < model->rowCount(); ++row) {
+        const Row& data = model->data()[row];
+        if(data.toolId <= Tool::ID::Null || data.toolOverride)
+            continue; // правка «только для этой УП» -- своими значениями
+        const auto it = tools.find(data.toolId);
+        if(it == tools.end())
+            continue;
+        const Tool::Operation rowOperation = operation(it->second, data.mode, data.isSlot);
+        if(App::toolHolder().resolve(it->second, rowOperation, before).hash()
+            != App::toolHolder().resolve(it->second, rowOperation, resolvedMaterial_).hash())
+            header->set(row, true);
+    }
 }
 
 Tool Form::rowTool(const Row& row) const { return row.toolOverride ? *row.toolOverride : resolved(row.tool(), row.mode, row.isSlot); }
@@ -586,7 +649,7 @@ void Form::editRowTool(int row) {
 
     // Правится КОПИЯ действующего инструмента строки -- база не трогается.
     // Действующий -- с набором режимов под операцию строки (её режим) и
-    // материал проекта: его УП и получит, его и правят.
+    // материал формы: его УП и получит, его и правят.
     const bool slot = model->data()[row].isSlot;
     const Mode mode = model->mode(row);
     const Tool current = rowTool(model->data()[row]);
@@ -663,6 +726,7 @@ void Form::on_doubleClicked(const QModelIndex& current) {
     // Пока была открыта база, таблицу могли перестроить.
     if(tdb.exec() && model == tableModel)
         setRowsTool({row}, tdb.tool());
+    updateMaterials(); // материалы могли править в окне базы
 }
 
 void Form::on_selectionChanged(const QItemSelection& selected, const QItemSelection& deselected) {
@@ -694,6 +758,7 @@ void Form::on_customContextMenuRequested(const QPoint& pos) {
         selectRowTool(tdb, toolRow);
         if(tdb.exec() && model == tableModel)
             setRowsTool(rows, tdb.tool());
+        updateMaterials(); // материалы могли править в окне базы
     });
 
     // Правка "только для этой УП": строка под курсором, иначе первая выделенная
@@ -758,6 +823,7 @@ void Form::customContextMenuRequested(const QPoint& pos) {
         selectRowTool(tdb, toolRowOf(selectedIndexes()));
         if(tdb.exec() && model == tableModel)
             setRowsTool(all, tdb.tool());
+        updateMaterials(); // материалы могли править в окне базы
     });
     menu.addAction(QIcon::fromTheme(u"list-remove"_s), tr("&Remove Tool for everyone"), [this] {
         ui->toolTable->selectAll();
@@ -860,7 +926,7 @@ void Form::computePaths() {
     { // Сверловка, пазы: фрезеруются вдоль путей (drilling.js)
         // Инструмент -- копией в самих данных: у правленной строки он не из
         // базы, и в УП (gcp.tools, а с ним file.tool.note скриптов) должен уйти он.
-        // Инструмент базы -- с набором режимов под операцию и материал проекта.
+        // Инструмент базы -- с набором режимов под операцию и материал формы.
         struct Data {
             Tool tool;
             Geo::Polylines paths;
