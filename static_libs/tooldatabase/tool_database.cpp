@@ -11,6 +11,8 @@
  * http://www.boost.org/LICENSE_1_0.txt                                         *
  ********************************************************************************/
 #include "tool_database.h"
+#include "app.h"
+#include "tool_codeformatdialog.h"
 #include "tool_item.h"
 #include "tool_materialsdialog.h"
 #include "ui_tooldatabase.h"
@@ -63,6 +65,17 @@ ToolDatabase::ToolDatabase(QWidget* parent, std::span<const Tool::Type> types)
         MaterialsDialog dialog{this};
         if(dialog.exec() == QDialog::Accepted)
             ui->toolEdit->materialsChanged(dialog.removed());
+    });
+
+    // Формат автоматического кода: по OK окна коды базы уже пересчитаны --
+    // за ними выбранный инструмент (его отдаёт tool()) и открытая правка.
+    connect(ui->pbCodeFormat, &QPushButton::clicked, this, [this] {
+        CodeFormatDialog dialog{this};
+        if(dialog.exec() != QDialog::Accepted)
+            return;
+        if(const Tool* found = App::toolHolder().findTool(tool_))
+            tool_ = *found;
+        ui->toolEdit->codeFormatChanged();
     });
 
     ui->pbCopy->setIcon(QIcon::fromTheme(u"edit-copy"_s));

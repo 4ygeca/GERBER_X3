@@ -660,6 +660,17 @@ void ToolEditForm::updateCodeHint() {
     ui->lblCodeHint->setToolTip(tr("Same code as: %1").arg(u'\n' + same.join(u'\n')));
 }
 
+void ToolEditForm::codeFormatChanged() {
+    // Коды базы уже пересчитаны (ToolHolder::setCodeFormat). Код правки -- за
+    // ними, и это не правка: признак изменения остаётся как был.
+    const bool fl1 = parentWidget()->isWindowModified();
+    const bool fl2 = ui->pbApply->isEnabled();
+    updateCode();
+    parentWidget()->setWindowModified(fl1);
+    ui->pbApply->setEnabled(fl2);
+    updateCodeHint(); // коды других инструментов тоже сменились
+}
+
 void ToolEditForm::valueChanged(double val) {
     if(auto dsbx = qobject_cast<QDoubleSpinBox*>(sender()); dsbx)
         (this->*update[dsbx])(val);
