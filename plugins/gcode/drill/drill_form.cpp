@@ -752,9 +752,11 @@ void Form::initEditButtons() {
         // Index-виджет view удаляет сам при смене или удалении модели.
         ui->toolTable->setIndexWidget(model->index(row, Model::Edit), button);
     }
-    connect(model, &Model::set, this, [this, tableModel = model](int row, bool on) {
+    // Кнопка правки -- по инструменту строки, а не по галке: галка бывает и
+    // без инструмента (подсветка отверстий).
+    connect(model, &Model::set, this, [this, tableModel = model](int row, bool) {
         if(auto* button = ui->toolTable->indexWidget(tableModel->index(row, Model::Edit)))
-            button->setEnabled(on);
+            button->setEnabled(tableModel->toolId(row) > Tool::ID::Null);
     });
 }
 

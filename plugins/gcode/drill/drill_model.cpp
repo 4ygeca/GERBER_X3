@@ -78,8 +78,11 @@ Tool::ID pickTool(Mode mode, bool slot, double diameter, const Tools& tools, con
     Tool::ID picked{Tool::ID::Null};
     for(const auto& [id, tool]: tools) {
         int typeRank{};
+        // Сломанное сверло (длина 0.1 -- пометка, чтобы не терять его режимы
+        // до замены) физически не годится: живая фреза того же диаметра --
+        // раньше него. Вручную его выбрать можно.
         if(tool.type() == Tool::Drill && !slot)
-            typeRank = 0;
+            typeRank = lengthRank(tool.lenght()) == 2 ? 2 : 0;
         else if(tool.type() == Tool::EndMill)
             typeRank = 1;
         else
@@ -147,7 +150,9 @@ void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
         item->setFlag(QGraphicsItem::ItemIsSelectable, id > Tool::ID::Null);
         item->updateTool();
     }
-    emit set(row, id > Tool::ID::Null);
+    // Назначили инструмент -- галка ставится. Сняли -- галка остаётся как
+    // была: она же подсветка отверстий (УП без инструмента не строится).
+    emit set(row, id > Tool::ID::Null || data_[row].useForCalc);
     emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
 }
 
