@@ -109,7 +109,7 @@
          <widget class="QLabel" name="lblCode">
           <property name="toolTip">
            <string>Tool code for the G-code and the sender: letters, digits, '.', '_', '-' (up to 20).
-Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).</string>
+Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are set by &quot;Code format…&quot; in the tool database).</string>
           </property>
           <property name="text">
            <string>Code</string>
@@ -122,7 +122,7 @@ Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).<
         <item>
          <widget class="QCheckBox" name="chbxAutoCode">
           <property name="toolTip">
-           <string>Automatic code: follows the type and geometry</string>
+           <string>Automatic code: follows the type, the geometry and the code format</string>
           </property>
           <property name="layoutDirection">
            <enum>Qt::LayoutDirection::RightToLeft</enum>
@@ -138,6 +138,16 @@ Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).<
        <widget class="QLineEdit" name="leCode"/>
       </item>
       <item row="3" column="1">
+       <widget class="QLabel" name="lblCodeHint">
+        <property name="text">
+         <string notr="true"/>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
        <widget class="QTextEdit" name="teNote">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -147,7 +157,7 @@ Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).<
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="lblNote">
         <property name="text">
          <string>Note</string>

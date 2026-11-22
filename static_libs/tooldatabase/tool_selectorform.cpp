@@ -138,6 +138,10 @@ void ToolSelectorForm::setSnapshot(const Tool& tool) {
         probe.setLaserDynamic(fromBase.laserDynamic());
         probe.setMaterial(fromBase.material());
     }
+    // Автоматический код снимка мог быть посчитан прежним форматом кода
+    // (D0.8x9 при нынешнем D08L90): это не правка -- код следует за базой.
+    if(probe.autoCode() && fromBase.autoCode())
+        probe.setCode(fromBase.code());
     edited_ = probe.hash() != fromBase.hash();
     tool_ = edited_ ? tool : fromBase;
     updateForm();

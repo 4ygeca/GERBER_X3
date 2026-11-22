@@ -68,6 +68,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="pbCodeFormat">
+       <property name="toolTip">
+        <string>Patterns of the automatic tool codes</string>
+       </property>
+       <property name="text">
+        <string>Code format…</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QDialogButtonBox" name="buttonBox">
        <property name="standardButtons">
         <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>

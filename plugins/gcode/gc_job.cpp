@@ -78,7 +78,7 @@ QString jobOperationKeyword(const JobStep& step) {
     return u"MILLING"_s;
 }
 
-// Сообщение оператору перед сменой: «T2 D1x10 DRILL D=1.00». Только ASCII
+// Сообщение оператору перед сменой: «T2 D10L100 DRILL D=1.00». Только ASCII
 // (код уже очищен, слово типа и число -- свои): имя инструмента бывает
 // кириллицей и с пробелами, его в сообщении нет -- оно есть в сведениях УП.
 QString jobMessage(const JobStep& step, int toolNumber) {

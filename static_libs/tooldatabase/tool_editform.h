@@ -44,6 +44,9 @@ public:
     // Список материалов правили (окно «Материалы…»): наборы удалённых материалов
     // уходят и из правки, имена в списке наборов -- новые.
     void materialsChanged(const std::set<QString>& removed);
+    // Сменили формат кода (окно «Формат кода…»): автоматический код правки --
+    // по новому формату, подсказка о повторе -- по новым кодам базы.
+    void codeFormatChanged();
     enum Feeds {
         mmPerSec,
         mmPerMin,
@@ -79,6 +82,8 @@ private:
 
     void updateName();
     void updateCode();
+    // Тот же код у других инструментов базы -- подсказка рядом с полем.
+    void updateCodeHint();
     void updateWarn();
     void setChanged(bool fl = true);
     void setVisibleToolWidgets(bool visible);
@@ -99,7 +104,6 @@ private:
     void removePreset();
     // Инструмент для базы: собственные значения режимов и все наборы.
     Tool assembled();
-    void warnDuplicateCode(const Tool& tool);
     using Key = decltype(&Tool::angle);
 
     void updateDsbxAngle(double val);
