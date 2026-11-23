@@ -521,6 +521,8 @@ void Form::on_cbxFileCurrentIndexChanged() {
     leName->setText(file && App::project().contains(file) ? drillGroup(file) : QString{});
     if(model) model->setMaterial(effectiveMaterial());
     pickUpTool();
+    // Отверстия на плате -- лишь отмеченных строк (галки ставит и подбор).
+    if(model) model->updateShown();
 
     delete ui->toolTable->model();
     ui->toolTable->setModel(model);
@@ -849,12 +851,19 @@ void Form::on_doubleClicked(const QModelIndex& current) {
 }
 
 void Form::on_selectionChanged(const QItemSelection& selected, const QItemSelection& deselected) {
+    // Выделенная строка видна и без галки -- чтобы понять, что это за
+    // отверстия; снятое выделение прячет их снова, если галки нет. Спрятанное
+    // превью не выделяется -- сперва показать.
     for(auto&& index: selected.indexes())
-        for(auto&& item: model->data()[index.row()].items)
+        for(auto&& item: model->data()[index.row()].items) {
+            item->setShown(true);
             item->setSelected(true);
+        }
     for(auto&& index: deselected.indexes())
-        for(auto&& item: model->data()[index.row()].items)
+        for(auto&& item: model->data()[index.row()].items) {
             item->setSelected(false);
+            item->setShown(model->useForCalc(index.row()));
+        }
     zoomToSelected();
 }
 

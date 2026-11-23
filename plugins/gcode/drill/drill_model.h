@@ -163,6 +163,9 @@ public:
 
     bool isSlot(int row) const { return data_[row].isSlot; }
     bool useForCalc(int row) const { return data_[row].useForCalc; }
+    // Превью всех строк -- по галкам: отмеченные видны, прочие -- лишь пока
+    // выделены в таблице. Зовёт форма, собрав строки нового файла.
+    void updateShown();
 
     Tool::ID toolId(int row) const { return data_[row].toolId; }
     bool hasOverride(int row) const { return data_[row].toolOverride.has_value(); }

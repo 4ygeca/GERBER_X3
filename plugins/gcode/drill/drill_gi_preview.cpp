@@ -32,6 +32,8 @@ Preview::Preview(Geo::Polyline&& path, double diameter, Tool::ID toolId, Row& ro
         source_ = draw_;
     sourcePath_ = source_.toPath();
     row.items.emplace_back(this);
+    // Выделяемо всегда (см. active()): включённость строки -- её галка.
+    setFlag(ItemIsSelectable, true);
     update();
 }
 

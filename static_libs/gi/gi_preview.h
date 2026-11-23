@@ -56,6 +56,15 @@ public:
     // virtual Paths paths() const          = 0;
     virtual bool fit(double depth) const = 0;
 
+    // Строка превью включена (галка): цвет -- по инструменту и биту Used. Нет
+    // -- серый, что бы ни было назначено. По умолчанию -- флаг
+    // ItemIsSelectable (резьба так и включает строку); сверловка держит это
+    // своим полем строки, а выделяемым её превью остаётся всегда.
+    virtual bool active() const { return flags() & ItemIsSelectable; }
+    // Показать или спрятать: спрятанное не рисуется, не выделяется и мыши не
+    // ловит. Показ -- с проявлением (ItemVisibleChange), как у нового превью.
+    void setShown(bool shown);
+
     void changeColor();
 
 protected:
@@ -103,10 +112,12 @@ protected:
         StateColors{QColor{192, 192, 192, 128}, pathNone}, //  1 ---H Hovered
         StateColors{QColor{128, 128, 128, 255}, pathNone}, //  2 --S- Selected
         StateColors{QColor{192, 192, 192, 255}, pathNone}, //  3 --SH Selected+Hovered
-        StateColors{QColor{128, 128, 128, 128}, pathNone}, //  4 -U-- Used
-        StateColors{QColor{128, 128, 128, 128}, pathNone}, //  5 -U-H Used+Hovered
-        StateColors{QColor{128, 128, 128, 255}, pathNone}, //  6 -US- Used+Selected (Selected приоритетнее)
-        StateColors{QColor{128, 128, 128, 255}, pathNone}, //  7 -USH Used+Selected+Hovered
+        // Строка включена, инструмента нет: отверстие подсвечено (оранжевым),
+        // но УП по нему не будет -- прежде оно оставалось серым, как выключенное.
+        StateColors{QColor{255, 160, 0, 128},   pathNone}, //  4 -U-- Used
+        StateColors{QColor{255, 192, 64, 128},  pathNone}, //  5 -U-H Used+Hovered
+        StateColors{QColor{255, 160, 0, 255},   pathNone}, //  6 -US- Used+Selected (Selected приоритетнее)
+        StateColors{QColor{255, 192, 64, 255},  pathNone}, //  7 -USH Used+Selected+Hovered
         StateColors{QColor{128, 0, 0, 128},     pathIdle}, //  8 T--- Tool
         StateColors{QColor{128, 0, 0, 128},     pathIdle}, //  9 T--H Tool+HovedarkRed
         StateColors{QColor{128, 0, 0, 255},     pathIdle}, // 10 T-S- Tool+Selected

@@ -15,6 +15,7 @@
 #include "abstract_file.h"
 #include "app.h"
 #include "ft_model.h"
+#include "gc_file.h"
 #include "gc_node.h"
 #include "geo/boolean.h"
 #include "gi_error.h"
@@ -552,6 +553,9 @@ const Params& Form::getNewGcpWithGi() {
     Geo::Polylines closedContours;
     for(auto* gi: App::grView().selectedItems<Gi::Item>()) {
         qDebug() << gi << gi->file();
+        // Траектории УП -- не исходник новой УП: «Выделить всё» берёт и их, и
+        // профиль шёл по отверстиям готовой сверловки поверх выбранного слоя.
+        if(gi->type() == Gi::Type::Path_ || dynamic_cast<const File*>(gi->file())) continue;
         if(skipGi(gi)) continue;
         // switch(gi->type()) {
         // case Gi::Type::DataSolid:

@@ -18,6 +18,7 @@
 #include "aboutform.h"
 #include "abstract_file.h"
 #include "abstract_fileplugin.h"
+#include "gc_file.h"
 #include "gc_job.h"
 #include "gc_plugin.h"
 #include "gc_propertiesform.h"
@@ -494,9 +495,14 @@ void MainWindow::selectAll() {
         for(QGraphicsItem* item: App::grView().items(Gi::Type::Preview))
             item->setSelected(true);
     } else {
-        for(QGraphicsItem* item: App::grView().items())
-            if(item->isVisible() && item->opacity() > 0)
-                item->setSelected(true);
+        // Только исходная геометрия: траектории УП (пути, отверстия сверловки)
+        // не выделяются -- иначе форма профиля брала их исходником.
+        for(QGraphicsItem* item: App::grView().items()) {
+            if(!item->isVisible() || item->opacity() <= 0) continue;
+            if(item->type() == Gi::Type::Path_) continue;
+            if(auto* gi = dynamic_cast<Gi::Item*>(item); gi && dynamic_cast<const GCode::File*>(gi->file())) continue;
+            item->setSelected(true);
+        }
     }
 }
 

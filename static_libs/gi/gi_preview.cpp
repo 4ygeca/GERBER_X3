@@ -91,7 +91,7 @@ void AbstractPreview::changeColor() {
     //            << (+(cs & CS::Selected) ? "Selected" : "        ")
     //            << (+(cs & CS::Used) ? "Used    " : "        ")
     //            << (+(cs & CS::Tool) ? "Tool    " : "        ");
-    auto cs = colorState & (flags() & ItemIsSelectable ? ~CS::Default : ~(CS::Used | CS::Tool));
+    auto cs = colorState & (active() ? ~CS::Default : ~(CS::Used | CS::Tool));
 
     propAnimBr.setStartValue(bodyColor_);
     propAnimPn.setStartValue(pathColor_);
@@ -100,6 +100,15 @@ void AbstractPreview::changeColor() {
     propAnimPn.setEndValue(c.path);
 
     propAnimGr.start();
+}
+
+void AbstractPreview::setShown(bool shown) {
+    if(shown == isVisible() && (!shown || opacity() > 0.0)) return;
+    setVisible(shown);
+    // Видимое, но ещё прозрачное (новое превью проявляется лишь сменой
+    // видимости) -- проявить: иначе включённая строка так и осталась бы
+    // невидимой.
+    if(shown && opacity() <= 0.0) setOpacity(1.0);
 }
 
 void AbstractPreview::hoverEnterEvent(QGraphicsSceneHoverEvent* event) {

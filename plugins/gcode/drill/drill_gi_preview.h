@@ -26,6 +26,10 @@ public:
     void updateTool() override;
     Geo::Polylines paths() const;
     bool fit(double depth) const override;
+    // Включена -- галка строки (Row::useForCalc), а не флаг выделяемости:
+    // выделяемым превью сверловки остаётся всегда -- строку выделяют в
+    // таблице и без галки, чтобы увидеть её отверстия.
+    bool active() const override { return row.useForCalc; }
 
     // AbstractDrillPrGI interface
     Tool::ID toolId() const override;

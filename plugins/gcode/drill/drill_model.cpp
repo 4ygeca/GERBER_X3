@@ -143,12 +143,11 @@ void Model::setToolId(int row, Tool::ID id, ToolOverride toolOverride) {
     // фрезу на сверло, строка так и осталась бы карманом или профилем.
     if(id > Tool::ID::Null && data_[row].tool().type() == ::Tool::Drill)
         data_[row].mode = Drilling::Mode::Drilling;
+    // Галка уже стоит как надо (useForCalc выше) -- цвет превью берёт её
+    // (Preview::active) и инструмент, который updateTool сейчас и перечитает.
     for(auto item: data_[row].items) {
-        // Флаг должен быть выставлен ДО updateTool(), т.к. тот в конце вызывает
-        // changeColor(), которая читает ItemIsSelectable как признак "Used" —
-        // иначе цвет пересчитывается по ещё не обновлённому (старому) флагу.
-        item->setFlag(QGraphicsItem::ItemIsSelectable, id > Tool::ID::Null);
         item->updateTool();
+        item->setShown(data_[row].useForCalc || item->isSelected());
     }
     // Назначили инструмент -- галка ставится. Сняли -- галка остаётся как
     // была: она же подсветка отверстий (УП без инструмента не строится).
@@ -185,12 +184,23 @@ void Model::setCreate(int row, bool create) {
     // плате, чтобы понять, что это за отверстия. УП строится только для строк
     // с инструментом (computePaths).
     data_[row].useForCalc = create;
+    // Без галки отверстий строки не видно, пока её не выделят в таблице: так
+    // на плате -- только те отверстия, что отмечены (оранжевым без
+    // инструмента, красным с ним).
     for(auto item: data_[row].items) {
-        item->setFlag(QGraphicsItem::ItemIsSelectable, create);
+        item->setShown(create || item->isSelected());
         item->changeColor();
     }
     emit dataChanged(createIndex(row, 0), createIndex(row, ColumnCount - 1));
     emit headerDataChanged(Qt::Vertical, row, row);
+}
+
+void Model::updateShown() {
+    for(Row& row: data_)
+        for(auto item: row.items) {
+            item->setShown(row.useForCalc || item->isSelected());
+            item->changeColor();
+        }
 }
 
 void Model::setCreate(bool create) {
