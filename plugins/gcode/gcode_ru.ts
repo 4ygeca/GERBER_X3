@@ -97,117 +97,117 @@
 <context>
     <name>GCode::Form</name>
     <message>
-        <location filename="gc_form.cpp" line="182"/>
+        <location filename="gc_form.cpp" line="183"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="186"/>
-        <location filename="gc_form.cpp" line="459"/>
-        <location filename="gc_form.cpp" line="854"/>
+        <location filename="gc_form.cpp" line="187"/>
+        <location filename="gc_form.cpp" line="460"/>
+        <location filename="gc_form.cpp" line="858"/>
         <source>Create</source>
         <translation>Создать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="242"/>
+        <location filename="gc_form.cpp" line="243"/>
         <source>Name:</source>
         <translation>Имя:</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="264"/>
+        <location filename="gc_form.cpp" line="265"/>
         <source>Continue</source>
         <translation>Продолжить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="265"/>
-        <location filename="gc_form.cpp" line="758"/>
+        <location filename="gc_form.cpp" line="266"/>
+        <location filename="gc_form.cpp" line="762"/>
         <source>Skip the contours with errors: no toolpaths are built for them</source>
         <translation>Пропустить контуры с ошибками: траектории для них не строятся</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="269"/>
+        <location filename="gc_form.cpp" line="270"/>
         <source>Run with errors</source>
         <translation>Выполнить с ошибками</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="270"/>
+        <location filename="gc_form.cpp" line="271"/>
         <source>Build toolpaths for all contours as if there were no errors: the listed places stay uncut</source>
         <translation>Построить траектории для всех контуров, как будто ошибок нет: места из списка останутся необработанными</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="272"/>
+        <location filename="gc_form.cpp" line="273"/>
         <source>Break</source>
         <translation>Прервать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="272"/>
+        <location filename="gc_form.cpp" line="273"/>
         <source>Stop the calculation</source>
         <translation>Остановить расчёт</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="347"/>
+        <location filename="gc_form.cpp" line="348"/>
         <source>The tool doesn`t fit in the Working items!</source>
         <translation>Инструмент не вмещается в рабочую область!</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="351"/>
-        <location filename="gc_form.cpp" line="609"/>
+        <location filename="gc_form.cpp" line="352"/>
+        <location filename="gc_form.cpp" line="613"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="459"/>
-        <location filename="gc_form.cpp" line="854"/>
+        <location filename="gc_form.cpp" line="460"/>
+        <location filename="gc_form.cpp" line="858"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="609"/>
+        <location filename="gc_form.cpp" line="613"/>
         <source>No data for working...</source>
         <translation>Нет данных для работы...</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="660"/>
+        <location filename="gc_form.cpp" line="664"/>
         <source>Toolpath name</source>
         <translation>Имя УП</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="682"/>
+        <location filename="gc_form.cpp" line="686"/>
         <source>Toolpath &quot;%1&quot; is open for editing, but the name has been changed to &quot;%2&quot;.</source>
         <translation>УП «%1» открыта для правки, но имя изменено на «%2».</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="684"/>
+        <location filename="gc_form.cpp" line="688"/>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="684"/>
+        <location filename="gc_form.cpp" line="688"/>
         <source>Save as New</source>
         <translation>Сохранить как новую</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="699"/>
+        <location filename="gc_form.cpp" line="703"/>
         <source>Toolpath &quot;%1&quot; already exists in the project.</source>
         <translation>УП «%1» уже есть в проекте.</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="700"/>
+        <location filename="gc_form.cpp" line="704"/>
         <source>Replace</source>
         <translation>Заменить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="700"/>
+        <location filename="gc_form.cpp" line="704"/>
         <source>Add Number</source>
         <translation>Добавить номер</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="759"/>
+        <location filename="gc_form.cpp" line="763"/>
         <source>Nothing to skip: &quot;Run with errors&quot; gives the same toolpaths (the tool does not enter these places at all, they are gaps between contours, or the contour is not closed)</source>
         <translation>Пропускать нечего: «Выполнить с ошибками» даст те же траектории (фреза в эти места не входит вовсе, это щели между контурами или контур не замкнут)</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="852"/>
+        <location filename="gc_form.cpp" line="856"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
@@ -265,176 +265,280 @@
 <context>
     <name>GCode::JobDialog</name>
     <message>
-        <location filename="gc_jobdialog.cpp" line="34"/>
+        <location filename="gc_jobdialog.cpp" line="38"/>
         <source>Save as Job</source>
         <translation>Сохранить как задание</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="39"/>
+        <location filename="gc_jobdialog.cpp" line="43"/>
         <source>Side: %1. Material: %2.</source>
         <translation>Сторона: %1. Материал: %2.</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="40"/>
+        <location filename="gc_jobdialog.cpp" line="44"/>
         <source>bottom</source>
         <translation>нижняя</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="40"/>
+        <location filename="gc_jobdialog.cpp" line="44"/>
         <source>top</source>
         <translation>верхняя</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="40"/>
+        <location filename="gc_jobdialog.cpp" line="44"/>
         <source>not set</source>
         <translation>не задан</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="43"/>
+        <location filename="gc_jobdialog.cpp" line="47"/>
         <source>Steps in the order of the job: by tool (drills, then end mills, then engravers, each by diameter), drilling before milling, the blank cutout last. Up and Down change the order; a cutout mark restores the default order.</source>
         <translation>Шаги в порядке задания: по инструменту (свёрла, затем фрезы, затем граверы — каждые по диаметру), сверловка раньше фрезеровки, вырезка заготовки последней. «Вверх» и «Вниз» меняют порядок; отметка вырезки возвращает порядок по умолчанию.</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>T</source>
         <translation>T</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>Code</source>
         <translation>Код</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>Tool</source>
         <translation>Инструмент</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>Operation</source>
         <translation>Операция</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>Program</source>
         <translation>УП</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>S</source>
         <translation>S</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>F</source>
         <translation>F</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="51"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
         <source>Cutout — last</source>
         <translation>Вырезка — последней</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="52"/>
+        <location filename="gc_jobdialog.cpp" line="55"/>
+        <source>Length</source>
+        <translation>Длина</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="56"/>
         <source>Tool number in this job; bold -- a tool change before the step</source>
         <translation>Номер инструмента в этом задании; жирный — смена инструмента перед шагом</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="53"/>
+        <location filename="gc_jobdialog.cpp" line="58"/>
+        <source>Tool length: from the controller table (G43 H, measured beforehand by the tool table file) or probed at X0 Y0 in the tool change</source>
+        <translation>Длина инструмента: из таблицы контроллера (G43 H, измерена заранее файлом замера) или замер щупом в X0 Y0 при смене</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="60"/>
         <source>Spindle speed (laser: power)</source>
         <translation>Обороты шпинделя (у лазера — мощность)</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="54"/>
+        <location filename="gc_jobdialog.cpp" line="61"/>
         <source>Feed, mm/min: plunge feed for drilling, cutting feed otherwise</source>
         <translation>Подача, мм/мин: у сверловки — врезания, иначе — резания</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="55"/>
+        <location filename="gc_jobdialog.cpp" line="62"/>
         <source>Blank cutout: the very last step of the job</source>
         <translation>Вырезка заготовки: самый последний шаг задания</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="65"/>
+        <location filename="gc_jobdialog.cpp" line="72"/>
         <source>Up</source>
         <translation>Вверх</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="66"/>
+        <location filename="gc_jobdialog.cpp" line="73"/>
         <source>Down</source>
         <translation>Вниз</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="67"/>
+        <location filename="gc_jobdialog.cpp" line="74"/>
         <source>Default order</source>
         <translation>Порядок по умолчанию</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="75"/>
+        <location filename="gc_jobdialog.cpp" line="82"/>
         <source>Tool numbers up to T:</source>
         <translation>Номера инструментов до T:</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="78"/>
+        <location filename="gc_jobdialog.cpp" line="85"/>
         <source>no limit</source>
         <translation>без ограничения</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="81"/>
+        <location filename="gc_jobdialog.cpp" line="88"/>
         <source>The highest tool number the controller takes: only when the controller keeps the tool table itself (grblHAL N_TOOLS = 8). Beyond it the numbers repeat, the tool code tells the tools apart.
 A sender with its own tool library (an ncSender plugin) needs no limit.</source>
         <translation>Наибольший номер инструмента, который примет контроллер: нужен, только если таблицу инструментов держит сам контроллер (grblHAL N_TOOLS = 8). Сверх него номера повторяются, инструменты различает их код.
 Отправителю со своей библиотекой инструментов (плагин ncSender) ограничение не нужно.</translation>
     </message>
     <message>
+        <location filename="gc_jobdialog.cpp" line="101"/>
+        <source>Tool lengths</source>
+        <translation>Длины инструментов</translation>
+    </message>
+    <message>
         <location filename="gc_jobdialog.cpp" line="104"/>
+        <source>Lengths:</source>
+        <translation>Длины:</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="106"/>
+        <source>Not in the file: the sender or the controller ($341) measures</source>
+        <translation>Не в файле: замер ведёт отправитель или контроллер ($341)</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="107"/>
+        <source>Controller tool table and probe (G43 H, touch at X0 Y0)</source>
+        <translation>Таблица контроллера и щуп (G43 H, касание в X0 Y0)</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="112"/>
+        <source>Probe Z0 at X0 Y0 at the start of the job</source>
+        <translation>Замер Z0 щупом в X0 Y0 в начале задания</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="114"/>
+        <source>Tool table file next to the job (&lt;name&gt;_tool_table): measures the tools from the table into their cells</source>
+        <translation>Файл замера таблицы рядом с заданием (&lt;имя&gt;_tool_table): меряет инструменты «из таблицы» в их ячейки</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="132"/>
         <source>Save...</source>
         <translation>Сохранить...</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="146"/>
+        <location filename="gc_jobdialog.cpp" line="193"/>
+        <location filename="gc_jobdialog.cpp" line="336"/>
         <source>Laser job: no tool changes</source>
         <translation>Лазерное задание: смен инструмента нет</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="151"/>
+        <location filename="gc_jobdialog.cpp" line="198"/>
         <source>Tool change before this step</source>
         <translation>Смена инструмента перед этим шагом</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="153"/>
+        <location filename="gc_jobdialog.cpp" line="200"/>
         <source>The same tool as in the previous step: no tool change</source>
         <translation>Тот же инструмент, что в прошлом шаге: без смены</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="164"/>
+        <location filename="gc_jobdialog.cpp" line="208"/>
+        <location filename="gc_jobdialog.cpp" line="218"/>
+        <source>Table (G43 H)</source>
+        <translation>Таблица (G43 H)</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="209"/>
+        <location filename="gc_jobdialog.cpp" line="218"/>
+        <source>Probe at X0 Y0</source>
+        <translation>Щуп в X0 Y0</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="211"/>
+        <source>Table: the length measured beforehand by the tool table file, G43 H%1.
+Probe: the tool touches the probe at X0 Y0 in this tool change.</source>
+        <translation>Таблица: длина, измеренная заранее файлом замера, G43 H%1.
+Щуп: инструмент касается щупа в X0 Y0 при этой смене.</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="219"/>
+        <source>The same tool as in the previous step: no tool change, the length stays</source>
+        <translation>Тот же инструмент, что в предыдущем шаге: смены нет, длина та же</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="231"/>
         <source>Found automatically: a profile outside the board outline</source>
         <translation>Найдена автоматически: профиль снаружи контура платы</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="165"/>
+        <location filename="gc_jobdialog.cpp" line="232"/>
         <source>Mark the blank cutout: it goes last</source>
         <translation>Отметьте вырезку заготовки: она идёт последней</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="169"/>
+        <location filename="gc_jobdialog.cpp" line="236"/>
         <source>Laser job: one laser, no tool changes; another laser spot is only a comment in the file.</source>
         <translation>Лазерное задание: лазер один, смен нет; другое пятно лазера — лишь комментарий в файле.</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="171"/>
+        <location filename="gc_jobdialog.cpp" line="238"/>
         <source>Tools: %1, tool changes: %2.</source>
         <translation>Инструментов: %1, смен инструмента: %2.</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="175"/>
+        <location filename="gc_jobdialog.cpp" line="245"/>
         <source>%1 tools, but the controller takes only T1..T%2: tool numbers repeat (T%3 is T1 again). The tool code in the file tells the tools apart.</source>
         <translation>Инструментов: %1, а контроллер принимает только T1..T%2: номера повторяются (T%3 — снова T1). Инструменты различает их код в файле.</translation>
     </message>
     <message>
-        <location filename="gc_jobdialog.cpp" line="181"/>
+        <location filename="gc_jobdialog.cpp" line="253"/>
+        <source>The size of the controller&apos;s tool table is not set: set &quot;Tool numbers up to T&quot; to its cells (grblHAL N_TOOLS, 8) -- up to it the tool table file zeroes the unused cells.</source>
+        <translation>Размер таблицы контроллера не задан: поставьте «Номера инструментов до T» по числу её ячеек (grblHAL N_TOOLS, 8) — до него файл замера обнуляет свободные ячейки.</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="256"/>
         <source>Skipped, no toolpaths: %1</source>
         <translation>Пропущены, нет траекторий: %1</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="331"/>
+        <source>Not in the file: the tool change and the touch-off are the sender&apos;s or the controller&apos;s (grblHAL $341 = 1).
+Controller tool table and probe (grblHAL $341 = 0, M6 is a pause): every tool takes its length from the table (G43 H) or touches the probe at X0 Y0 in its tool change -- the column &quot;Length&quot;.</source>
+        <translation>Не в файле: смену и касание ведёт отправитель или контроллер (grblHAL $341 = 1).
+Таблица контроллера и щуп (grblHAL $341 = 0, M6 — пауза): каждый инструмент берёт длину из таблицы (G43 H) или касается щупа в X0 Y0 при своей смене — столбец «Длина».</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="337"/>
+        <source>The post &quot;%1&quot; cannot write tool lengths (grblHAL can).</source>
+        <translation>Пост «%1» не умеет писать длины инструментов (умеет grblHAL).</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="351"/>
+        <source>The first tool goes to X0 Y0, touches the probe and sets Z0 of the work with its table length; then a pause to take the probe off. Off: Z0 is set already.</source>
+        <translation>Первый инструмент едет в X0 Y0, касается щупа и задаёт Z0 детали со своей длиной из таблицы; затем пауза, чтобы снять щуп. Выключено: Z0 уже задан.</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="353"/>
+        <source>The first tool is probed: its touch at X0 Y0 sets Z0 of the work anyway.</source>
+        <translation>Первый инструмент — со щупом: его касание в X0 Y0 и так задаёт Z0 детали.</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="362"/>
+        <source>A separate file: every tool from the table touches the probe at one point and its length goes into its cell (G10 L10); the cells up to T%1 this job does not use are zeroed (G10 L1).
+Run it once for a series of boards, then only the jobs.</source>
+        <translation>Отдельный файл: каждый инструмент «из таблицы» касается щупа в одной точке, и его длина идёт в его ячейку (G10 L10); ячейки до T%1, которых нет в задании, обнуляются (G10 L1).
+Запустите его один раз на серию плат, дальше — только задания.</translation>
+    </message>
+    <message>
+        <location filename="gc_jobdialog.cpp" line="366"/>
+        <source>No tool takes its length from the table</source>
+        <translation>Ни один инструмент не берёт длину из таблицы</translation>
     </message>
 </context>
 <context>
@@ -861,57 +965,57 @@ Already calculated toolpaths keep their cutting data.</source>
         <translation type="vanished">;        Источник: %1 [%2]</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="565"/>
+        <location filename="gc_file.cpp" line="569"/>
         <source>	         Source: %1 [%2]</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="566"/>
+        <location filename="gc_file.cpp" line="570"/>
         <source>#%1 (deleted)</source>
         <translation>#%1 (удалён)</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="572"/>
+        <location filename="gc_file.cpp" line="576"/>
         <source>Top|Bottom</source>
         <translation>Верх|Низ</translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="575"/>
+        <location filename="gc_file.cpp" line="579"/>
         <source>	           Name: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="577"/>
+        <location filename="gc_file.cpp" line="581"/>
         <source>	        Program: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="579"/>
+        <location filename="gc_file.cpp" line="583"/>
         <source>	           Tool: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="580"/>
+        <location filename="gc_file.cpp" line="584"/>
         <source>	  Tool Stepover: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="581"/>
+        <location filename="gc_file.cpp" line="585"/>
         <source>	 Feed Rate mm/s: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="582"/>
+        <location filename="gc_file.cpp" line="586"/>
         <source>	Tool Pass Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="583"/>
+        <location filename="gc_file.cpp" line="587"/>
         <source>	          Depth: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="gc_file.cpp" line="584"/>
+        <location filename="gc_file.cpp" line="588"/>
         <source>	           Side: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -948,22 +1052,22 @@ Already calculated toolpaths keep their cutting data.</source>
         <translation type="vanished">;         Сторона: %1</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="95"/>
+        <location filename="gc_form.cpp" line="96"/>
         <source>not closed</source>
         <translation>не замкнут</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="114"/>
+        <location filename="gc_form.cpp" line="115"/>
         <source>Position</source>
         <translation>Позиция</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="116"/>
+        <location filename="gc_form.cpp" line="117"/>
         <source>Area mm²</source>
         <translation>Площадь мм²</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="172"/>
+        <location filename="gc_job.cpp" line="174"/>
         <source>No tool paths are selected.
 Mark the tool paths of the job with their checkboxes in the tree, or select several with Ctrl or Shift, or a whole group.</source>
         <oldsource>No tool paths are selected.
@@ -972,44 +1076,61 @@ Select the tool paths of the job in the tree: several with Ctrl or Shift, or a w
 Отметьте УП задания галочками в дереве или выделите несколько — с Ctrl или Shift, или целую группу.</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="195"/>
+        <location filename="gc_job.cpp" line="197"/>
         <source>The selected tool paths have no toolpaths: there is nothing to save.</source>
         <translation>У выбранных УП нет траекторий: сохранять нечего.</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="199"/>
+        <location filename="gc_job.cpp" line="201"/>
         <source>The selected tool paths are on both sides of the board.
 A job is one side: select the tool paths of one side.</source>
         <translation>Выбранные УП — с обеих сторон платы.
 Задание — одна сторона: выберите УП одной стороны.</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="205"/>
+        <location filename="gc_job.cpp" line="207"/>
         <source>Laser and spindle tool paths cannot be in one job: the machine works with them in different modes.
 Save them as separate jobs.</source>
         <translation>Лазерные УП и УП шпинделя не могут быть в одном задании: станок работает с ними в разных режимах.
 Сохраните их разными заданиями.</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="332"/>
+        <location filename="gc_job.cpp" line="272"/>
+        <source>The first tool is probed: its touch sets Z0 of the work, but %1 take their lengths from the controller table, measured against another tool -- Z0 would be wrong for them. Take the first tool from the table as well, or probe all tools.</source>
+        <translation>Первый инструмент — со щупом: его касание задаёт Z0 детали, а %1 берут длину из таблицы контроллера, измеренную против другого инструмента, — Z0 для них будет неверным. Возьмите первый инструмент тоже из таблицы или поставьте щуп всем.</translation>
+    </message>
+    <message>
+        <location filename="gc_job.cpp" line="285"/>
+        <source>T%1: %2 tools share cell %1 of the controller table (the tool numbers wrap), and a cell holds one length. Probe these tools.</source>
+        <translation>T%1: у %2 инструментов одна ячейка %1 таблицы контроллера (номера пошли по кругу), а в ячейке одна длина. Поставьте этим инструментам щуп.</translation>
+    </message>
+    <message>
+        <location filename="gc_job.cpp" line="440"/>
         <source>Save as Job</source>
         <translation>Сохранить как задание</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="347"/>
+        <location filename="gc_job.cpp" line="455"/>
         <source>Save Job</source>
         <translation>Сохранить задание</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="349"/>
+        <location filename="gc_job.cpp" line="457"/>
         <source>GCode (*.%1)</source>
         <translation>УП (*.%1)</translation>
     </message>
     <message>
-        <location filename="gc_job.cpp" line="369"/>
+        <location filename="gc_job.cpp" line="502"/>
         <source>Cannot write the job file &quot;%1&quot;.
 %2</source>
         <translation>Не удалось записать файл задания «%1».
+%2</translation>
+    </message>
+    <message>
+        <location filename="gc_job.cpp" line="505"/>
+        <source>Cannot write the tool table file &quot;%1&quot;.
+%2</source>
+        <translation>Не удаётся записать файл замера таблицы «%1».
 %2</translation>
     </message>
 </context>
