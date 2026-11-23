@@ -11,6 +11,9 @@
 //                       workRect{x, y, width, height}, home{x, y}, zero{x, y}, pins[]
 //   file.laser, file.spiralRamp, file.notTile, file.slotPaths, file.toolDiameter, ...
 //   file.getDepths(), file.getToolPaths(ox, oy), file.savePathLines(...),
+//   file.addPassLines(i, moveWords) - group i as one pass: odd paths as savePathLines
+//                       (appended), even ones as straight moves formatted from moveWords
+//                       ("X"/"Y" -- the vertex), see laserHldiTile in pocketraster.js,
 //   file.startPath(x, y), file.endPath(), file.addLine(s), file.formatted([...]),
 //   file.forceWords(letters) - next formatted() writes these letters even if unchanged,
 //   file.g0()..g3(), file.fmtX()..fmtF(), file.fmtR/fmtQ/fmtP(v), file.fmtDwell(seconds),

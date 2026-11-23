@@ -32,11 +32,22 @@ function laserHldiTile(file, pathss) {
     var pass = pathss[0];
     file.startPath(pass[0][0].x, pass[0][0].y);
     switchLaserOn(file);
-    for (var j = 0; j < pass.length; j++) {
-        if (j % 2)
-            appendLines(file, file.savePathLines(0, j, false, 0, 0));
-        else
-            laserOffPath(file, pass[j]);
+    // The whole pass in one call (GcFileProxy::addPassLines): the very same
+    // lines as the loop below -- odd paths as savePathLines, even ones as
+    // laserOffPath with these words ("X"/"Y" -- the vertex) -- without a
+    // JS<->C++ round trip per path and per vertex: on a full board (half a
+    // million lines) a minute of the loop becomes about a second. The loop
+    // stays the reference and the way where the helper is absent (the node
+    // test harness).
+    if (typeof file.addPassLines === "function") {
+        file.addPassLines(0, [file.g1(), "X", "Y", file.strFeed, file.fmtS(0)]);
+    } else {
+        for (var j = 0; j < pass.length; j++) {
+            if (j % 2)
+                appendLines(file, file.savePathLines(0, j, false, 0, 0));
+            else
+                laserOffPath(file, pass[j]);
+        }
     }
     laserCurves(file, pathss, 1, false);
 }
