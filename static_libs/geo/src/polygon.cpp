@@ -6,7 +6,14 @@
 #include "geo/geo_json.h"
 #include "phasestats.h"
 
+#include <CGAL/Arr_batched_point_location.h>
+
 #include <QPainterPath>
+
+#include <algorithm>
+#include <cmath>
+#include <numeric>
+#include <variant>
 
 namespace Geo {
 
@@ -395,6 +402,68 @@ bool Polygons::contains(QPointF point) const {
     // раскладываться на полигоны, а полигонам -- на контуры.
     const Traits::Point_2 query(K::FT(point.x()), K::FT(point.y()));
     return impl_->exact.oriented_side(query) == CGAL::ON_POSITIVE_SIDE;
+}
+
+std::vector<char> Polygons::contains(std::span<const QPointF> points) const {
+    std::vector<char> inside(points.size());
+    if(points.empty()) return inside;
+    // Порядок ниже -- по double, и NaN его сломал бы: такие точки, если
+    // попадутся, спрашиваются по одной, как и прежде.
+    if(!std::ranges::all_of(points, [](QPointF p) { return std::isfinite(p.x()) && std::isfinite(p.y()); })) {
+        for(std::size_t i{}; i < points.size(); ++i) inside[i] = contains(points[i]);
+        return inside;
+    }
+
+    // Заметание отдаёт ответы по точкам В СВОЁМ порядке -- лексикографическом
+    // по (x, y) -- и по одному на совпадающие точки. Поэтому точки идут в
+    // него уже упорядоченными и без повторов, а ответ раздаётся обратно по
+    // номерам. Координаты в точном домене -- те же double, что и у одиночного
+    // contains, так что и порядок у них тот же, что у double.
+    std::vector<std::size_t> order(points.size());
+    std::iota(order.begin(), order.end(), std::size_t{});
+    auto less = [&points](std::size_t a, std::size_t b) {
+        return points[a].x() < points[b].x() || (points[a].x() == points[b].x() && points[a].y() < points[b].y());
+    };
+    std::ranges::sort(order, less);
+    std::vector<std::size_t> unique; // первый номер каждой различной точки
+    std::vector<Traits::Point_2> queries;
+    for(std::size_t i: order)
+        if(unique.empty() || less(unique.back(), i)) {
+            unique.push_back(i);
+            queries.emplace_back(K::FT(points[i].x()), K::FT(points[i].y()));
+        }
+
+    using Arrangement = PolySet::Arrangement_2;
+    using Located = std::pair<Traits::Point_2, CGAL::Arr_point_location_result<Arrangement>::Type>;
+    std::vector<Located> located;
+    located.reserve(queries.size());
+    CGAL::locate(impl_->exact.arrangement(), queries.begin(), queries.end(), std::back_inserter(located));
+
+    // Точка внутри грани -- внутри региона, если грань его; на ребре или в
+    // вершине -- на границе, то есть снаружи (как ON_ORIENTED_BOUNDARY у
+    // одиночного contains). Ответ сверяется с точкой: разойтись с порядком
+    // заметания им незачем, но если бы разошлись -- точнее спросить каждую
+    // точку по отдельности, чем раздать чужие ответы.
+    std::vector<char> answer(unique.size());
+    bool matched = located.size() == unique.size();
+    for(std::size_t k{}; matched && k < located.size(); ++k) {
+        const QPointF query = points[unique[k]];
+        if(CGAL::to_double(located[k].first.x()) != query.x() || CGAL::to_double(located[k].first.y()) != query.y()) {
+            matched = false;
+            break;
+        }
+        const auto* face = std::get_if<Arrangement::Face_const_handle>(&located[k].second);
+        answer[k] = face && (*face)->contained();
+    }
+    if(!matched)
+        for(std::size_t k{}; k < unique.size(); ++k) answer[k] = contains(points[unique[k]]);
+
+    // Повторы получают ответ своей первой точки.
+    for(std::size_t k{}, u{}; k < order.size(); ++k) {
+        if(u + 1 < unique.size() && !less(order[k], unique[u + 1]) && !less(unique[u + 1], order[k])) ++u;
+        inside[order[k]] = answer[u];
+    }
+    return inside;
 }
 
 QPainterPath Polygons::toPath() const {

@@ -28,6 +28,7 @@ add_library(
   src/cgal.cpp
   src/cgal.h
   src/clipopen.cpp
+  src/endgrid.h
   src/fill.cpp
   src/inflatepasses.cpp
   src/offsetcapsules.h

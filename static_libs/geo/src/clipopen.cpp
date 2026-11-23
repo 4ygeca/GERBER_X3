@@ -21,7 +21,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace Geo {
@@ -177,12 +180,144 @@ struct BoundaryContour {
     std::vector<Seg> segs;
 };
 
-std::vector<double> cutsFor(const Seg& s, const std::vector<BoundaryContour>& boundary) {
+// Граница целиком: контуры и указатель по высоте поверх них.
+//
+// Прежде каждый разрез и каждый луч перебирали ВСЕ контуры региона: на плате
+// это тысячи габаритов на каждый кусок строки, хотя строку задевают единицы
+// из них, а у гребёнки змейки (один контур в тысячи рёбер) -- все рёбра на
+// каждый кусок. Указатель делит высоту региона на полосы и помнит в каждой
+// пары (контур, сегмент), чей общий по высоте габарит её задевает. Внутри
+// полосы пары отбираются ТЕМИ ЖЕ сравнениями габаритов, что и при полном
+// переборе, так что набор проверенных сегментов, а с ним и ответ, прежние:
+// указатель лишь не даёт перебирать заведомо далёкие.
+class Boundary {
+public:
+    explicit Boundary(const Polylines& contours) {
+        contours_.reserve(contours.size());
+        QRectF bounds;
+        for(const Polyline& contour: contours) {
+            BoundaryContour& bc = contours_.emplace_back();
+            bc.box = contour.boundingRect().adjusted(
+                -exitWeldTolerance, -exitWeldTolerance, exitWeldTolerance, exitWeldTolerance);
+            bc.segs.reserve(contour.size());
+            for(const auto& [from, to]: segments(contour)) bc.segs.push_back(makeSeg(from, to));
+            segCount_ += bc.segs.size();
+            for(const Seg& seg: bc.segs) bounds |= seg.box;
+            bounds |= bc.box;
+        }
+        buildIndex(bounds);
+    }
+
+    const std::vector<BoundaryContour>& contours() const { return contours_; }
+
+    // Есть ли указатель для высоты y. Без него (вырожденная граница, NaN) --
+    // прежний полный перебор.
+    bool indexed(double y) const { return scale_ > 0.0 && std::isfinite(y); }
+
+    // Пары одной полосы -- каждая в ней по разу. f возвращает false, если
+    // перебирать дальше незачем.
+    template <typename F>
+    void forBand(double y, F&& f) const {
+        const int band = bandOf(y);
+        for(uint32_t r = first_[band]; r < first_[band + 1]; ++r)
+            if(!f(contours_[refs_[r].contour], contours_[refs_[r].contour].segs[refs_[r].seg])) return;
+    }
+
+    // Пары полос [bandOf(lo), bandOf(hi)] -- каждая по разу, хоть и лежит во
+    // многих: разрез, найденный дважды, -- лишний.
+    template <typename F>
+    void forBands(double lo, double hi, F&& f) const {
+        if(++epoch_ == 0) { // счётчик обернулся -- метки заново
+            std::ranges::fill(seen_, 0u);
+            epoch_ = 1;
+        }
+        for(int band = bandOf(lo), last = bandOf(hi); band <= last; ++band)
+            for(uint32_t r = first_[band]; r < first_[band + 1]; ++r) {
+                const Ref& ref = refs_[r];
+                if(seen_[ref.id] == epoch_) continue;
+                seen_[ref.id] = epoch_;
+                f(contours_[ref.contour], contours_[ref.contour].segs[ref.seg]);
+            }
+    }
+
+private:
+    struct Ref {
+        uint32_t contour;
+        uint32_t seg;
+        uint32_t id; // сквозной номер сегмента -- для меток forBands
+    };
+
+    int bandOf(double y) const {
+        const double band = std::floor((y - y0_) * scale_);
+        if(band < 0.0) return 0;
+        if(band >= bands_) return bands_ - 1;
+        return static_cast<int>(band);
+    }
+
+    void buildIndex(const QRectF& bounds) {
+        const double height = bounds.height();
+        if(segCount_ == 0 || segCount_ > std::numeric_limits<uint32_t>::max() / 2
+            || !std::isfinite(bounds.top()) || !std::isfinite(height) || !(height > 0.0))
+            return;
+        // Полоса -- на несколько сегментов: мельче -- указатель разбухает от
+        // высоких рёбер, крупнее -- в полосе снова лишнее.
+        bands_ = static_cast<int>(std::clamp<std::size_t>(segCount_ / 4, 1, std::size_t{1} << 16));
+        y0_ = bounds.top();
+        scale_ = bands_ / height;
+
+        // Высота, на которой пара проходит ОБЕ проверки по y (контура и
+        // сегмента), -- пересечение их габаритов; пара живёт в полосах этой
+        // высоты. bandOf монотонна (floor монотонных операций), так что
+        // точка с такой высотой попадает в одну из этих полос.
+        auto span = [this](const BoundaryContour& c, const Seg& seg, int& from, int& to) {
+            const double lo = std::max(c.box.top(), seg.box.top());
+            const double hi = std::min(c.box.bottom(), seg.box.bottom());
+            if(!(lo <= hi)) return false;
+            from = bandOf(lo);
+            to = bandOf(hi);
+            return true;
+        };
+        std::vector<uint32_t> count(static_cast<std::size_t>(bands_), 0u);
+        for(const BoundaryContour& c: contours_)
+            for(const Seg& seg: c.segs)
+                if(int from{}, to{}; span(c, seg, from, to))
+                    for(int band = from; band <= to; ++band) ++count[band];
+        first_.assign(static_cast<std::size_t>(bands_) + 1, 0u);
+        for(int band = 0; band < bands_; ++band) first_[band + 1] = first_[band] + count[band];
+        refs_.resize(first_[bands_]);
+        std::vector<uint32_t> fill(first_.begin(), first_.end() - 1);
+        uint32_t id{};
+        for(uint32_t ci{}; ci < contours_.size(); ++ci)
+            for(uint32_t si{}; si < contours_[ci].segs.size(); ++si, ++id)
+                if(int from{}, to{}; span(contours_[ci], contours_[ci].segs[si], from, to))
+                    for(int band = from; band <= to; ++band) refs_[fill[band]++] = {ci, si, id};
+        seen_.assign(segCount_, 0u);
+    }
+
+    std::vector<BoundaryContour> contours_;
+    std::size_t segCount_{};
+    double y0_{};
+    double scale_{}; // полос на единицу высоты; 0 -- указателя нет
+    int bands_{};
+    std::vector<uint32_t> first_; // начало полосы в refs_, bands_ + 1 штук
+    std::vector<Ref> refs_;
+    mutable std::vector<uint32_t> seen_; // метки forBands
+    mutable uint32_t epoch_{};
+};
+
+std::vector<double> cutsFor(const Seg& s, const Boundary& boundary) {
     std::vector<double> ts;
-    for(const BoundaryContour& contour: boundary) {
-        if(!s.box.intersects(contour.box)) continue;
-        for(const Seg& bs: contour.segs)
-            if(s.box.intersects(bs.box)) cutSegSeg(ts, s, bs);
+    // Порядок разрезов значения не имеет: ниже они сортируются.
+    if(boundary.indexed(s.box.top()) && boundary.indexed(s.box.bottom())) {
+        boundary.forBands(s.box.top(), s.box.bottom(), [&ts, &s](const BoundaryContour& contour, const Seg& bs) {
+            if(s.box.intersects(contour.box) && s.box.intersects(bs.box)) cutSegSeg(ts, s, bs);
+        });
+    } else {
+        for(const BoundaryContour& contour: boundary.contours()) {
+            if(!s.box.intersects(contour.box)) continue;
+            for(const Seg& bs: contour.segs)
+                if(s.box.intersects(bs.box)) cutSegSeg(ts, s, bs);
+        }
     }
     if(ts.empty()) return ts;
 
@@ -209,26 +344,44 @@ std::vector<double> cutsFor(const Seg& s, const std::vector<BoundaryContour>& bo
 // ОТКАТОМ для сомнительных лучей: прошедших ближе допуска к вершине,
 // касанию или к самой границе. Сомнение всегда уходит в точный домен --
 // ошибиться СТОРОНОЙ по-прежнему нельзя, см. шапку файла.
+//
+// Сомнительных при этом не так мало, как хотелось бы: строки змейки идут
+// шагом, кратным сетке платы, и ложатся ровно на горизонтальные рёбра и
+// вершины, сдвинутые офсетом на тот же шаг. На растре HLDI платы 150x250 это
+// два десятка тысяч кусков по ~13 мс точного обхода -- почти шесть минут.
+// Поэтому луч здесь только ОТВЕЧАЕТ или СОМНЕВАЕТСЯ, а сомнительные
+// clipOpen собирает со всех путей и спрашивает точный домен одним
+// заметанием (Polygons::contains от многих точек). Ответ тот же, что у
+// поштучного contains: точная локализация та же, иначе лишь ищется грань.
 class Side {
 public:
-    Side(const Polygons& region, const std::vector<BoundaryContour>& boundary)
-        : region_{region}
-        , boundary_{boundary} { }
+    explicit Side(const Boundary& boundary)
+        : boundary_{boundary} { }
 
-    bool inside(QPointF p) const {
+    // 1 -- внутри, 0 -- снаружи, -1 -- луч ничего не доказал.
+    int ray(QPointF p) const {
         int crossings{};
-        for(const BoundaryContour& contour: boundary_) {
+        bool doubt{};
+        auto test = [&](const BoundaryContour& contour, const Seg& seg) {
             if(p.y() < contour.box.top() || p.y() > contour.box.bottom()
-                || p.x() > contour.box.right()) continue;
-            for(const Seg& seg: contour.segs) {
-                if(p.y() < seg.box.top() || p.y() > seg.box.bottom()
-                    || p.x() > seg.box.right()) continue;
-                const int n = seg.arc ? crossArc(*seg.arc, seg, p) : crossLine(seg, p);
-                if(n < 0) return region_.contains(p); // сомнение -- к точному
-                crossings += n;
+                || p.x() > contour.box.right()) return true;
+            if(p.y() < seg.box.top() || p.y() > seg.box.bottom()
+                || p.x() > seg.box.right()) return true;
+            const int n = seg.arc ? crossArc(*seg.arc, seg, p) : crossLine(seg, p);
+            if(n < 0) {
+                doubt = true; // сомнение -- к точному
+                return false;
             }
-        }
-        return crossings & 1;
+            crossings += n;
+            return true;
+        };
+        if(boundary_.indexed(p.y()))
+            boundary_.forBand(p.y(), test);
+        else
+            for(const BoundaryContour& contour: boundary_.contours())
+                for(const Seg& seg: contour.segs)
+                    if(!test(contour, seg)) return -1;
+        return doubt ? -1 : crossings & 1;
     }
 
 private:
@@ -274,8 +427,7 @@ private:
         return n;
     }
 
-    const Polygons& region_;
-    const std::vector<BoundaryContour>& boundary_;
+    const Boundary& boundary_;
 };
 
 // Кусок сегмента между соседними параметрами разреза.
@@ -286,14 +438,33 @@ struct Atom {
     bool keep{};
 };
 
-Polylines clipPath(const Polyline& path, const Side& side,
-    const std::vector<BoundaryContour>& boundary, bool keepInside) {
-    auto keeps = [&side, keepInside](QPointF p) { return side.inside(p) == keepInside; };
+// Кусок, чью сторону решит точный домен: номер пути и номер куска в нём.
+struct Doubt {
+    std::size_t path;
+    std::size_t atom;
+};
 
-    if(path.size() < 2) // одинокой вершине резать нечего: судьба решается ей самой
-        return path.empty() || !keeps(path.front()) ? Polylines{} : Polylines{path};
+// Ход первый: путь режется на куски, сторона каждого -- по лучу.
+// Сомнительные откладываются (точка в points, место в doubts) до общего
+// точного ответа -- см. Side.
+void atomize(const Polyline& path, std::size_t pathIndex, const Side& side, const Boundary& boundary,
+    bool keepInside, std::vector<Atom>& atoms, std::vector<QPointF>& points, std::vector<Doubt>& doubts) {
+    auto classify = [&](Atom& a) {
+        if(const int r = side.ray(a.mid); r >= 0) {
+            a.keep = (r == 1) == keepInside;
+        } else {
+            points.push_back(a.mid);
+            doubts.push_back({pathIndex, atoms.size() - 1});
+        }
+    };
 
-    std::vector<Atom> atoms;
+    // Одинокой вершине резать нечего: её судьба решается ей самой -- единственным
+    // «куском» с серединой в ней же.
+    if(path.size() < 2) {
+        if(!path.empty()) classify(atoms.emplace_back(path.front(), path.front(), path.front()));
+        return;
+    }
+
     for(const auto& [from, to]: segments(path)) {
         checkCancelled();
         const Seg s = makeSeg(from, to);
@@ -301,13 +472,18 @@ Polylines clipPath(const Polyline& path, const Side& side,
         ts.push_back(1.0);
         double prev{};
         for(const double t: ts) {
-            Atom& a = atoms.emplace_back(
+            classify(atoms.emplace_back(
                 Vertex{s.pointAt(prev), s.bulgeAt(prev, t)},
-                s.pointAt(t), s.pointAt((prev + t) * 0.5));
-            a.keep = keeps(a.mid);
+                s.pointAt(t), s.pointAt((prev + t) * 0.5)));
             prev = t;
         }
     }
+}
+
+// Ход последний: куски с решённой стороной -- обратно в пути.
+Polylines assemble(const Polyline& path, const std::vector<Atom>& atoms) {
+    if(path.size() < 2)
+        return path.empty() || !atoms.front().keep ? Polylines{} : Polylines{path};
 
     // Целиком по одну сторону -- вход возвращается КАК ЕСТЬ, с исходными
     // вершинами и замкнутостью: пересборка из атомов только насажала бы
@@ -357,22 +533,25 @@ Polylines clipOpen(ClipType_ clipType, const Polylines& paths, const Polygons& r
     // Пустой регион: снаружи него -- всё, внутри -- ничего.
     if(region.empty()) return keepInside ? Polylines{} : paths;
 
-    const Polylines contours = region.contours();
-    std::vector<BoundaryContour> boundary;
-    boundary.reserve(contours.size());
-    for(const Polyline& contour: contours) {
-        BoundaryContour& bc = boundary.emplace_back();
-        bc.box = contour.boundingRect().adjusted(
-            -exitWeldTolerance, -exitWeldTolerance, exitWeldTolerance, exitWeldTolerance);
-        bc.segs.reserve(contour.size());
-        for(const auto& [from, to]: segments(contour)) bc.segs.push_back(makeSeg(from, to));
+    const Boundary boundary{region.contours()};
+    const Side side{boundary};
+
+    std::vector<std::vector<Atom>> atomsOf(paths.size());
+    std::vector<QPointF> points;
+    std::vector<Doubt> doubts;
+    for(std::size_t i{}; i < paths.size(); ++i)
+        atomize(paths[i], i, side, boundary, keepInside, atomsOf[i], points, doubts);
+
+    // Все сомнительные -- одним точным вопросом.
+    if(!points.empty()) {
+        const std::vector<char> inside = region.contains(std::span<const QPointF>{points});
+        for(std::size_t k{}; k < doubts.size(); ++k)
+            atomsOf[doubts[k].path][doubts[k].atom].keep = (inside[k] != 0) == keepInside;
     }
 
-    const Side side{region, boundary};
-
     Polylines result;
-    for(const Polyline& path: paths)
-        for(Polyline& piece: clipPath(path, side, boundary, keepInside))
+    for(std::size_t i{}; i < paths.size(); ++i)
+        for(Polyline& piece: assemble(paths[i], atomsOf[i]))
             result.push_back(std::move(piece));
     return result;
 }

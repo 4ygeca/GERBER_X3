@@ -14,10 +14,52 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <ranges>
 
 using namespace Geo;
 
 namespace {
+
+// Склейка Geo::stitch ДО сетки концов -- перебором, как она и была (база
+// c559383), вместе с замыканием вернувшихся к старту обрывков. Эталон для
+// stitchMatchesPairwiseReference: сетка обязана давать то же самое, в том же
+// порядке и с теми же разворотами.
+void stitchPairwise(Polylines& polylines, double glue) {
+    auto joinable = [glue](QPointF a, QPointF b) { return distance(a, b) <= glue; };
+    bool merged;
+    do {
+        merged = false;
+        for(std::size_t i{}; i < polylines.size() && !merged; ++i) {
+            if(polylines[i].closed || polylines[i].size() < 2) continue;
+            for(std::size_t j{}; j < polylines.size(); ++j) {
+                if(i == j || polylines[j].closed || polylines[j].size() < 2) continue;
+                Polyline& a = polylines[i];
+                Polyline b = polylines[j];
+                if(joinable(a.back(), b.front())) {
+                } else if(joinable(a.back(), b.back())) {
+                    b.reverse();
+                } else if(joinable(a.front(), b.back())) {
+                    a.reverse(), b.reverse();
+                } else if(joinable(a.front(), b.front())) {
+                    a.reverse();
+                } else
+                    continue;
+                a.append(b);
+                polylines.erase(polylines.begin() + j);
+                merged = true;
+                break;
+            }
+        }
+    } while(merged);
+    for(Polyline& p: polylines) {
+        if(p.size() < 3 || distance(p.front(), p.back()) > glue) continue;
+        const std::size_t body = p.size() - 1;
+        if(body < 3 && std::ranges::none_of(p | std::views::take(body), &Vertex::isArc)) continue;
+        if(!p.closed && static_cast<const QPointF&>(p.front()) != p.back()) p.pop_back();
+        p.close();
+    }
+}
 
 // Прямоугольник заданного обхода: ccw -- против часовой, иначе по часовой.
 Polyline rect(double x, double y, double w, double h, bool ccw) {
@@ -369,6 +411,53 @@ private slots:
         QCOMPARE(pieces.size(), std::size_t{1});
         QVERIFY(pieces.front().closed);
         QCOMPARE(pieces.front().size(), std::size_t{4});
+    }
+
+    // Склейка сеткой концов -- та же, что перебором: какой кусок к какому,
+    // каким концом и в каком порядке. Обрывки -- рёбра решётки с дрожанием
+    // концов меньше клея (стыки по допуску, а не побитово), вразнобой
+    // развёрнутые, с дугами (их прогиб переезжает при развороте), с
+    // замкнутыми и одиночными вершинами (они не клеятся), со стыками на
+    // трёх и более кусков (выбор «первого» тут и решает) -- и разные клеи,
+    // вплоть до нулевого.
+    void stitchMatchesPairwiseReference() {
+        uint64_t state = 20261122;
+        auto next = [&state] {
+            state = state * 6364136223846793005ull + 1442695040888963407ull;
+            return static_cast<double>(state >> 11) / static_cast<double>(1ull << 53);
+        };
+        for(const double glue: {0.0, 0.05, 0.3}) {
+            for(int round{}; round < 20; ++round) {
+                const double jitter = glue * 0.45;
+                auto node = [&] {
+                    return QPointF{std::floor(next() * 5.0) + (next() - 0.5) * jitter,
+                        std::floor(next() * 5.0) + (next() - 0.5) * jitter};
+                };
+                Polylines pieces;
+                for(int k{}; k < 60; ++k) {
+                    Polyline p;
+                    p.emplace_back(node(), next() < 0.2 ? (next() - 0.5) : 0.0);
+                    if(next() < 0.9) p.emplace_back(node());
+                    if(next() < 0.3) p.emplace_back(node());
+                    if(next() < 0.05 && p.size() >= 3) p.closed = true;
+                    pieces.push_back(std::move(p));
+                }
+                Polylines expected = pieces;
+                stitchPairwise(expected, glue);
+                QVERIFY(expected.size() < 60); // склейки были: 25 узлов на сотню концов
+                stitch(pieces, glue);
+                QCOMPARE(pieces.size(), expected.size());
+                for(std::size_t i{}; i < pieces.size(); ++i) {
+                    QCOMPARE(pieces[i].closed, expected[i].closed);
+                    QCOMPARE(pieces[i].size(), expected[i].size());
+                    for(std::size_t v{}; v < pieces[i].size(); ++v) {
+                        QCOMPARE(pieces[i][v].x(), expected[i][v].x());
+                        QCOMPARE(pieces[i][v].y(), expected[i][v].y());
+                        QCOMPARE(pieces[i][v].bulge, expected[i][v].bulge);
+                    }
+                }
+            }
+        }
     }
 
     // Что замкнуть не вышло -- не теряется: профиль по разомкнутой линии такая

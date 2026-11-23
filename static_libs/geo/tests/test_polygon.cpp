@@ -71,6 +71,7 @@ private slots:
     void smallHolesSurviveSerialization();
     void spanConstructorKeepsBodyNestedInsideHole();
     void translationPreservesAreaOfComplexArcBoundary();
+    void batchContainsMatchesSingle();
 };
 
 void PolygonTest::polygonWithHoleMeasuresBodyOnly() {
@@ -373,6 +374,45 @@ void PolygonTest::translationPreservesAreaOfComplexArcBoundary() {
         QVERIFY(near(moved.area(), before, 1e-9));
         QVERIFY(near(moved.boundingRect().center().x() - thermal.boundingRect().center().x(), offset.x(), 1e-6));
     }
+}
+
+// Принадлежность многих точек разом (одно заметание, clipOpen спрашивает
+// так сомнительные куски) обязана отвечать ровно как поштучная: точки на
+// границе -- снаружи, повторы и -0.0 -- как их двойники, порядок ответов --
+// порядок точек, а не заметания.
+void PolygonTest::batchContainsMatchesSingle() {
+    Polygons region = square(20.0);
+    region -= Polygons{Polylines{circle(8.0)}};
+    region |= Polygons{Polylines{circle(2.0)}};                     // остров в дырке
+    region |= Polygons{Polylines{circle(3.0, QPointF{15.0, 0.0})}}; // дуги снаружи
+
+    std::vector<QPointF> points;
+    for(double x = -16.0; x <= 16.0; x += 0.5)
+        for(double y = -12.0; y <= 12.0; y += 0.75) points.emplace_back(x, y);
+    // Границы: вершины и середины сторон квадрата, точки окружностей.
+    points.emplace_back(10.0, 10.0);
+    points.emplace_back(-10.0, -10.0);
+    points.emplace_back(10.0, 0.0);
+    points.emplace_back(0.0, -10.0);
+    points.emplace_back(4.0, 0.0);
+    points.emplace_back(0.0, -4.0);
+    points.emplace_back(1.0, 0.0);
+    points.emplace_back(16.5, 0.0);
+    // Повторы вразбивку и ноль со знаком.
+    for(const std::size_t i: {7, 3, 7}) points.push_back(points[i]);
+    points.emplace_back(-0.0, 0.0);
+    points.emplace_back(0.0, -0.0);
+
+    auto check = [&points](const Polygons& r) {
+        const std::vector<char> batch = r.contains(std::span<const QPointF>{points});
+        QCOMPARE(batch.size(), points.size());
+        for(std::size_t i{}; i < points.size(); ++i)
+            if((batch[i] != 0) != r.contains(points[i]))
+                QFAIL(qPrintable(QString::asprintf("(%g, %g)", points[i].x(), points[i].y())));
+    };
+    check(region);
+    check(~region); // неограниченный: тело -- внешняя грань
+    QVERIFY(Polygons{}.contains(std::span<const QPointF>{}).empty());
 }
 
 QTEST_APPLESS_MAIN(PolygonTest)

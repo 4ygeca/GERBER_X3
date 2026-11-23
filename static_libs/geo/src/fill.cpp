@@ -8,12 +8,15 @@
 
 #include "geo/fill.h"
 
+#include "endgrid.h"
 #include "geo/boolean.h"
 #include "geo/cancel.h"
 #include "geo/util.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <list>
 #include <optional>
 
@@ -99,7 +102,12 @@ bool joined(const QPointF& a, const QPointF& b) {
 // переворачиваются -- направление строк уже выставлено): к хвосту пути
 // клеится следующая строка, между ними -- восходящий кусок границы; к началу
 // пути -- нисходящий. Всё, что не склеилось, остаётся отдельным проходом.
-Polylines merge(Polylines&& scanLines, Polylines&& frames) {
+//
+// Это сшивка перебором, как она и была: на каждый кусок -- проход по всем
+// оставшимся. Квадратична, и на растре всей платы (сотни тысяч кусков) шла
+// бы часами; живёт для входа, с которым сетка концов не справится (NaN,
+// гигантские координаты). Обычный путь -- merge ниже, тот же порядок.
+Polylines mergeQuadratic(Polylines&& scanLines, Polylines&& frames) {
     Polylines merged;
     merged.reserve(scanLines.size() / 10);
     std::list<Polyline> bList;
@@ -141,6 +149,109 @@ Polylines merge(Polylines&& scanLines, Polylines&& frames) {
                 fList.erase(fit);
                 break;
             }
+        }
+    }
+    merged.shrink_to_fit();
+    return merged;
+}
+
+// Та же сшивка в ТОМ ЖЕ порядке, без перебора. У перебора выше правила
+// такие: новый путь берёт первую оставшуюся строку; после каждой взятой
+// строки к хвосту пробуется первая (по порядку) подходящая восходящая
+// рамка, а следующая строка ищется С ВТОРОЙ оставшейся (bit = begin, затем
+// ++bit) -- первая так и ждёт следующего пути; закончив, путь пробует
+// нисходящую рамку к началу. Здесь «первая подходящая» ищется сеткой концов
+// (кандидаты по номерам, проверка -- то же самое условие), а «оставшиеся»
+// -- метками: erase порядка остальных не меняет.
+Polylines merge(Polylines&& scanLines, Polylines&& frames) {
+    double extent{};
+    bool sane = scanLines.size() < std::numeric_limits<uint32_t>::max() && frames.size() < std::numeric_limits<uint32_t>::max();
+    for(const Polylines* list: {&scanLines, &frames})
+        for(const Polyline& p: *list) {
+            if(p.empty()) {
+                sane = false;
+                break;
+            }
+            extent = EndGrid::extent(EndGrid::extent(extent, p.front()), p.back());
+        }
+    if(!sane || !EndGrid::usable(exitWeldTolerance, extent))
+        return mergeQuadratic(std::move(scanLines), std::move(frames));
+
+    constexpr uint32_t none = std::numeric_limits<uint32_t>::max();
+    const auto scanCount = static_cast<uint32_t>(scanLines.size());
+    const auto frameCount = static_cast<uint32_t>(frames.size());
+    std::vector<char> scanAlive(scanCount, 1), frameAlive(frameCount, 1);
+    EndGrid scanFronts{exitWeldTolerance}, frameFronts{exitWeldTolerance}, frameBacks{exitWeldTolerance};
+    for(uint32_t i{}; i < scanCount; ++i) scanFronts.insert(scanLines[i].front(), i);
+    for(uint32_t i{}; i < frameCount; ++i) {
+        frameFronts.insert(frames[i].front(), i);
+        frameBacks.insert(frames[i].back(), i);
+    }
+
+    std::vector<uint32_t> candidates;
+    // Первая по порядку живая рамка, для которой fits -- как перебор fList.
+    // Условие проверяется у кандидатов по возрастанию номера, ровно в том
+    // порядке, в каком перебор дошёл бы до них.
+    auto firstFrame = [&](const EndGrid& grid, QPointF at, auto&& fits) {
+        candidates.clear();
+        grid.near(at, [&](uint32_t id) {
+            if(frameAlive[id]) candidates.push_back(id);
+        });
+        std::ranges::sort(candidates);
+        for(uint32_t id: candidates)
+            if(fits(frames[id])) return id;
+        return none;
+    };
+
+    uint32_t head{}; // первая оставшаяся строка
+    auto nextHead = [&] {
+        while(head < scanCount && !scanAlive[head]) ++head;
+    };
+    // Первая по порядку оставшаяся строка ПОСЛЕ первой, чьё начало стыкуется с at.
+    auto nextScan = [&](QPointF at) {
+        candidates.clear();
+        scanFronts.near(at, [&](uint32_t id) {
+            if(scanAlive[id] && id > head) candidates.push_back(id);
+        });
+        std::ranges::sort(candidates);
+        for(uint32_t id: candidates)
+            if(joined(at, scanLines[id].front())) return id;
+        return none;
+    };
+
+    Polylines merged;
+    merged.reserve(scanLines.size() / 10);
+    std::size_t left = scanCount;
+    nextHead();
+    while(left) {
+        merged.resize(merged.size() + 1);
+        auto& path = merged.back();
+        for(uint32_t take = head; take != none;) {
+            checkCancelled();
+            // Polyline::append, не append_range(drop(1)): кусок границы
+            // скруглённого кармана начинается дугой, и её прогиб сидит на
+            // той самой первой вершине.
+            path.append(scanLines[take]);
+            scanAlive[take] = 0;
+            --left;
+            nextHead();
+            const uint32_t up = firstFrame(frameFronts, path.back(), [&path](const Polyline& frame) {
+                return joined(path.back(), frame.front()) && frame.front().y() < frame.at(1).y();
+            });
+            if(up != none) {
+                path.append(frames[up]);
+                frameAlive[up] = 0;
+            }
+            take = left ? nextScan(path.back()) : none;
+        }
+        const uint32_t down = firstFrame(frameBacks, path.front(), [&path](const Polyline& frame) {
+            return joined(path.front(), frame.back()) && frame.front().y() > frame.at(1).y();
+        });
+        if(down != none) {
+            Polyline whole = std::move(frames[down]);
+            whole.append(path);
+            path = std::move(whole);
+            frameAlive[down] = 0;
         }
     }
     merged.shrink_to_fit();
