@@ -26,32 +26,39 @@ namespace {
 // Склейка Geo::stitch перебором, без сетки концов, вместе с замыканием
 // вернувшихся к старту обрывков. Эталон для stitchMatchesPairwiseReference:
 // сетка обязана давать то же самое, в том же порядке и с теми же разворотами.
-// Правило -- первый кусок, у которого есть пара, с БЛИЖАЙШЕЙ парой (при
-// равных -- меньший номер) и ближайшим из четырёх стыков (при равных --
-// конец к началу, конец к концу, начало к концу, начало к началу).
+// Правило -- первый кусок, у которого есть пара, с парой, чей стык ближе
+// всех, и стыком, ближайшим из четырёх. Расстояния, что дальше ближайшего не
+// более чем на exitWeldTolerance, -- равные, и из них берётся прежний
+// порядок: меньший номер; конец к началу, конец к концу, начало к концу,
+// начало к началу.
 void stitchPairwise(Polylines& polylines, double glue) {
     auto joints = [](const Polyline& a, const Polyline& b) {
         return std::array{distance(a.back(), b.front()), distance(a.back(), b.back()), distance(a.front(), b.back()),
             distance(a.front(), b.front())};
     };
+    auto nearestOf = [](const std::array<double, 4>& d) { return *std::ranges::min_element(d); };
     bool merged;
     do {
         merged = false;
         for(std::size_t i{}; i < polylines.size() && !merged; ++i) {
             if(polylines[i].closed || polylines[i].size() < 2) continue;
+            auto candidate = [&](std::size_t j) {
+                return i != j && !polylines[j].closed && polylines[j].size() >= 2
+                    && nearestOf(joints(polylines[i], polylines[j])) <= glue;
+            };
+            double nearest = std::numeric_limits<double>::infinity();
+            for(std::size_t j{}; j < polylines.size(); ++j)
+                if(candidate(j)) nearest = std::min(nearest, nearestOf(joints(polylines[i], polylines[j])));
             std::size_t best = polylines.size();
-            double bestDistance = std::numeric_limits<double>::infinity();
-            for(std::size_t j{}; j < polylines.size(); ++j) {
-                if(i == j || polylines[j].closed || polylines[j].size() < 2) continue;
-                const auto d = joints(polylines[i], polylines[j]);
-                const double nearest = *std::ranges::min_element(d);
-                if(nearest <= glue && nearest < bestDistance) best = j, bestDistance = nearest;
-            }
+            for(std::size_t j{}; j < polylines.size() && best == polylines.size(); ++j)
+                if(candidate(j) && nearestOf(joints(polylines[i], polylines[j])) <= nearest + exitWeldTolerance) best = j;
             if(best == polylines.size()) continue;
             Polyline& a = polylines[i];
             Polyline b = polylines[best];
             const auto d = joints(a, b);
-            switch(std::ranges::min_element(d) - d.begin()) {
+            int kind{};
+            while(!(d[kind] <= glue && d[kind] <= nearestOf(d) + exitWeldTolerance)) ++kind;
+            switch(kind) {
             case 0: break;
             case 1: b.reverse(); break;
             case 2: a.reverse(), b.reverse(); break;

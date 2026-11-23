@@ -17,6 +17,7 @@
 #include "phasestats.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <ranges>
 #include <set>
@@ -163,34 +164,49 @@ Polyline& closeRing(Polyline& p) {
 
 namespace {
 
-// Стык пары -- БЛИЖАЙШИЙ из четырёх (конец a к началу b, конец к концу,
-// начало к концу, начало к началу), при равных -- первый в этом порядке.
+// Выбор стыка -- по близости, а не первого же в пределах клея.
 //
-// Прежде брался первый же стык в пределах клея, а не ближайший. Пока куски
-// длиннее клея, в его пределах лежит лишь один стык, и разницы нет. Но
-// скругление контура KiCad пишет отрезками по 0.0499 мм, короче клея 0.05 по
-// умолчанию: у куска оба конца рядом с соседом, и «первый» стык брал ЧУЖОЙ
-// конец -- кусок вставал задом наперёд, вершина соседа пропадала, контур
-// панели из 65 вырезов собирался в 52 тела и 12 обрывков. «Внутри» обрывки не
-// фрезерует, и вырезы со скруглениями молча пропадали из УП.
-struct Joint {
-    double distance; // NaN -- как бесконечность: такой стык не годится
-    int kind;        // 0..3 -- порядок выше
-};
+// Пока куски длиннее клея, в его пределах лежит лишь один стык, и разницы
+// нет. Но скругление контура KiCad пишет отрезками по 0.0499 мм, короче клея
+// 0.05 по умолчанию: у куска оба конца рядом с соседом, и «первый» стык брал
+// ЧУЖОЙ конец -- кусок вставал задом наперёд, вершина соседа пропадала,
+// контур панели из 65 вырезов собирался в 52 тела и 12 обрывков. «Внутри»
+// обрывки не фрезерует, и вырезы со скруглениями молча пропадали из УП.
+//
+// Стыки, что дальше ближайшего не более чем на sameReach, -- равны: на выходе
+// их концы неразличимы (exitWeldTolerance, polyline.h), и выбор между ними --
+// прежний, по порядку. Склейка с клеем exitWeldTolerance (растр, штриховка)
+// поэтому идёт ровно как прежде, а ближайший решает лишь там, где разница
+// видна -- 0 против 0.0499 мм у скругления KiCad.
+constexpr double sameReach = exitWeldTolerance;
 
-Joint nearestJoint(const Polyline& a, const Polyline& b) {
-    const double d[4]{distance(a.back(), b.front()), distance(a.back(), b.back()), distance(a.front(), b.back()),
+// Расстояния четырёх стыков пары: конец a к началу b, конец к концу, начало к
+// концу, начало к началу -- в этом порядке.
+std::array<double, 4> jointDistances(const Polyline& a, const Polyline& b) {
+    return {distance(a.back(), b.front()), distance(a.back(), b.back()), distance(a.front(), b.back()),
         distance(a.front(), b.front())};
-    Joint best{std::numeric_limits<double>::infinity(), 0};
-    for(int kind{}; kind < 4; ++kind)
-        if(d[kind] < best.distance) best = {d[kind], kind}; // строго: при равных -- прежний порядок
-    return best;
 }
 
-// Склейка пары: к a приклеивается b ближайшим стыком (nearestJoint). Пара
-// заведомо склеивается (stitchJoinable).
-void stitchPair(Polyline& a, Polyline b) {
-    switch(nearestJoint(a, b).kind) {
+// Ближайший из стыков (NaN не в счёт).
+double nearestOf(const std::array<double, 4>& d) {
+    double nearest = std::numeric_limits<double>::infinity();
+    for(double v: d)
+        if(v < nearest) nearest = v;
+    return nearest;
+}
+
+// Насколько пара близка: её ближайший стык.
+double pairDistance(const Polyline& a, const Polyline& b) { return nearestOf(jointDistances(a, b)); }
+
+// Склейка пары: к a приклеивается b первым по порядку из стыков, равных
+// ближайшему (sameReach) и лежащих в пределах клея. Пара заведомо
+// склеивается (stitchJoinable).
+void stitchPair(Polyline& a, Polyline b, double glue) {
+    const auto d = jointDistances(a, b);
+    const double nearest = nearestOf(d);
+    int kind{};
+    while(kind < 3 && !(d[kind] <= glue && d[kind] <= nearest + sameReach)) ++kind;
+    switch(kind) {
     case 0: break;
     case 1: b.reverse(); break;
     case 2: a.reverse(), b.reverse(); break;
@@ -210,36 +226,43 @@ bool stitchJoinable(const Polyline& a, const Polyline& b, double glue) {
 
 bool stitchable(const Polyline& p) { return !p.closed && p.size() >= 2; }
 
-// Пара куска -- та, чей стык ближе (nearestJoint); при равных -- меньший
-// номер. Стык точнее клея у соседа по контуру всегда ближе, чем у куска через
-// одного, -- даже когда куски короче клея и в его пределах лежат оба.
-struct Partner {
-    double distance{std::numeric_limits<double>::infinity()};
-    std::size_t id{std::numeric_limits<std::size_t>::max()};
-    void offer(double d, std::size_t candidate) {
-        if(d < distance || (d == distance && candidate < id)) distance = d, id = candidate;
-    }
-};
+// Пара куска: из кандидатов -- с меньшим номером среди тех, чей стык равен
+// ближайшему (sameReach). Стык у соседа по контуру всегда ближе, чем у куска
+// через одного, даже когда куски короче клея и в его пределах лежат оба.
+// Два прохода -- сперва ближайший стык, затем меньший номер среди равных ему:
+// так выбор не зависит от порядка обхода кандидатов. forEach(visit) обходит
+// кандидатов, visit(номер, расстояние).
+template<typename ForEach>
+std::size_t choosePartner(ForEach&& forEach) {
+    double nearest = std::numeric_limits<double>::infinity();
+    forEach([&nearest](std::size_t, double d) {
+        if(d < nearest) nearest = d;
+    });
+    std::size_t best = std::numeric_limits<std::size_t>::max();
+    forEach([&](std::size_t id, double d) {
+        if(d <= nearest + sameReach && id < best) best = id;
+    });
+    return best;
+}
 
 // Склейка перебором: после каждой склейки -- снова с начала. Склеивается
-// ПЕРВЫЙ открытый кусок, у которого вообще есть пара, с БЛИЖАЙШЕЙ из своих
-// пар (Partner). Квадратична на каждую склейку -- для входа, с которым сетка
-// не справится (NaN, бесконечность, гигантские координаты).
+// ПЕРВЫЙ открытый кусок, у которого вообще есть пара, со своей парой
+// (choosePartner). Квадратична на каждую склейку -- для входа, с которым
+// сетка не справится (NaN, бесконечность, гигантские координаты).
 void stitchQuadratic(Polylines& polylines, double glue) {
     bool merged;
     do {
         merged = false;
         for(std::size_t i{}; i < polylines.size() && !merged; ++i) {
             if(!stitchable(polylines[i])) continue;
-            Partner partner;
-            for(std::size_t j{}; j < polylines.size(); ++j) {
-                if(i == j || !stitchable(polylines[j])) continue;
-                if(!stitchJoinable(polylines[i], polylines[j], glue)) continue;
-                partner.offer(nearestJoint(polylines[i], polylines[j]).distance, j);
-            }
-            if(partner.id >= polylines.size()) continue;
-            stitchPair(polylines[i], polylines[partner.id]);
-            polylines.erase(polylines.begin() + static_cast<std::ptrdiff_t>(partner.id));
+            const std::size_t j = choosePartner([&](auto&& visit) {
+                for(std::size_t k{}; k < polylines.size(); ++k)
+                    if(k != i && stitchable(polylines[k]) && stitchJoinable(polylines[i], polylines[k], glue))
+                        visit(k, pairDistance(polylines[i], polylines[k]));
+            });
+            if(j >= polylines.size()) continue;
+            stitchPair(polylines[i], polylines[j], glue);
+            polylines.erase(polylines.begin() + static_cast<std::ptrdiff_t>(j));
             merged = true;
         }
         checkCancelled(); // склейка квадратична по числу обрывков
@@ -247,7 +270,7 @@ void stitchQuadratic(Polylines& polylines, double glue) {
 }
 
 // Та же склейка в ТОМ ЖЕ порядке, но без перебора. Порядок перебора задан
-// правилом «первый кусок с парой и ближайшая из его пар» -- значит, следующую
+// правилом «первый кусок с парой и его пара по choosePartner» -- значит, следующую
 // склейку определяет наименьший номер среди кусков, у которых пара есть.
 // Их множество и держится, а пары ищутся сеткой концов: склейка меняет
 // концы лишь двух кусков, и пересчитывать надо только тех, чьи концы лежат
@@ -276,15 +299,16 @@ bool stitchFast(Polylines& polylines, double glue) {
         if(stitchable(polylines[id])) insert(id);
 
     constexpr uint32_t none = std::numeric_limits<uint32_t>::max();
-    // Ближайшая пара куска i (Partner) -- та, что нашёл бы перебор.
+    // Пара куска i (choosePartner) -- та, что нашёл бы перебор.
     auto partnerOf = [&](uint32_t i) {
-        Partner best;
-        for(const QPointF& end: {QPointF{polylines[i].front()}, QPointF{polylines[i].back()}})
-            grid.near(end, [&](uint32_t id) {
-                if(id != i && stitchJoinable(polylines[i], polylines[id], glue))
-                    best.offer(nearestJoint(polylines[i], polylines[id]).distance, id);
-            });
-        return best.id < count ? static_cast<uint32_t>(best.id) : none;
+        const std::size_t best = choosePartner([&](auto&& visit) {
+            for(const QPointF& end: {QPointF{polylines[i].front()}, QPointF{polylines[i].back()}})
+                grid.near(end, [&](uint32_t id) {
+                    if(id != i && stitchJoinable(polylines[i], polylines[id], glue))
+                        visit(id, pairDistance(polylines[i], polylines[id]));
+                });
+        });
+        return best < count ? static_cast<uint32_t>(best) : none;
     };
 
     std::set<uint32_t> ready; // куски, у которых пара есть
@@ -309,7 +333,7 @@ bool stitchFast(Polylines& polylines, double glue) {
         touchNear(j);
         erase(i);
         erase(j);
-        stitchPair(polylines[i], std::move(polylines[j]));
+        stitchPair(polylines[i], std::move(polylines[j]), glue);
         alive[j] = 0;
         ready.erase(j);
         insert(i);
