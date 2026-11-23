@@ -13,43 +13,53 @@
 #include <QTest>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <ranges>
 
 using namespace Geo;
 
 namespace {
 
-// Склейка Geo::stitch ДО сетки концов -- перебором, как она и была (база
-// c559383), вместе с замыканием вернувшихся к старту обрывков. Эталон для
-// stitchMatchesPairwiseReference: сетка обязана давать то же самое, в том же
-// порядке и с теми же разворотами.
+// Склейка Geo::stitch перебором, без сетки концов, вместе с замыканием
+// вернувшихся к старту обрывков. Эталон для stitchMatchesPairwiseReference:
+// сетка обязана давать то же самое, в том же порядке и с теми же разворотами.
+// Правило -- первый кусок, у которого есть пара, с БЛИЖАЙШЕЙ парой (при
+// равных -- меньший номер) и ближайшим из четырёх стыков (при равных --
+// конец к началу, конец к концу, начало к концу, начало к началу).
 void stitchPairwise(Polylines& polylines, double glue) {
-    auto joinable = [glue](QPointF a, QPointF b) { return distance(a, b) <= glue; };
+    auto joints = [](const Polyline& a, const Polyline& b) {
+        return std::array{distance(a.back(), b.front()), distance(a.back(), b.back()), distance(a.front(), b.back()),
+            distance(a.front(), b.front())};
+    };
     bool merged;
     do {
         merged = false;
         for(std::size_t i{}; i < polylines.size() && !merged; ++i) {
             if(polylines[i].closed || polylines[i].size() < 2) continue;
+            std::size_t best = polylines.size();
+            double bestDistance = std::numeric_limits<double>::infinity();
             for(std::size_t j{}; j < polylines.size(); ++j) {
                 if(i == j || polylines[j].closed || polylines[j].size() < 2) continue;
-                Polyline& a = polylines[i];
-                Polyline b = polylines[j];
-                if(joinable(a.back(), b.front())) {
-                } else if(joinable(a.back(), b.back())) {
-                    b.reverse();
-                } else if(joinable(a.front(), b.back())) {
-                    a.reverse(), b.reverse();
-                } else if(joinable(a.front(), b.front())) {
-                    a.reverse();
-                } else
-                    continue;
-                a.append(b);
-                polylines.erase(polylines.begin() + j);
-                merged = true;
-                break;
+                const auto d = joints(polylines[i], polylines[j]);
+                const double nearest = *std::ranges::min_element(d);
+                if(nearest <= glue && nearest < bestDistance) best = j, bestDistance = nearest;
             }
+            if(best == polylines.size()) continue;
+            Polyline& a = polylines[i];
+            Polyline b = polylines[best];
+            const auto d = joints(a, b);
+            switch(std::ranges::min_element(d) - d.begin()) {
+            case 0: break;
+            case 1: b.reverse(); break;
+            case 2: a.reverse(), b.reverse(); break;
+            case 3: a.reverse(); break;
+            }
+            a.append(b);
+            polylines.erase(polylines.begin() + static_cast<std::ptrdiff_t>(best));
+            merged = true;
         }
     } while(merged);
     for(Polyline& p: polylines) {
@@ -411,6 +421,53 @@ private slots:
         QCOMPARE(pieces.size(), std::size_t{1});
         QVERIFY(pieces.front().closed);
         QCOMPARE(pieces.front().size(), std::size_t{4});
+    }
+
+    // Скругление KiCad пишет отрезками по 0.0499 мм -- короче клея 0.05 по
+    // умолчанию, и в пределах клея у куска оказываются оба конца соседа и
+    // конец куска через одного. Склейка «первым стыком в пределах клея»
+    // разворачивала кусок задом наперёд и теряла вершины: из 65 вырезов
+    // панели собиралось 52 тела и 12 обрывков, и «Внутри» вырезы со
+    // скруглениями молча пропадали. Ближайший стык -- всегда настоящий.
+    void stitchPiecesShorterThanGlue() {
+        // Вырез 4 x 6 со скруглёнными углами R0.5 -- обход против часовой.
+        constexpr double r = 0.5, chord = 0.0499;
+        const int perCorner = static_cast<int>(std::ceil(r * pi / 2.0 / chord));
+        Polyline ring;
+        const QPointF centers[4]{{3.5, 0.5}, {3.5, 5.5}, {0.5, 5.5}, {0.5, 0.5}};
+        for(int corner{}; corner < 4; ++corner)
+            for(int k{}; k <= perCorner; ++k) {
+                const double a = (corner - 1) * pi / 2.0 + k * (pi / 2.0) / perCorner;
+                ring.emplace_back(centers[corner] + QPointF{r * std::cos(a), r * std::sin(a)});
+            }
+        double expected{};
+        for(std::size_t i{}; i < ring.size(); ++i) {
+            const QPointF& p = ring[i];
+            const QPointF& q = ring[(i + 1) % ring.size()];
+            expected += (p.x() * q.y() - q.x() * p.y()) / 2.0;
+        }
+        uint64_t state = 20261123;
+        auto next = [&state] {
+            state = state * 6364136223846793005ull + 1442695040888963407ull;
+            return state >> 33;
+        };
+        for(const double glue: {0.05, 0.1}) {
+            for(int round{}; round < 5; ++round) {
+                Polylines pieces;
+                for(std::size_t i{}; i < ring.size(); ++i) {
+                    Polyline piece{ring[i], ring[(i + 1) % ring.size()]};
+                    if(next() & 1) piece.reverse();
+                    pieces.push_back(std::move(piece));
+                }
+                for(std::size_t i = pieces.size(); i > 1; --i) std::swap(pieces[i - 1], pieces[next() % i]);
+                const Normalized norm = normalize(std::move(pieces), glue);
+                QVERIFY(norm.open.empty());
+                QCOMPARE(norm.region.size(), std::size_t{1});
+                QCOMPARE(norm.region.contours().size(), std::size_t{1});
+                QVERIFY2(std::abs(norm.region.area() - expected) < 1e-9,
+                    qPrintable(QString::number(norm.region.area(), 'f', 12) + QStringLiteral(" vs ") + QString::number(expected, 'f', 12)));
+            }
+        }
     }
 
     // Склейка сеткой концов -- та же, что перебором: какой кусок к какому,
