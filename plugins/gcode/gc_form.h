@@ -132,17 +132,25 @@ protected:
 private:
     Creator* creator_{nullptr};
 
-    QDialogButtonBox* errBtnBox;
+    QPushButton* pbErrContinue;
+    QPushButton* pbErrRunAll;
+    QPushButton* pbErrBreak;
     class TableView* errTable;
 
     QWidget* ctrWidget;
     QWidget* errWidget;
 
+    // Ответы таблицы ошибок: «Продолжить» -- без контуров с ошибками,
+    // «Выполнить с ошибками» -- все как есть (см. Creator::ErrorAnswer),
+    // «Прервать» -- отмена.
     void errContinue();
+    void errRunWithErrors();
+    void errAnswer(Creator::ErrorAnswer answer);
     void errBreak();
 
     void cancel();
-    void errorHandler(int = 0);
+    // faulty -- см. Creator::errorOccurred.
+    void errorHandler(int faulty = 0);
 
     void startProgress();
     void stopProgress();

@@ -85,10 +85,24 @@ public:
     // внутри одного вызова (см. geo/cancel.h). Без токена считает до конца.
     void createGc(Params&& gcp, std::stop_token token = {});
 
+    // Ответ на найденные ошибки (таблица ошибок формы). «Прервать» сюда не
+    // входит: это отмена стоп-токеном, см. continueCalc.
+    enum class ErrorAnswer {
+        // «Продолжить»: считать без тел, в которых нашлась ошибка, -- их
+        // траекторий не будет вовсе. Убрать можно лишь тело с ошибкой ВНУТРИ
+        // (сторона Inner); щель между телами (Outer) ничьей не назначишь, и
+        // там убирать нечего -- это то же, что RunAll.
+        SkipFaulty,
+        // «Выполнить с ошибками»: считать всё как есть, будто ошибок нет, --
+        // куда инструмент не проходит, там и останется необработанным. Так
+        // прежде работал и «Continue»: сам он ничего не убирал.
+        RunAll,
+    };
+
     // Ответ на вопрос, заданный isContinueCalc: расчётный поток спит, пока
-    // GUI не нажмёт «Continue» или «Break». Зовётся ПРЯМО из GUI-потока и
-    // только будит; отменяет («Break») стоп-токен, а не этот вызов.
-    void continueCalc();
+    // GUI не ответит. Зовётся ПРЯМО из GUI-потока и только будит; отменяет
+    // («Break») стоп-токен, а не этот вызов.
+    void continueCalc(ErrorAnswer answer = ErrorAnswer::RunAll);
 
     // Надпись в прогрессбаре. Пишет её расчётный поток, читает GUI -- отсюда
     // мьютекс, а не голое поле: QString неявно разделяемая, и гонка на ней --
@@ -110,7 +124,10 @@ private:
 
 signals:
     void fileReady(File* file);
-    void errorOccurred(int = 0);
+    // Найдены ошибки (items), расчётный поток ждёт ответа continueCalc.
+    // faulty -- сколько тел убрал бы ответ SkipFaulty; ноль -- убирать
+    // нечего, и он ничем не отличается от RunAll.
+    void errorOccurred(int faulty = 0);
 
 protected:
     bool checkMilling(SideOfMilling side);
@@ -145,7 +162,10 @@ protected:
     double stepOver{};
     Params gcp;
 
-    void isContinueCalc();
+    // Показать ошибки (items) и дождаться ответа GUI; faulty -- см.
+    // errorOccurred. Ответ читается под мьютексом и отдаётся сразу: поле
+    // answer_ после пробуждения может переписать отмена из GUI.
+    ErrorAnswer isContinueCalc(int faulty);
 
 private:
     // Ожидание ответа на найденные ошибки: расчётный поток спит на cv, GUI
@@ -154,6 +174,7 @@ private:
     std::mutex mutex;
     std::condition_variable cv;
     bool answered_{};
+    ErrorAnswer answer_{ErrorAnswer::RunAll};
 
     mutable std::mutex msgMutex;
     QString msg_;
