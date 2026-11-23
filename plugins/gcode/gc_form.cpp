@@ -92,6 +92,7 @@ public:
                 auto pos{items[index.row()]->boundingRect().center()};
                 return u"X = %1\nY = %2"_s.arg(pos.x()).arg(pos.y());
             }
+            if(items[index.row()]->area() == Gi::Error::NotClosed) return QObject::tr("not closed");
             return items[index.row()]->area();
         case Qt::UserRole: return QVariant::fromValue(items[index.row()]);
         case Qt::DecorationRole:
@@ -747,10 +748,15 @@ void Form::errorHandler(int faulty) {
     creator_->checkMillingFl = false;
     stopProgress();
 
-    // Убирать нечего (щели между телами, тела, куда фреза не входит вовсе) --
-    // «Продолжить» дал бы ровно то же, что «Выполнить с ошибками», и два
-    // одинаковых ответа только путали бы.
-    pbErrContinue->setVisible(faulty > 0);
+    // Ответов всегда три, на своих местах: пропавшая кнопка читается как
+    // потерянный выбор. Когда убирать нечего (тела, куда фреза не входит
+    // вовсе, щели между телами, незамкнутые контуры), «Продолжить» дал бы
+    // ровно то же, что «Выполнить с ошибками», -- он виден, но недоступен, и
+    // подсказка говорит почему.
+    pbErrContinue->setEnabled(faulty > 0);
+    pbErrContinue->setToolTip(faulty > 0
+            ? tr("Skip the contours with errors: no toolpaths are built for them")
+            : tr("Nothing to skip: \"Run with errors\" gives the same toolpaths (the tool does not enter these places at all, they are gaps between contours, or the contour is not closed)"));
 
     ctrWidget->setVisible(false);
     errWidget->setVisible(true);

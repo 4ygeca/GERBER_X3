@@ -22,6 +22,10 @@ class Error final : public QGraphicsItem {
     const double area_;
 
 public:
+    // Площадь «контур не замкнут»: у линии её нет, таблица ошибок пишет
+    // вместо числа пометку (GCode::Form, ErrorModel).
+    static constexpr double NotClosed = -1.0;
+
     Error(const Geo::Polylines& curves, double area);
     ~Error() override;
     double area() const;

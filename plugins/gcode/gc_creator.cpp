@@ -13,6 +13,7 @@
 #include "gc_creator.h"
 
 #include "geo/boolean.h"
+#include "geo/util.h" // Geo::circle
 // #include "gc_file.h"
 #include "gc_file.h"
 #include "gc_types.h"
@@ -33,6 +34,7 @@
     #include <execution>
     #define emit
 #endif
+#include <algorithm>
 #include <forward_list>
 #include <numbers>
 #include <set>
@@ -379,11 +381,10 @@ bool Creator::checkMilling(SideOfMilling side) {
 
     // Порог шума -- для ВСЕХ ошибок, в том числе тела, в которое фреза не
     // входит вовсе: у него порога не было никакого, и сообщалось любое.
-    // Отсюда и строки таблицы по 6.2e-05 мм² на контуре платы, скруглённом
-    // у площадок под перемычки: остаток меньше testArea в таблицу не
-    // попадает, значит, это целые тела-осколки -- концы обрывков контура
-    // сошлись не точно, и склейка оставила там крошечные отдельные области.
-    // Это не материал, а погрешность чертежа.
+    // Строки таблицы по 6.2e-05 мм² на панели со скруглёнными вырезами были
+    // осколками склейки: отрезки скругления короче клея, и она сшивала их не
+    // с теми соседями (исправлено в Geo::stitch -- ближайший стык). Порог же
+    // -- от погрешности вообще: крошечное тело -- не материал, а шум чертежа.
     // Порог -- полоска в 10 мкм (биение и люфт любительского станка, точнее
     // он не режет) длиной в диаметр фрезы, но не меньше 1e-3 мм² (квадрат
     // 0.03 мм): у фрезы 1 мм это 0.01 мм² -- в двадцать раз меньше остатка в
@@ -424,6 +425,19 @@ bool Creator::checkMilling(SideOfMilling side) {
     } break;
     case Inner: {
         Timer t{"Inner"};
+        // Незамкнутое «Внутри» не обрабатывается вовсе: стороны у линии нет, и
+        // профиль с карманом берут только регион. Прежде такой контур молча
+        // пропадал из УП -- теперь он в таблице: штрих по нему и метки на
+        // концах, там, где контур не сошёлся (разрыв шире клея из «Свойств
+        // G-кода»). Убирать его нечего -- траектории у него и так нет.
+        const double stroke = std::max(0.05, toolDiameter * 0.25);
+        const double mark = std::max(0.3, toolDiameter);
+        for(const Geo::Polyline& path: openSrcPaths) {
+            Geo::Polygons shape = Geo::Inflate(Geo::Polylines{path}, stroke);
+            shape |= Geo::Polygons{Geo::Polylines{Geo::circle(mark, path.front())}};
+            shape |= Geo::Polygons{Geo::Polylines{Geo::circle(mark, path.back())}};
+            items.push_back(new Gi::Error{shape.contours(), Gi::Error::NotClosed});
+        }
         groupedPaths(Grouping::Copper);
 
         setMax(groupedPss.size());
