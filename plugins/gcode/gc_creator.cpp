@@ -186,7 +186,18 @@ void Creator::createGc(Params&& newGcp, std::stop_token token) {
                     .arg(extent.height())
                     .toStdString()};
 
-        if(possibleTest() && !App::isDebug()) {
+        // Проверка фрезеруемости -- о ФРЕЗЕ: что останется невыбранным там,
+        // куда круглый инструмент не входит. Лучу лазера она ни к чему. Его
+        // пятно (у HLDI 0.05 мм) на порядок уже любого зазора платы, и
+        // «ошибками» проверка находит лишь острые углы, где дорожка входит в
+        // площадку, -- на плате 150x250 их тысячи, таблицу не разобрать. Да и
+        // исправлять там нечего: засветка и так идёт ровно туда, куда луч
+        // достаёт (кадры растра -- регион, сжатый на пол-луча), а щель уже
+        // луча остаётся незасвеченной -- это и есть «Выполнить с ошибками».
+        // Стоит же проверка двух точных офсетов всей меди -- на такой плате
+        // минуту и больше, прежде чем растр вообще начнётся.
+        const bool laser = !gcp.tools.empty() && gcp.tools.back().type() == Tool::Laser;
+        if(possibleTest() && !App::isDebug() && !laser) {
             checkMillingFl = true;
             checkMilling(gcp.side());
             checkMillingFl = false;
@@ -316,15 +327,17 @@ void Creator::stacking(Geo::Polylines& paths) {
     sortByProximity(returnPss, App::home().pos() + App::zero().pos());
 }
 
-void Creator::isContinueCalc() {
+Creator::ErrorAnswer Creator::isContinueCalc(int faulty) {
     {
         std::lock_guard lk{mutex};
         answered_ = false;
+        answer_ = ErrorAnswer::RunAll;
     }
-    emit errorOccurred(); // очередью в GUI-поток: там покажут таблицу ошибок
+    emit errorOccurred(faulty); // очередью в GUI-поток: там покажут таблицу ошибок
     std::unique_lock lk{mutex};
     cv.wait(lk, [this] { return answered_; });
     items.clear();
+    return answer_;
 }
 
 // Мьютекс тут обязателен: без него «answered_ = true» может лечь между
@@ -334,10 +347,11 @@ void Creator::isContinueCalc() {
 // Отмену («Break») этот вызов НЕ делает -- её просят у стоп-токена, и делает
 // это форма перед тем, как разбудить: проснувшийся поток упрётся в ближайшую
 // Geo::checkCancelled и свернётся сам.
-void Creator::continueCalc() {
+void Creator::continueCalc(ErrorAnswer answer) {
     {
         std::lock_guard lk{mutex};
         answered_ = true;
+        answer_ = answer;
     }
     cv.notify_all();
 }
@@ -363,9 +377,28 @@ bool Creator::checkMilling(SideOfMilling side) {
     // разница площадей описанного квадрата и самого пятна.
     const double testArea = toolDiameter * toolDiameter * (1.0 - std::numbers::pi / 4.0);
 
+    // Порог шума -- для ВСЕХ ошибок, в том числе тела, в которое фреза не
+    // входит вовсе: у него порога не было никакого, и сообщалось любое.
+    // Отсюда и строки таблицы по 6.2e-05 мм² на контуре платы, скруглённом
+    // у площадок под перемычки: остаток меньше testArea в таблицу не
+    // попадает, значит, это целые тела-осколки -- концы обрывков контура
+    // сошлись не точно, и склейка оставила там крошечные отдельные области.
+    // Это не материал, а погрешность чертежа.
+    // Порог -- полоска в 10 мкм (биение и люфт любительского станка, точнее
+    // он не режет) длиной в диаметр фрезы, но не меньше 1e-3 мм² (квадрат
+    // 0.03 мм): у фрезы 1 мм это 0.01 мм² -- в двадцать раз меньше остатка в
+    // любом остром углу (testArea), о котором не сообщается никогда, и на
+    // два порядка больше таких осколков.
+    const double noiseArea = std::max(1e-3, 0.01 * toolDiameter);
+    const double minArea = std::max(testArea, noiseArea);
+
     auto report = [this](const Geo::Polygon& polygon) {
         items.push_back(new Gi::Error{polygon.contours(), polygon.area()});
     };
+
+    // Тела с ошибкой внутри (проход в них рвётся на куски) -- их убирает
+    // ответ «Продолжить» (ErrorAnswer::SkipFaulty).
+    std::vector<Geo::Polygon> faulty;
 
     switch(side) {
     case Outer: {
@@ -385,7 +418,7 @@ bool Creator::checkMilling(SideOfMilling side) {
         for(const Geo::Polygon& polygon: polygons) {
             incCurrent();
             Geo::checkCancelled();
-            if(polygon.area() >= testArea)
+            if(polygon.area() >= minArea)
                 report(polygon);
         }
     } break;
@@ -402,20 +435,31 @@ bool Creator::checkMilling(SideOfMilling side) {
             const Geo::Polygons body{group};
             const Geo::Polygons reachable = opening(body);
 
-            if(reachable.empty()) // фреза не входит вовсе
-                report(group);
-            else if(reachable.size() > 1) // проход разрывается на куски
+            if(reachable.empty()) { // фреза не входит вовсе
+                if(group.area() >= noiseArea)
+                    report(group);
+            } else if(reachable.size() > 1) { // проход разрывается на куски
+                const std::size_t before = items.size();
                 for(const Geo::Polygon& polygon: (body - reachable).all())
-                    if(polygon.area() >= testArea)
+                    if(polygon.area() >= minArea)
                         report(polygon);
+                if(items.size() > before) faulty.push_back(group);
+            }
         }
     } break;
     case On: break;
     }
     setMsg(last);
 
-    if(items.size())
-        isContinueCalc();
+    if(items.empty()) return true;
+
+    // «Продолжить» -- без тел с ошибками: их нет в регионе, и траекторий для
+    // них не строит уже никто. Прежде ответ ничего не убирал вовсе --
+    // считалось всё как есть, ровно как теперь «Выполнить с ошибками». Тело,
+    // в которое фреза не входит вовсе, траектории не даёт и так, а щель
+    // между телами (Outer) ничьей не назначишь -- убирать там нечего.
+    if(isContinueCalc(static_cast<int>(faulty.size())) == ErrorAnswer::SkipFaulty && !faulty.empty())
+        closedSrc -= Geo::Polygons{std::span<const Geo::Polygon>{faulty}};
     return true;
 }
 

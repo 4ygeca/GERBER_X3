@@ -151,6 +151,19 @@ public:
     // Returns JS array of strings.
     Q_INVOKABLE QJSValue savePathLines(int pathssIdx, int pathIdx, bool reversed, double perimeter, double depth);
 
+    // Группа pathssIdx как ОДИН проход с чередованием (растр HLDI, см.
+    // PocketRaster::RasterApi): нечётные пути -- те же строки, что дал бы
+    // savePathLines(i, j, false, 0, 0), чётные -- ходы по прямым к вершинам
+    // 1..n-1 словами moveWords, где слова "X" и "Y" -- места координат
+    // вершины (fmtX/fmtY); вершина, не сдвигающая головку в единицах вывода,
+    // пропускается. Строки сразу уходят в программу, ответ -- их число.
+    //
+    // То же самое скрипт пишет и сам, путь за путём, но тогда на каждую
+    // вершину хода -- семь переходов JS<->C++ (fmtX, fmtY, g1, strFeed, fmtS,
+    // formatted, addLine): на растре всей платы это полмиллиона строк и
+    // минута счёта. Здесь -- один вызов на проход.
+    Q_INVOKABLE int addPassLines(int pathssIdx, const QJSValue& moveWords);
+
     // Format a list of gcode tokens, suppressing unchanged values per format flags.
     // parts: JS array of strings such as [g0(), fmtX(1.0), fmtY(2.0)].
     // Letters written: G X Y Z I J R S F Q P L (any other word is dropped).
@@ -190,10 +203,18 @@ public:
     static QJSValue propertiesValue(QJSEngine& engine);
 
 private:
+    // Массив путей прежним способом -- объект за объектом из C++: запасной
+    // путь на случай, если сборщик ниже не создался.
+    QJSValue toolPathsValue() const;
+
     File* file_;
     QJSEngine* engine_;
     QPointF offset_;
     std::vector<Geo::Polylines> cachedPathss_;
+    // Функция JS, собирающая массивы путей из буфера чисел (getToolPaths).
+    // Живёт на движке скрипта и разрушается раньше него: прокси объявлен
+    // после движка (File::runJsScript).
+    QJSValue pathsBuilder_;
 };
 
 } // namespace GCode

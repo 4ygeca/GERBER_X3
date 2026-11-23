@@ -249,19 +249,26 @@ Form::Form(Plugin* plugin, Creator* tpc)
     { // On Error
         auto grid = new QVBoxLayout{errWidget};
         grid->addWidget(errTable = new TableView{errWidget});
-        grid->addWidget(errBtnBox = new QDialogButtonBox{errWidget});
 
-        errBtnBox->setObjectName(u"errBtnBox"_s);
-        errBtnBox->setOrientation(Qt::Horizontal);
-        errBtnBox->setStandardButtons(QDialogButtonBox::Cancel | QDialogButtonBox::Ok);
-
-        errBtnBox->button(QDialogButtonBox::Ok)->setText(tr("Continue"));
-        errBtnBox->button(QDialogButtonBox::Cancel)->setText(tr("Break"));
-
-        connect(errBtnBox->button(QDialogButtonBox::Ok),
-            &QAbstractButton::clicked, this, &Form::errContinue);
-        connect(errBtnBox->button(QDialogButtonBox::Cancel),
-            &QAbstractButton::clicked, this, &Form::errBreak);
+        // Ответы -- столбиком и во всю ширину: их три, в ряд в узкий док они
+        // не влезают, а QDialogButtonBox, поставленный стоймя, растягивать
+        // кнопки не умеет -- длинную надпись перевода он обрезал бы.
+        auto answer = [this, grid](const QString& text, const QString& toolTip, void (Form::*slot)()) {
+            auto* button = new QPushButton{text, errWidget};
+            button->setToolTip(toolTip);
+            connect(button, &QAbstractButton::clicked, this, slot);
+            grid->addWidget(button);
+            return button;
+        };
+        pbErrContinue = answer(tr("Continue"),
+            tr("Skip the contours with errors: no toolpaths are built for them"), &Form::errContinue);
+        // «Продолжить» выбрасывает контур с ошибкой целиком, а ошибка бывает и
+        // пустяковой: скругление, куда фреза не входит на волос, -- контур
+        // нужен и с ним. Этот ответ строит траектории для всех.
+        pbErrRunAll = answer(tr("Run with errors"),
+            tr("Build toolpaths for all contours as if there were no errors: the listed places stay uncut"),
+            &Form::errRunWithErrors);
+        pbErrBreak = answer(tr("Break"), tr("Stop the calculation"), &Form::errBreak);
         errWidget->setVisible({});
     }
 
@@ -730,7 +737,7 @@ void Form::cancel() {
     stopProgress();
 }
 
-void Form::errorHandler(int) {
+void Form::errorHandler(int faulty) {
     if(creator_ == nullptr)
         return;
 
@@ -739,6 +746,11 @@ void Form::errorHandler(int) {
 
     creator_->checkMillingFl = false;
     stopProgress();
+
+    // Убирать нечего (щели между телами, тела, куда фреза не входит вовсе) --
+    // «Продолжить» дал бы ровно то же, что «Выполнить с ошибками», и два
+    // одинаковых ответа только путали бы.
+    pbErrContinue->setVisible(faulty > 0);
 
     ctrWidget->setVisible(false);
     errWidget->setVisible(true);
@@ -754,7 +766,11 @@ void Form::errorHandler(int) {
     // ещё и убивали таймер, заведённый конструктором вида, -- насовсем.
 }
 
-void Form::errContinue() {
+void Form::errContinue() { errAnswer(Creator::ErrorAnswer::SkipFaulty); }
+
+void Form::errRunWithErrors() { errAnswer(Creator::ErrorAnswer::RunAll); }
+
+void Form::errAnswer(Creator::ErrorAnswer answer) {
     if(creator_ == nullptr)
         return;
     qDebug(__FUNCTION__);
@@ -765,7 +781,7 @@ void Form::errContinue() {
     errWidget->setVisible({});
 
     startProgress();
-    creator_->continueCalc();
+    creator_->continueCalc(answer);
 }
 
 void Form::errBreak() {

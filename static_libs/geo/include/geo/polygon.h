@@ -184,6 +184,12 @@ public:
     double area() const;
     QRectF boundingRect() const;
     bool contains(QPointF point) const;
+    // То же для многих точек разом, ответ i -- для points[i]. Одиночный
+    // contains обходит ВСЁ разбиение на каждый вызов (на плате с медью это
+    // миллисекунды на точку), здесь все точки локализуются одним заметанием
+    // CGAL. Ответы те же: локализация точная в обоих случаях, разнится лишь
+    // способ поиска грани.
+    std::vector<char> contains(std::span<const QPointF> points) const;
     QPainterPath toPath() const;
 
     // Сумма Минковского ГРАНИЦЫ региона с кругом радиуса `radius` -- полоса

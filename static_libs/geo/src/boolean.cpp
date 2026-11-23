@@ -10,13 +10,16 @@
 
 #include "geo/boolean.h"
 #include "cgal.h" // Cgal::weldTolerance
+#include "endgrid.h"
 #include "geo/cancel.h"
 #include "geo/util.h"
 #include "offsetcapsules.h"
 #include "phasestats.h"
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
+#include <set>
 
 #include <QtGlobal>
 
@@ -158,35 +161,48 @@ Polyline& closeRing(Polyline& p) {
 
 } // namespace
 
-void stitch(Polylines& polylines, double glue) {
-    auto joinable = [glue](QPointF a, QPointF b) { return distance(a, b) <= glue; };
+namespace {
 
+// Склейка пары: к a приклеивается b тем из четырёх стыков, что найдётся
+// первым в этом порядке. Пара заведомо склеивается (stitchJoinable).
+void stitchPair(Polyline& a, Polyline b, double glue) {
+    auto joinable = [glue](QPointF p, QPointF q) { return distance(p, q) <= glue; };
+    if(joinable(a.back(), b.front())) {
+    } else if(joinable(a.back(), b.back())) {
+        b.reverse();
+    } else if(joinable(a.front(), b.back())) {
+        a.reverse(), b.reverse();
+    } else if(joinable(a.front(), b.front())) {
+        a.reverse();
+    }
+    // Только Polyline::append: прогиб стыка -- у первой вершины куска, и
+    // ручной insert(begin() + 1, …) его выбрасывал -- дуга габарита уходила
+    // хордой, если кусок приклеивался перевёрнутым.
+    a.append(b);
+}
+
+bool stitchJoinable(const Polyline& a, const Polyline& b, double glue) {
+    auto joinable = [glue](QPointF p, QPointF q) { return distance(p, q) <= glue; };
+    return joinable(a.back(), b.front()) || joinable(a.back(), b.back())
+        || joinable(a.front(), b.back()) || joinable(a.front(), b.front());
+}
+
+bool stitchable(const Polyline& p) { return !p.closed && p.size() >= 2; }
+
+// Склейка перебором: после каждой склейки -- снова с начала. Склеивается
+// ПЕРВЫЙ открытый кусок, у которого вообще есть пара, с ПЕРВЫМ из своих пар
+// (по порядку в списке). Квадратична на каждую склейку -- для входа, с
+// которым сетка не справится (NaN, бесконечность, гигантские координаты).
+void stitchQuadratic(Polylines& polylines, double glue) {
     bool merged;
     do {
         merged = false;
         for(std::size_t i{}; i < polylines.size() && !merged; ++i) {
-            if(polylines[i].closed || polylines[i].size() < 2) continue;
+            if(!stitchable(polylines[i])) continue;
             for(std::size_t j{}; j < polylines.size(); ++j) {
-                if(i == j || polylines[j].closed || polylines[j].size() < 2) continue;
-
-                Polyline& a = polylines[i];
-                Polyline b = polylines[j];
-
-                if(joinable(a.back(), b.front())) {
-                } else if(joinable(a.back(), b.back())) {
-                    b.reverse();
-                } else if(joinable(a.front(), b.back())) {
-                    a.reverse(), b.reverse();
-                } else if(joinable(a.front(), b.front())) {
-                    a.reverse();
-                } else
-                    continue;
-
-                // Только Polyline::append: прогиб стыка -- у первой вершины
-                // куска, и ручной insert(begin() + 1, …) его выбрасывал --
-                // дуга габарита уходила хордой, если кусок приклеивался
-                // перевёрнутым.
-                a.append(b);
+                if(i == j || !stitchable(polylines[j])) continue;
+                if(!stitchJoinable(polylines[i], polylines[j], glue)) continue;
+                stitchPair(polylines[i], polylines[j], glue);
                 polylines.erase(polylines.begin() + j);
                 merged = true;
                 break;
@@ -194,6 +210,99 @@ void stitch(Polylines& polylines, double glue) {
         }
         checkCancelled(); // склейка квадратична по числу обрывков
     } while(merged);
+}
+
+// Та же склейка в ТОМ ЖЕ порядке, но без перебора. Порядок перебора задан
+// правилом «первый кусок с парой и первая из его пар» -- значит, следующую
+// склейку определяет наименьший номер среди кусков, у которых пара есть.
+// Их множество и держится, а пары ищутся сеткой концов: склейка меняет
+// концы лишь двух кусков, и пересчитывать надо только тех, чьи концы лежат
+// рядом с прежними или новыми концами этих двух. Номера -- исходные: erase
+// порядка оставшихся не меняет, так что порядок списка и есть порядок
+// номеров. На растре платы прежний перебор шёл часами (тысячи склеек по
+// квадрату обрывков, каждый с копией пути), здесь -- доли секунды.
+bool stitchFast(Polylines& polylines, double glue) {
+    double extent{};
+    for(const Polyline& p: polylines)
+        if(stitchable(p)) extent = EndGrid::extent(EndGrid::extent(extent, p.front()), p.back());
+    if(!EndGrid::usable(glue, extent) || polylines.size() >= std::numeric_limits<uint32_t>::max()) return false;
+
+    const auto count = static_cast<uint32_t>(polylines.size());
+    std::vector<char> alive(count, 1);
+    EndGrid grid{glue};
+    auto insert = [&](uint32_t id) {
+        grid.insert(polylines[id].front(), id);
+        grid.insert(polylines[id].back(), id);
+    };
+    auto erase = [&](uint32_t id) {
+        grid.erase(polylines[id].front(), id);
+        grid.erase(polylines[id].back(), id);
+    };
+    for(uint32_t id{}; id < count; ++id)
+        if(stitchable(polylines[id])) insert(id);
+
+    constexpr uint32_t none = std::numeric_limits<uint32_t>::max();
+    // Первая (по номеру) пара куска i -- та, что нашёл бы перебор.
+    auto partnerOf = [&](uint32_t i) {
+        uint32_t best = none;
+        for(const QPointF& end: {QPointF{polylines[i].front()}, QPointF{polylines[i].back()}})
+            grid.near(end, [&](uint32_t id) {
+                if(id != i && id < best && stitchJoinable(polylines[i], polylines[id], glue)) best = id;
+            });
+        return best;
+    };
+
+    std::set<uint32_t> ready; // куски, у которых пара есть
+    for(uint32_t id{}; id < count; ++id)
+        if(stitchable(polylines[id]) && partnerOf(id) != none) ready.insert(id);
+
+    std::vector<uint32_t> touched;
+    auto touchNear = [&](uint32_t id) {
+        for(const QPointF& end: {QPointF{polylines[id].front()}, QPointF{polylines[id].back()}})
+            grid.near(end, [&](uint32_t other) { touched.push_back(other); });
+    };
+    while(!ready.empty()) {
+        checkCancelled();
+        const uint32_t i = *ready.begin();
+        const uint32_t j = partnerOf(i);
+        if(j == none) { // пару увела прежняя склейка
+            ready.erase(ready.begin());
+            continue;
+        }
+        touched.clear();
+        touchNear(i);
+        touchNear(j);
+        erase(i);
+        erase(j);
+        stitchPair(polylines[i], std::move(polylines[j]), glue);
+        alive[j] = 0;
+        ready.erase(j);
+        insert(i);
+        touchNear(i);
+        touched.push_back(i);
+        std::ranges::sort(touched);
+        touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
+        for(uint32_t id: touched) {
+            if(!alive[id]) continue;
+            if(partnerOf(id) != none) ready.insert(id);
+            else ready.erase(id);
+        }
+    }
+
+    std::size_t kept{};
+    for(uint32_t id{}; id < count; ++id)
+        if(alive[id]) {
+            if(kept != id) polylines[kept] = std::move(polylines[id]);
+            ++kept;
+        }
+    polylines.resize(kept);
+    return true;
+}
+
+} // namespace
+
+void stitch(Polylines& polylines, double glue) {
+    if(!stitchFast(polylines, glue)) stitchQuadratic(polylines, glue);
 
     // Замкнувшийся сам на себя обрывок -- это контур, а не линия.
     for(Polyline& polyline: polylines)
