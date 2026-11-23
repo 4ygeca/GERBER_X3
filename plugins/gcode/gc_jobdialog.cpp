@@ -13,9 +13,13 @@
 #include "gc_jobdialog.h"
 
 #include "app.h"
+#include "gc_post.h"
 #include "project.h"
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -48,8 +52,11 @@ JobDialog::JobDialog(Job job, QWidget* parent)
     layout->addWidget(hint);
 
     table_ = new QTableWidget{0, ColCount, this};
-    table_->setHorizontalHeaderLabels({tr("T"), tr("Code"), tr("Tool"), tr("Operation"), tr("Program"), tr("S"), tr("F"), tr("Cutout — last")});
+    table_->setHorizontalHeaderLabels({tr("T"), tr("Length"), tr("Code"), tr("Tool"), tr("Operation"), tr("Program"), tr("S"), tr("F"), tr("Cutout — last")});
     table_->horizontalHeaderItem(ColTool)->setToolTip(tr("Tool number in this job; bold -- a tool change before the step"));
+    table_->horizontalHeaderItem(ColLength)->setToolTip(
+        tr("Tool length: from the controller table (G43 H, measured beforehand by the tool table file) "
+           "or probed at X0 Y0 in the tool change"));
     table_->horizontalHeaderItem(ColSpeed)->setToolTip(tr("Spindle speed (laser: power)"));
     table_->horizontalHeaderItem(ColFeed)->setToolTip(tr("Feed, mm/min: plunge feed for drilling, cutting feed otherwise"));
     table_->horizontalHeaderItem(ColCutout)->setToolTip(tr("Blank cutout: the very last step of the job"));
@@ -88,6 +95,26 @@ JobDialog::JobDialog(Job job, QWidget* parent)
     buttons->addWidget(sbxMaxTool_);
     layout->addLayout(buttons);
 
+    // Длины инструментов: по умолчанию -- не в файле (отправитель, $341);
+    // либо таблица контроллера и щуп -- тогда у каждого инструмента свой
+    // выбор в колонке «Длина».
+    lengthsBox_ = new QGroupBox{tr("Tool lengths"), this};
+    auto* lengthsLayout = new QVBoxLayout{lengthsBox_};
+    auto* modeRow = new QHBoxLayout;
+    auto* lblLengths = new QLabel{tr("Lengths:"), lengthsBox_};
+    cbxLengths_ = new QComboBox{lengthsBox_};
+    cbxLengths_->addItem(tr("Not in the file: the sender or the controller ($341) measures"), static_cast<int>(JobLengths::Sender));
+    cbxLengths_->addItem(tr("Controller tool table and probe (G43 H, touch at X0 Y0)"), static_cast<int>(JobLengths::Controller));
+    lblLengths->setBuddy(cbxLengths_);
+    modeRow->addWidget(lblLengths);
+    modeRow->addWidget(cbxLengths_, 1);
+    lengthsLayout->addLayout(modeRow);
+    chbxZeroProbe_ = new QCheckBox{tr("Probe Z0 at X0 Y0 at the start of the job"), lengthsBox_};
+    lengthsLayout->addWidget(chbxZeroProbe_);
+    chbxTableFile_ = new QCheckBox{tr("Tool table file next to the job (<name>_tool_table): measures the tools from the table into their cells"), lengthsBox_};
+    lengthsLayout->addWidget(chbxTableFile_);
+    layout->addWidget(lengthsBox_);
+
     summary_ = new QLabel{this};
     summary_->setWordWrap(true);
     layout->addWidget(summary_);
@@ -101,7 +128,8 @@ JobDialog::JobDialog(Job job, QWidget* parent)
 
     auto* buttonBox = new QDialogButtonBox{QDialogButtonBox::Save | QDialogButtonBox::Cancel, this};
     // Дальше -- выбор имени файла.
-    buttonBox->button(QDialogButtonBox::Save)->setText(tr("Save..."));
+    pbSave_ = buttonBox->button(QDialogButtonBox::Save);
+    pbSave_->setText(tr("Save..."));
     layout->addWidget(buttonBox);
 
     connect(pbUp_, &QPushButton::clicked, this, [this] { moveStep(-1); });
@@ -114,6 +142,22 @@ JobDialog::JobDialog(Job job, QWidget* parent)
         fill();
         if(current >= 0) selectStep(current);
     });
+    connect(cbxLengths_, &QComboBox::currentIndexChanged, this, [this] {
+        job_.lengths = static_cast<JobLengths>(cbxLengths_->currentData().toInt());
+        job_.saveLengthSettings();
+        const int32_t current = rowStep(currentRow());
+        fill();
+        if(current >= 0) selectStep(current);
+    });
+    connect(chbxZeroProbe_, &QCheckBox::toggled, this, [this](bool checked) {
+        job_.zeroProbe = checked;
+        job_.saveLengthSettings();
+        fill();
+    });
+    connect(chbxTableFile_, &QCheckBox::toggled, this, [this](bool checked) {
+        job_.toolTableFile = checked;
+        job_.saveLengthSettings();
+    });
     connect(table_, &QTableWidget::itemChanged, this, &JobDialog::cutoutToggled);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &JobDialog::updateButtons);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &JobDialog::accept);
@@ -121,7 +165,7 @@ JobDialog::JobDialog(Job job, QWidget* parent)
 
     fill();
     if(!job_.steps.empty()) selectStep(job_.steps.front().id);
-    resize(std::max(sizeHint().width(), 860), 460);
+    resize(std::max(sizeHint().width(), 900), 560);
 }
 
 JobDialog::~JobDialog() = default;
@@ -131,6 +175,9 @@ void JobDialog::fill() {
     // Сигналы таблицы -- молчат: иначе флажок новой строки звал бы
     // cutoutToggled посреди пересборки.
     const QSignalBlocker blocker{table_};
+    // Списки длины -- виджеты ячеек: setItem их не снимает, а смена у строки
+    // после перестановки бывает уже другая.
+    for(int row{}; row < table_->rowCount(); ++row) table_->removeCellWidget(row, ColLength);
     table_->setRowCount(static_cast<int>(job_.steps.size()));
     for(int row{}; std::cmp_less(row, job_.steps.size()); ++row) {
         const JobStep& step = job_.steps[row];
@@ -151,6 +198,26 @@ void JobDialog::fill() {
             tool->setToolTip(tr("Tool change before this step"));
         } else
             tool->setToolTip(tr("The same tool as in the previous step: no tool change"));
+        cell(ColLength, {});
+        if(job_.controllerLengths()) {
+            const bool fromTable = job_.tableTools.contains(step.identity);
+            if(plan.toolChange[row]) {
+                // Выбор -- у смены инструмента: длина у инструмента одна на
+                // все его шаги, и запоминается она за ним.
+                auto* combo = new QComboBox{table_};
+                combo->addItem(tr("Table (G43 H)"));
+                combo->addItem(tr("Probe at X0 Y0"));
+                combo->setCurrentIndex(fromTable ? 0 : 1);
+                combo->setToolTip(tr("Table: the length measured beforehand by the tool table file, G43 H%1.\n"
+                                     "Probe: the tool touches the probe at X0 Y0 in this tool change.")
+                                      .arg(plan.toolNumbers[row]));
+                const int32_t id = step.id;
+                connect(combo, &QComboBox::currentIndexChanged, this, [this, id](int index) { setFromTable(id, index == 0); });
+                table_->setCellWidget(row, ColLength, combo);
+            } else
+                cell(ColLength, fromTable ? tr("Table (G43 H)") : tr("Probe at X0 Y0"))
+                    ->setToolTip(tr("The same tool as in the previous step: no tool change, the length stays"));
+        }
         cell(ColCode, step.code);
         cell(ColName, step.toolName);
         cell(ColOperation, Tool::operationName(step.operation));
@@ -170,13 +237,21 @@ void JobDialog::fill() {
     else
         summary_->setText(tr("Tools: %1, tool changes: %2.").arg(plan.tools).arg(plan.toolChanges));
 
-    QStringList warnings;
+    updateLengths();
+    QStringList warnings = job_.lengthProblems();
+    // Писать нельзя, пока длины не сходятся: Z0 встал бы не там.
+    pbSave_->setEnabled(warnings.isEmpty());
     if(plan.wrapped)
         warnings << tr("%1 tools, but the controller takes only T1..T%2: tool numbers repeat (T%3 is T1 again). "
                        "The tool code in the file tells the tools apart.")
                         .arg(plan.tools)
                         .arg(job_.maxToolNumber)
                         .arg(job_.maxToolNumber + 1);
+    // Число ячеек таблицы контроллера -- предел номеров T: без него файл
+    // замера не знает, что обнулять, а номера сверх ячеек не пойдут по кругу.
+    if(job_.controllerLengths() && job_.maxToolNumber == 0)
+        warnings << tr("The size of the controller's tool table is not set: set \"Tool numbers up to T\" to its cells "
+                       "(grblHAL N_TOOLS, 8) -- up to it the tool table file zeroes the unused cells.");
     if(!job_.skipped.isEmpty())
         warnings << tr("Skipped, no toolpaths: %1").arg(job_.skipped.join(u", "_s));
     warnings_->setText(warnings.join(u'\n'));
@@ -239,6 +314,71 @@ void JobDialog::cutoutToggled(QTableWidgetItem* item) {
     // пересборка этот элемент удаляет. До неё строки и шаги не совпадают --
     // шаг строки поэтому всегда по id (rowStep), а не по номеру строки.
     job_.applyDefaultOrder();
+    QTimer::singleShot(0, this, [this, id] {
+        fill();
+        selectStep(id);
+    });
+}
+
+void JobDialog::updateLengths() {
+    const bool can = !job_.laser && App::gcSettings().post().toolLengths();
+    const bool controller = job_.controllerLengths();
+    {
+        const QSignalBlocker blocker{cbxLengths_};
+        cbxLengths_->setCurrentIndex(controller ? 1 : 0);
+    }
+    cbxLengths_->setEnabled(can);
+    if(can)
+        cbxLengths_->setToolTip(tr("Not in the file: the tool change and the touch-off are the sender's or the controller's "
+                                   "(grblHAL $341 = 1).\n"
+                                   "Controller tool table and probe (grblHAL $341 = 0, M6 is a pause): every tool takes its "
+                                   "length from the table (G43 H) or touches the probe at X0 Y0 in its tool change -- "
+                                   "the column \"Length\"."));
+    else if(job_.laser)
+        cbxLengths_->setToolTip(tr("Laser job: no tool changes"));
+    else
+        cbxLengths_->setToolTip(tr("The post \"%1\" cannot write tool lengths (grblHAL can).").arg(App::gcSettings().post().name()));
+    table_->setColumnHidden(ColLength, !controller);
+
+    // Замер Z0 в начале -- выбор лишь у первого инструмента «из таблицы»: у
+    // «щупа» его касание Z0 и задаёт.
+    const bool firstFromTable = !job_.steps.empty() && job_.tableTools.contains(job_.steps.front().identity);
+    {
+        const QSignalBlocker blocker{chbxZeroProbe_};
+        chbxZeroProbe_->setChecked(controller && (firstFromTable ? job_.zeroProbe : true));
+    }
+    chbxZeroProbe_->setEnabled(controller && firstFromTable);
+    chbxZeroProbe_->setToolTip(!controller ? QString{}
+            : firstFromTable
+            ? tr("The first tool goes to X0 Y0, touches the probe and sets Z0 of the work with its table length; "
+                 "then a pause to take the probe off. Off: Z0 is set already.")
+            : tr("The first tool is probed: its touch at X0 Y0 sets Z0 of the work anyway."));
+
+    const bool table = job_.usesTable();
+    {
+        const QSignalBlocker blocker{chbxTableFile_};
+        chbxTableFile_->setChecked(table && job_.toolTableFile);
+    }
+    chbxTableFile_->setEnabled(table);
+    chbxTableFile_->setToolTip(table
+            ? tr("A separate file: every tool from the table touches the probe at one point and its length goes "
+                 "into its cell (G10 L10); the cells up to T%1 this job does not use are zeroed (G10 L1).\n"
+                 "Run it once for a series of boards, then only the jobs.")
+                  .arg(job_.maxToolNumber > 0 ? job_.maxToolNumber : 1)
+            : tr("No tool takes its length from the table"));
+}
+
+void JobDialog::setFromTable(int32_t id, bool fromTable) {
+    const int index = stepIndex(id);
+    if(index < 0) return;
+    const QString identity = job_.steps[index].identity;
+    if(fromTable)
+        job_.tableTools.insert(identity);
+    else
+        job_.tableTools.erase(identity);
+    job_.saveLengthSettings();
+    // Таблица -- после возврата в цикл событий: сигнал идёт из самого списка,
+    // а пересборка его удаляет.
     QTimer::singleShot(0, this, [this, id] {
         fill();
         selectStep(id);

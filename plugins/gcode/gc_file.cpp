@@ -410,6 +410,10 @@ std::vector<QString> File::toolChangeText(const ToolChange& change) {
     ctx.first = change.first;
     ctx.messageText = change.message;
     ctx.message = post.message(change.message);
+    ctx.length = change.length;
+    ctx.probe = change.probe;
+    ctx.setZero = change.setZero;
+    ctx.safeZ = App::project().safeZ();
     // Код -- тот же, что в таблице инструментов задания: у старых снимков
     // поле code пустое, Tool::code() берёт его по геометрии.
     ctx.tool.setProperty(u"code"_s, change.code);

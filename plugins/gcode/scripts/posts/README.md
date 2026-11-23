@@ -248,9 +248,12 @@ M2
   `spindleOn(ctx)` with the new speed when the speed differs.
 - Laser jobs: one laser, no tool changes; another laser "tool" (spot size)
   only gets a comment with the message text.
-- GGEasy never writes tool lengths, `G43`/`G43.1`/`G49`/`G10` or probing:
-  the tool change procedure, the touch-off and the lengths are the sender's
-  (ncSender, ioSender and plugins) and the controller's (grblHAL `$341`).
+- By default GGEasy writes no tool lengths, `G43`/`G43.1`/`G49`/`G10` or
+  probing: the tool change procedure, the touch-off and the lengths are the
+  sender's (ncSender, ioSender and plugins) and the controller's (grblHAL
+  `$341`). The job dialog can instead write the lengths from the
+  controller's tool table and probe touches -- see "Tool lengths" below; only
+  with a post that can (`probe` and `toolTable`).
 
 `toolChange(ctx)` returns the lines of the block. Besides the usual fields
 `ctx` has:
@@ -282,6 +285,74 @@ set in the job dialog.
 
 `spinUp` is a property of the grblHAL, LinuxCNC, grbl and FluidNC posts:
 the dwell in seconds after the spindle start of a tool change, 0 by default.
+
+### Tool lengths
+
+"Tool lengths: Controller tool table and probe" in the job dialog is for a
+controller that keeps the tool table itself (grblHAL `$341 = 0`: `M6` is a
+pause, RUN continues; `N_TOOLS` cells -- the job dialog's "Tool numbers up to
+T") and a probe (a wire on the copper, a clip on the tool). Every tool of the
+job is either:
+
+- **Table** -- its length is in its cell already, measured by the tool table
+  file (below): the tool change writes `G43 H<n>`;
+- **Probe** -- the tool touches the probe at X0 Y0 in its tool change.
+
+Z0 of the work is set by the first tool change: a Table tool touches at
+X0 Y0 with its table length when "Probe Z0 at the start" is on (off: Z0 is
+set already), a Probe tool always touches. Later on, a Probe tool writes its
+length into its cell against that Z0 (`G10 L10 P<n> Z0`, `G43 H<n>`) when the
+job has Table tools; without any (a single board, every tool probed) it sets
+Z0 with its own tip again (`G49`, `G10 L20 P1 Z0`), and the job leaves the
+table alone. The dialog refuses a probed first tool together with Table
+tools (Z0 would be the probed tip, the table lengths were measured against
+another tool) and a Table tool in a cell shared with another tool (wrapped
+numbers).
+
+The post can do it when it has both:
+
+```js
+probe: { search: 40, feed: 60, backoff: 1, fine: 2, fineFeed: 15, lift: 20 },
+toolTable: function(ctx) { ... },
+```
+
+`probe` -- the touch: down at most `search` mm at `feed` mm/min, up
+`backoff`, the precise touch at most `fine` mm at `fineFeed`; `lift` -- up
+after a touch of the tool table file. `toolChange(ctx)` then gets besides the
+usual fields:
+
+| Field     | Value |
+|-----------|-------|
+| `length`  | `""` -- lengths are not the job's (the default), `"table"` -- `G43 H<n>` from the table, `"probe"` -- probed |
+| `probe`   | `true` -- touch the probe at X0 Y0 in this change |
+| `setZero` | `true` -- the touch sets Z0 of the work (`G10 L20 P1 Z0` with the current length); `false` -- the length goes into the tool's cell |
+| `safeZ`   | the project's safe height: up to it after the touch, before the pause to take the clip off |
+
+grblHAL writes for a probed change: a second message (clip the probe on),
+`T<n> M6`, `G49` when the touch sets Z0, `G0 X0 Y0`, `G91`,
+`G38.2 Z-<search> F<feed>`, `G0 Z<backoff>`, `G38.2 Z-<fine> F<fineFeed>`,
+`G90`, `G10 L20 P1 Z0` or `G10 L10 P<n> Z0` and `G43 H<n>`, `G0 Z<safeZ>`, a
+message to take the clip off, `M0`, then `M3 S`. A Table tool: `T<n> M6`,
+`G43 H<n>` and, for the first one with "Probe Z0 at the start", the same
+touch with `G10 L20 P1 Z0`.
+
+`toolTable(ctx)` returns the lines of the **tool table file** (the job
+dialog writes it next to the job as `<job>_tool_table.<ext>`): every Table
+tool touches the probe at one point and its length goes into its cell; the
+cells up to `ctx.cells` that the job does not use are zeroed -- an old length
+there would be taken for a new tool. `ctx`:
+
+| Field   | Value |
+|---------|-------|
+| `name`  | the job name |
+| `cells` | the highest cell (the job dialog's "Tool numbers up to T"); 0 -- unknown, zero none |
+| `tools` | `[{number, text}]` by number: T and the tool line (`T2 D10L100 DRILL D=1.00`) |
+
+grblHAL: `G21 G90 G94 G17`, `G49`, `M5`, `M61 Q0`, then per tool a message,
+`T<n> M6`, the touch and `G10 L10 P<n> Z0`, up `lift`; then `G10 L1 P<n> Z0`
+for every unused cell, a final message and `M30`. grblHAL keeps `G10 L10` in
+RAM only: send `$#` after the run and save every `[T:n|...|z]` with
+`G10 L1 Pn Zz` (the file says so at its start and at its end).
 
 ### Job info and tool table
 

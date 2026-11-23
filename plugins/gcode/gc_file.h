@@ -211,6 +211,12 @@ public:
         bool first{};
         QString code;    // код инструмента для УП -- он же ctx.tool.code
         QString message; // сообщение оператору, ASCII
+        // Длина (Post::Context): "" -- не наша, "table" -- G43 H из таблицы
+        // контроллера, "probe" -- замер щупом; probe -- касание в X0 Y0 в этой
+        // смене, setZero -- касание задаёт Z0 детали.
+        QString length;
+        bool probe{};
+        bool setZero{};
     };
     // Блок смены инструмента этой УП: отвод на safeZ, post.toolChange и снова
     // safeZ -- до любого хода по XY. После ручного касания инструмент может

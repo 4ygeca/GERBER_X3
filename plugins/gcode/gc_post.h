@@ -99,6 +99,17 @@ public:
         bool first{};
         QString message;
         QString messageText;
+        // Длина инструмента (окно задания, «Длины: таблица контроллера и
+        // щуп»; README постов, «Tool lengths»): "" -- длины не наши
+        // (отправитель, $341), "table" -- G43 H<n> из таблицы контроллера,
+        // "probe" -- замер щупом в этой смене. probe -- касание в X0 Y0 в этой
+        // смене; setZero -- касание задаёт Z0 детали (иначе -- длину в ячейку
+        // инструмента). safeZ -- безопасная высота проекта: на неё блок
+        // поднимается после касания.
+        QString length;
+        bool probe{};
+        bool setZero{};
+        double safeZ{};
     };
 
     Post();
@@ -154,8 +165,22 @@ public:
     QString message(const QString& text);
     // Блок смены инструмента: post.toolChange(ctx). Поля нет (пост, писанный
     // до заданий) -- ISO-смена: spindleOff, ctx.message, «T<n> M6», spindleOn.
-    // Длин, G43/G49/G10 и касаний здесь нет и не будет: это дело отправителя.
+    // Длины (G43, касания щупом) -- только если их просили в окне задания
+    // (ctx.length) и пост умеет (toolLengths).
     QStringList toolChange(const Context& ctx);
+
+    // Умеет ли пост длины инструментов из таблицы контроллера и замер щупом:
+    // есть post.probe (настройки касания) и post.toolTable (файл замера).
+    bool toolLengths() const;
+    // Файл замера таблицы инструментов задания name: post.toolTable(ctx) --
+    // каждый инструмент tools (номер T и строка о нём, ASCII) касается щупа и
+    // пишет длину в свою ячейку; ячейки до cells, которых нет в tools,
+    // обнуляются.
+    struct TableTool {
+        int number{};
+        QString text; // «T2 D10L100 DRILL D=1.00»
+    };
+    QStringList toolTable(const QString& name, int cells, const std::vector<TableTool>& tools);
 
     // Итоговый текст файла: строки + нумерация N по посту.
     QString renderText(const std::vector<QString>& lines) const;

@@ -14,6 +14,9 @@
 
 #include <QDialog>
 
+class QCheckBox;
+class QComboBox;
+class QGroupBox;
 class QLabel;
 class QPushButton;
 class QSpinBox;
@@ -39,6 +42,7 @@ public:
 private:
     enum Column {
         ColTool,
+        ColLength, // длина инструмента: «из таблицы» или «щуп» -- при таблице контроллера
         ColCode,
         ColName,
         ColOperation,
@@ -62,6 +66,10 @@ private:
     void defaultOrder();
     void cutoutToggled(QTableWidgetItem* item);
     void updateButtons();
+    // Группа длин и колонка длины -- по job_ (без сигналов).
+    void updateLengths();
+    // Инструмент шага id -- «из таблицы» (true) или «щуп».
+    void setFromTable(int32_t id, bool fromTable);
 
     Job job_;
     QTableWidget* table_{};
@@ -69,7 +77,12 @@ private:
     QLabel* warnings_{};
     QPushButton* pbUp_{};
     QPushButton* pbDown_{};
+    QPushButton* pbSave_{};
     QSpinBox* sbxMaxTool_{};
+    QGroupBox* lengthsBox_{};
+    QComboBox* cbxLengths_{};
+    QCheckBox* chbxZeroProbe_{};
+    QCheckBox* chbxTableFile_{};
 };
 
 } // namespace GCode

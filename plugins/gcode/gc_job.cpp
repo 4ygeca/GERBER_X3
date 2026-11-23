@@ -14,6 +14,7 @@
 #include "gc_file.h"
 #include "gc_jobdialog.h"
 #include "gc_plugin.h"
+#include "gc_post.h"
 
 #include "abstract_file.h"
 #include "app.h"
@@ -28,6 +29,7 @@
 #include <QSaveFile>
 #include <QSettings>
 #include <QTextStream>
+#include <map>
 #include <set>
 
 namespace GCode {
@@ -211,8 +213,80 @@ std::optional<Job> Job::fromPrograms(const std::vector<int32_t>& ids, QString& e
     job.laser = lasers > 0;
     // Номера T у лазера станку не уходят (смен нет) -- и предел им ни к чему.
     job.maxToolNumber = job.laser ? 0 : jobMaxToolNumber();
+    job.loadLengthSettings();
     job.applyDefaultOrder();
     return job;
+}
+
+namespace {
+const auto jobLengthsKey = u"GCode/JobLengths"_s;
+const auto jobZeroProbeKey = u"GCode/JobZeroProbe"_s;
+const auto jobToolTableFileKey = u"GCode/JobToolTableFile"_s;
+const auto jobTableToolsKey = u"GCode/JobTableTools"_s;
+} // namespace
+
+void Job::loadLengthSettings() {
+    const QSettings settings;
+    // Пост, который длин не умеет, -- всегда по-старому, что бы ни
+    // запомнилось от прошлого поста.
+    const bool can = App::gcSettings().post().toolLengths();
+    lengths = can && settings.value(jobLengthsKey, 0).toInt() == static_cast<int>(JobLengths::Controller)
+        ? JobLengths::Controller
+        : JobLengths::Sender;
+    zeroProbe = settings.value(jobZeroProbeKey, true).toBool();
+    toolTableFile = settings.value(jobToolTableFileKey, false).toBool();
+    tableTools.clear();
+    for(const QString& identity: settings.value(jobTableToolsKey).toStringList()) tableTools.insert(identity);
+}
+
+void Job::saveLengthSettings() const {
+    QSettings settings;
+    settings.setValue(jobLengthsKey, static_cast<int>(lengths));
+    settings.setValue(jobZeroProbeKey, zeroProbe);
+    settings.setValue(jobToolTableFileKey, toolTableFile);
+    // Отметки «из таблицы» прочих инструментов (не этого задания) -- как были:
+    // их память у инструмента, а не у задания.
+    QStringList identities = settings.value(jobTableToolsKey).toStringList();
+    for(const JobStep& step: steps) identities.removeAll(step.identity);
+    for(const QString& identity: tableTools)
+        if(r::contains(steps, identity, &JobStep::identity)) identities.push_back(identity);
+    settings.setValue(jobTableToolsKey, identities);
+}
+
+bool Job::usesTable() const {
+    return controllerLengths() && r::any_of(steps, [this](const JobStep& step) { return tableTools.contains(step.identity); });
+}
+
+QStringList Job::lengthProblems() const {
+    QStringList problems;
+    if(!controllerLengths() || steps.empty()) return problems;
+    const JobPlan p = plan();
+    // Z0 задаёт первый инструмент. Если он «щуп», Z0 -- его кончик, а длины
+    // таблицы мерены против другой точки и другого инструмента: инструмент
+    // «из таблицы» встал бы не на Z0 -- воздух или фреза в стол.
+    if(usesTable() && !tableTools.contains(steps.front().identity)) {
+        QStringList codes;
+        for(size_t i{}; i < steps.size(); ++i)
+            if(tableTools.contains(steps[i].identity) && !codes.contains(u"T%1"_s.arg(p.toolNumbers[i])))
+                codes << u"T%1"_s.arg(p.toolNumbers[i]);
+        problems << QObject::tr("The first tool is probed: its touch sets Z0 of the work, but %1 take their lengths "
+                                "from the controller table, measured against another tool -- Z0 would be wrong for them. "
+                                "Take the first tool from the table as well, or probe all tools.")
+                        .arg(codes.join(u", "_s));
+    }
+    // Номера пошли по кругу: в ячейке одна длина, а инструментов на неё
+    // несколько. «Щуп» перепишет её посреди задания (G10 L10), файл замера
+    // запишет туда лишь один -- инструменту «из таблицы» общая ячейка не годится.
+    std::map<int, std::vector<QString>> cells; // номер -> инструменты (identity)
+    for(size_t i{}; i < steps.size(); ++i)
+        if(auto& tools = cells[p.toolNumbers[i]]; !r::contains(tools, steps[i].identity)) tools.push_back(steps[i].identity);
+    for(const auto& [number, tools]: cells)
+        if(tools.size() > 1 && r::any_of(tools, [this](const QString& identity) { return tableTools.contains(identity); }))
+            problems << QObject::tr("T%1: %2 tools share cell %1 of the controller table (the tool numbers wrap), "
+                                    "and a cell holds one length. Probe these tools.")
+                            .arg(number)
+                            .arg(tools.size());
+    return problems;
 }
 
 static const auto jobMaxToolNumberKey = u"GCode/JobMaxToolNumber"_s;
@@ -300,6 +374,15 @@ std::vector<QString> Job::text(const QString& name) const {
         info.push_back(File::comment(warning.arg(plan.tools).arg(maxToolNumber)));
     }
 
+    // Длины из таблицы контроллера и щупом (окно задания). Z0 детали задаёт
+    // первая смена: инструмент «из таблицы» -- касанием с его длиной (G43 H,
+    // если просили замер в начале), «щуп» -- касанием своего кончика. Дальше
+    // «из таблицы» -- G43 H, «щуп» -- касание: при инструментах из таблицы
+    // длина в его ячейку против уже заданного Z0, без них -- снова Z0 его
+    // кончиком (таблицу такое задание не трогает вовсе).
+    const bool controller = controllerLengths();
+    const bool table = usesTable();
+
     // Шапка первой УП -- без пуска шпинделя (ctx.job), тела всех, концовка
     // последней -- один раз.
     std::vector<QString> lines = parts.front().second->jobHeaderText(info);
@@ -309,14 +392,25 @@ std::vector<QString> Job::text(const QString& name) const {
             const QString message = jobMessage(*step, plan.toolNumbers[i]);
             if(laser) // лазер один, сколько бы «инструментов» (пятен) ни было: только отметка
                 lines.push_back(File::comment(message));
-            else
-                lines.append_range(file->toolChangeText({
+            else {
+                File::ToolChange change{
                     .toolNumber = plan.toolNumbers[i],
                     .previousToolNumber = i ? plan.toolNumbers[i - 1] : 0,
                     .first = i == 0,
                     .code = step->code,
                     .message = message,
-                }));
+                    .length = {},
+                    .probe = false,
+                    .setZero = false,
+                };
+                if(controller) {
+                    const bool fromTable = tableTools.contains(step->identity);
+                    change.length = fromTable ? u"table"_s : u"probe"_s;
+                    change.probe = !fromTable || (i == 0 && zeroProbe);
+                    change.setZero = fromTable ? change.probe : !table;
+                }
+                lines.append_range(file->toolChangeText(change));
+            }
         } else if(!laser && step->spindleSpeed != parts[i - 1].first->spindleSpeed) {
             // Тот же инструмент, другие режимы: без смены, только обороты.
             lines.push_back(file->spindleOnText());
@@ -326,6 +420,19 @@ std::vector<QString> Job::text(const QString& name) const {
     lines.append_range(parts.back().second->sectionsText(File::Footer | File::Job));
     std::erase_if(lines, std::bind(&QString::isEmpty, _1));
     return lines;
+}
+
+std::vector<QString> Job::toolTableText(const QString& name) const {
+    if(!usesTable()) return {};
+    const JobPlan p = plan();
+    std::vector<Post::TableTool> tools;
+    std::set<QString> listed;
+    for(size_t i{}; i < steps.size(); ++i)
+        if(tableTools.contains(steps[i].identity) && listed.insert(steps[i].identity).second)
+            tools.push_back({p.toolNumbers[i], jobMessage(steps[i], p.toolNumbers[i])});
+    r::sort(tools, {}, &Post::TableTool::number);
+    const QStringList lines = App::gcSettings().post().toolTable(name, maxToolNumber, tools);
+    return {lines.begin(), lines.end()};
 }
 
 void saveJob(const std::vector<int32_t>& ids, QWidget* owner) {
@@ -363,10 +470,38 @@ void saveJob(const std::vector<int32_t>& ids, QWidget* owner) {
         } // поток дописан до commit: тот закрывает файл
         written = file.commit();
     }
+    // Файл замера таблицы инструментов -- рядом, с тем же именем и
+    // приставкой: панель_TS.nc и панель_TS_tool_table.nc.
+    QString tableName;
+    bool tableWritten{true};
+    QString tableError;
+    if(written && accepted.toolTableFile) {
+        const QFileInfo info{name};
+        const std::vector<QString> table = accepted.toolTableText(info.completeBaseName());
+        if(!table.empty()) {
+            tableName = info.dir().filePath(info.completeBaseName() + u"_tool_table."_s + info.suffix());
+            QSaveFile tableFile{tableName};
+            tableWritten = false;
+            if(tableFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                {
+                    QTextStream out{&tableFile};
+                    out.setEncoding(QStringConverter::Utf8);
+                    // Как написал пост, с пустыми строками между
+                    // инструментами: файл читают глазами.
+                    for(const QString& line: table) out << line << u'\n';
+                }
+                tableWritten = tableFile.commit();
+            }
+            if(!tableWritten) tableError = tableFile.errorString();
+        }
+    }
     QGuiApplication::restoreOverrideCursor();
     if(!written)
         QMessageBox::warning(owner, title,
             QObject::tr("Cannot write the job file \"%1\".\n%2").arg(QDir::toNativeSeparators(name), file.errorString()));
+    else if(!tableWritten)
+        QMessageBox::warning(owner, title,
+            QObject::tr("Cannot write the tool table file \"%1\".\n%2").arg(QDir::toNativeSeparators(tableName), tableError));
 }
 
 } // namespace GCode

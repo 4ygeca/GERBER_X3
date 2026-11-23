@@ -222,6 +222,10 @@ QJSValue Post::makeCtx(const Context& ctx) {
     obj.setProperty(u"first"_s, ctx.first);
     obj.setProperty(u"message"_s, ctx.message);
     obj.setProperty(u"messageText"_s, ctx.messageText);
+    obj.setProperty(u"length"_s, ctx.length);
+    obj.setProperty(u"probe"_s, ctx.probe);
+    obj.setProperty(u"setZero"_s, ctx.setZero);
+    obj.setProperty(u"safeZ"_s, ctx.safeZ);
     return obj;
 }
 
@@ -310,6 +314,26 @@ QStringList Post::toolChange(const Context& ctx) {
     if(post_.isObject() && !post_.property(u"toolChange"_s).isUndefined())
         return callLines(u"toolChange"_s, makeCtx(ctx));
     return {spindleOff(ctx), ctx.message, u"T%1 M6"_s.arg(ctx.toolNumber), spindleOn(ctx)};
+}
+
+bool Post::toolLengths() const {
+    return post_.isObject() && post_.property(u"probe"_s).isObject() && post_.property(u"toolTable"_s).isCallable();
+}
+
+QStringList Post::toolTable(const QString& name, int cells, const std::vector<TableTool>& tools) {
+    if(!toolLengths()) return {};
+    QJSValue ctx = engine_->newObject();
+    ctx.setProperty(u"name"_s, name);
+    ctx.setProperty(u"cells"_s, cells);
+    QJSValue list = engine_->newArray(static_cast<uint>(tools.size()));
+    for(quint32 i{}; const TableTool& tool: tools) {
+        QJSValue item = engine_->newObject();
+        item.setProperty(u"number"_s, tool.number);
+        item.setProperty(u"text"_s, tool.text);
+        list.setProperty(i++, item);
+    }
+    ctx.setProperty(u"tools"_s, list);
+    return callLines(u"toolTable"_s, ctx);
 }
 
 QString Post::renderText(const std::vector<QString>& lines) const {
