@@ -4,29 +4,24 @@
 <context>
     <name>CodeFormatDialog</name>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="79"/>
         <source>Code format</source>
-        <translation>Формат кода</translation>
+        <translation type="vanished">Формат кода</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="84"/>
         <source>Placeholders: {D} -- the diameter without the point: as many decimals as the diameter needs, at least one, with a leading 0 below 1 mm (0.35 -&gt; 035, 0.8 -&gt; 08, 1 -&gt; 10); {L} -- the working length in tenths of a millimetre (5 -&gt; 50, 10 -&gt; 100); {d}, {l} -- the diameter and the length with the point (0.8, 9); {A} -- the angle. A part in [ ] is written only when all its values are set: the working length is over 1 mm, the angle is over 0. Letters, digits, &apos;.&apos;, &apos;_&apos; and &apos;-&apos; are written as they are.</source>
-        <translation>Подстановки: {D} — диаметр без точки: знаков после неё столько, сколько нужно диаметру, но не меньше одного, у диаметра меньше 1 мм впереди 0 (0.35 → 035, 0.8 → 08, 1 → 10); {L} — длина рабочей части в десятых миллиметра (5 → 50, 10 → 100); {d}, {l} — диаметр и длина с точкой (0.8, 9); {A} — угол. Часть в [ ] пишется, только если все значения в ней заданы: длина рабочей части больше 1 мм, угол больше 0. Латинские буквы, цифры, «.», «_» и «-» пишутся как есть.</translation>
+        <translation type="vanished">Подстановки: {D} — диаметр без точки: знаков после неё столько, сколько нужно диаметру, но не меньше одного, у диаметра меньше 1 мм впереди 0 (0.35 → 035, 0.8 → 08, 1 → 10); {L} — длина рабочей части в десятых миллиметра (5 → 50, 10 → 100); {d}, {l} — диаметр и длина с точкой (0.8, 9); {A} — угол. Часть в [ ] пишется, только если все значения в ней заданы: длина рабочей части больше 1 мм, угол больше 0. Латинские буквы, цифры, «.», «_» и «-» пишутся как есть.</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="124"/>
         <source>OK recomputes the automatic codes of the tools; codes set by hand stay as they are. The code goes into the G-code, and the sender finds the tool by it: the code patterns of the sender plugin must follow this format.</source>
-        <translation>По OK автоматические коды инструментов пересчитываются, заданные вручную остаются как есть. Код уходит в G-код, и по нему отправитель находит инструмент: шаблоны кодов в плагине отправителя должны следовать этому формату.</translation>
+        <translation type="vanished">По OK автоматические коды инструментов пересчитываются, заданные вручную остаются как есть. Код уходит в G-код, и по нему отправитель находит инструмент: шаблоны кодов в плагине отправителя должны следовать этому формату.</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="132"/>
         <source>Defaults</source>
-        <translation>По умолчанию</translation>
+        <translation type="vanished">По умолчанию</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="167"/>
         <source>The pattern is not finished: a [ or a { is not closed</source>
-        <translation>Шаблон не закончен: не закрыта [ или {</translation>
+        <translation type="vanished">Шаблон не закончен: не закрыта [ или {</translation>
     </message>
 </context>
 <context>
@@ -157,17 +152,15 @@ Delete the material together with them?</source>
         <translation>Материалы…</translation>
     </message>
     <message>
-        <location filename="tooldatabase.ui" line="73"/>
         <source>Patterns of the automatic tool codes</source>
-        <translation>Шаблоны автоматических кодов инструментов</translation>
+        <translation type="vanished">Шаблоны автоматических кодов инструментов</translation>
     </message>
     <message>
-        <location filename="tooldatabase.ui" line="76"/>
         <source>Code format…</source>
-        <translation>Формат кода…</translation>
+        <translation type="vanished">Формат кода…</translation>
     </message>
     <message>
-        <location filename="tool_database.cpp" line="57"/>
+        <location filename="tool_database.cpp" line="56"/>
         <source>Invalid tool</source>
         <translation>Недействительный инструмент</translation>
     </message>
@@ -193,29 +186,24 @@ Delete the material together with them?</source>
         <translation>Информация об инструменте</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="66"/>
         <source>Drill</source>
-        <translation>Сверло</translation>
+        <translation type="vanished">Сверло</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="67"/>
         <source>End Mill</source>
-        <translation>Концевая фреза</translation>
+        <translation type="vanished">Концевая фреза</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="68"/>
         <source>Engraver</source>
-        <translation>Гравёр</translation>
+        <translation type="vanished">Гравёр</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="69"/>
         <source>Laser</source>
-        <translation>Лазер</translation>
+        <translation type="vanished">Лазер</translation>
     </message>
     <message>
-        <location filename="tool_codeformatdialog.cpp" line="70"/>
         <source>Thread Mill</source>
-        <translation>Резьбофреза</translation>
+        <translation type="vanished">Резьбофреза</translation>
     </message>
     <message>
         <location filename="tooleditform.ui" line="71"/>
@@ -230,11 +218,11 @@ Delete the material together with them?</source>
     <message>
         <location filename="tooleditform.ui" line="111"/>
         <source>Tool code for the G-code and the sender: letters, digits, &apos;.&apos;, &apos;_&apos;, &apos;-&apos; (up to 20).
-Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are set by &quot;Code format…&quot; in the tool database).</source>
+Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are in tools.json, key &quot;codeFormat&quot;).</source>
         <oldsource>Tool code for the G-code and the sender: letters, digits, &apos;.&apos;, &apos;_&apos;, &apos;-&apos; (up to 20).
-Empty -- automatic, by type and geometry (D0.8x9: drill 0.8, working length 9).</oldsource>
+Empty -- automatic, by type and geometry (D08L90: drill 0.8, working length 9; the patterns are set by &quot;Code format…&quot; in the tool database).</oldsource>
         <translation>Код инструмента для G-кода и отправителя: латинские буквы, цифры, «.», «_», «-» (до 20).
-Пусто — автоматический, по типу и геометрии (D08L90: сверло 0.8, длина рабочей части 9; шаблоны задаются в «Формат кода…» базы инструментов).</translation>
+Пусто — автоматический, по типу и геометрии (D08L90: сверло 0.8, длина рабочей части 9; шаблоны — в tools.json, ключ &quot;codeFormat&quot;).</translation>
     </message>
     <message>
         <location filename="tooleditform.ui" line="115"/>
@@ -378,49 +366,48 @@ The fields edit the shown set; the geometry always belongs to the tool.</source>
         <translation>Съём за оборот (Fz...)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="637"/>
         <source>Vc</source>
-        <translation>Vc</translation>
+        <translation type="vanished">Vc</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="654"/>
+        <location filename="tooleditform.ui" line="637"/>
         <source>Drill cycle:</source>
         <translation>Цикл сверления:</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="661"/>
+        <location filename="tooleditform.ui" line="644"/>
         <source>How the holes are drilled: a canned cycle or plain G0/G1 moves.
 Auto -- chosen by the post processor.</source>
         <translation>Как сверлятся отверстия: постоянным циклом или простыми перемещениями G0/G1.
 Авто — выбирает постпроцессор.</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="669"/>
+        <location filename="tooleditform.ui" line="652"/>
         <source>Dwell, s:</source>
         <translation>Выдержка, с:</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="676"/>
+        <location filename="tooleditform.ui" line="659"/>
         <source>Dwell at the bottom of the hole (G82)</source>
         <translation>Выдержка на дне отверстия (G82)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="692"/>
+        <location filename="tooleditform.ui" line="675"/>
         <source>Between holes return to the R plane (G99) instead of the initial plane (G98)</source>
         <translation>Между отверстиями — отвод на плоскость R (G99), а не на исходную (G98)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="695"/>
+        <location filename="tooleditform.ui" line="678"/>
         <source>Retract to R (G99)</source>
         <translation>Отвод на R (G99)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="732"/>
+        <location filename="tooleditform.ui" line="715"/>
         <source>Spindle Speed (N)</source>
         <translation>Обороты шпинделя (N)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="764"/>
+        <location filename="tooleditform.ui" line="747"/>
         <source>Feed Rate (Vf)</source>
         <translation>Подача (Vf)</translation>
     </message>
@@ -465,7 +452,7 @@ Auto -- chosen by the post processor.</source>
         <translation type="vanished">Рез за один оборот</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="708"/>
+        <location filename="tooleditform.ui" line="691"/>
         <source>Feed Speeds</source>
         <translation>Скорости подачи</translation>
     </message>
@@ -474,13 +461,13 @@ Auto -- chosen by the post processor.</source>
         <translation type="vanished">Скорость шпинделя</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="739"/>
+        <location filename="tooleditform.ui" line="722"/>
         <source> r.p.m.</source>
         <translation> об/мин</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="755"/>
-        <location filename="tooleditform.ui" line="787"/>
+        <location filename="tooleditform.ui" line="738"/>
+        <location filename="tooleditform.ui" line="770"/>
         <source>If checked then automatic calculate!</source>
         <translation>Если отмечено — автоматический расчёт!</translation>
     </message>
@@ -489,30 +476,30 @@ Auto -- chosen by the post processor.</source>
         <translation type="vanished">Скорость подачи</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="771"/>
-        <location filename="tooleditform.ui" line="800"/>
+        <location filename="tooleditform.ui" line="754"/>
+        <location filename="tooleditform.ui" line="783"/>
         <source> mm/sec</source>
         <translation> мм/сек</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="793"/>
+        <location filename="tooleditform.ui" line="776"/>
         <source>Plunge Rate</source>
         <translation>Скорость врезания</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="816"/>
+        <location filename="tooleditform.ui" line="799"/>
         <source>Checked -- M4: the laser power follows the actual speed, the exposure stays even at corners, accelerations and decelerations.
 Unchecked -- M3: constant power, the same S at any speed: corners and slow segments get more exposure.</source>
         <translation>Галка стоит — M4: мощность лазера следует за фактической скоростью, засветка остаётся равномерной в углах, на разгонах и торможениях.
 Без галки — M3: постоянная мощность, одно и то же S при любой скорости: углы и медленные участки засвечиваются сильнее.</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="820"/>
+        <location filename="tooleditform.ui" line="803"/>
         <source>Dynamic power (M4)</source>
         <translation>Динамическая мощность (M4)</translation>
     </message>
     <message>
-        <location filename="tooleditform.ui" line="833"/>
+        <location filename="tooleditform.ui" line="816"/>
         <source>Apply</source>
         <translation>Применить</translation>
     </message>
@@ -563,33 +550,33 @@ These errors do not appear in the visualization.</source>
         <translation>G73 ломка стружки</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="430"/>
+        <location filename="tool_editform.cpp" line="429"/>
         <source>Laser Power (S)</source>
         <translation>Мощность лазера (S)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="438"/>
+        <location filename="tool_editform.cpp" line="437"/>
         <source>Tool defaults</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="527"/>
-        <location filename="tool_editform.cpp" line="549"/>
+        <location filename="tool_editform.cpp" line="526"/>
+        <location filename="tool_editform.cpp" line="548"/>
         <source>New cutting data</source>
         <translation>Новые режимы резания</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="537"/>
+        <location filename="tool_editform.cpp" line="536"/>
         <source>Operation:</source>
         <translation>Операция:</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="538"/>
+        <location filename="tool_editform.cpp" line="537"/>
         <source>Material:</source>
         <translation>Материал:</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="550"/>
+        <location filename="tool_editform.cpp" line="549"/>
         <source>Cutting data for &quot;%1&quot; already exist.</source>
         <translation>Режимы для «%1» уже есть.</translation>
     </message>
@@ -612,37 +599,37 @@ The code goes into the G-code, and the sender finds the tool by it.</source>
 Код попадает в G-код, по нему отправитель находит инструмент.</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="694"/>
+        <location filename="tool_editform.cpp" line="683"/>
         <source>Cutting data</source>
         <translation>Режимы резания</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="695"/>
+        <location filename="tool_editform.cpp" line="684"/>
         <source>The cutting data &quot;%1&quot; have a zero feed, pass depth or stepover. Fill them in before applying.</source>
         <translation>В режимах «%1» нулевая подача, глубина прохода или шаг. Заполните их перед применением.</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="718"/>
+        <location filename="tool_editform.cpp" line="707"/>
         <source>End Mill (Ø%1 mm)</source>
         <translation>Концевая фреза (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="719"/>
+        <location filename="tool_editform.cpp" line="708"/>
         <source>Engrave (%2° %1 mm tip)</source>
         <translation>Гравёр (%2° %1 мм кончик)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="720"/>
+        <location filename="tool_editform.cpp" line="709"/>
         <source>Drill (Ø%1 mm)</source>
         <translation>Сверло (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="721"/>
+        <location filename="tool_editform.cpp" line="710"/>
         <source>Laser (Ø%1 mm)</source>
         <translation>Лазер (Ø%1 мм)</translation>
     </message>
     <message>
-        <location filename="tool_editform.cpp" line="722"/>
+        <location filename="tool_editform.cpp" line="711"/>
         <source>Thread (Ø%1 mm)</source>
         <translation>Резьба (Ø%1 мм)</translation>
     </message>
@@ -656,7 +643,7 @@ The code goes into the G-code, and the sender finds the tool by it.</source>
     </message>
     <message>
         <location filename="tool.cpp" line="659"/>
-        <location filename="tool_editform.cpp" line="534"/>
+        <location filename="tool_editform.cpp" line="533"/>
         <source>Any material</source>
         <translation>Любой материал</translation>
     </message>

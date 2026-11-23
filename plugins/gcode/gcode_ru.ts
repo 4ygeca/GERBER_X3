@@ -22,12 +22,12 @@
 <context>
     <name>GCode</name>
     <message>
-        <location filename="gc_creator.cpp" line="196"/>
+        <location filename="gc_creator.cpp" line="207"/>
         <source>createGc</source>
         <translation>Создание УП</translation>
     </message>
     <message>
-        <location filename="gc_creator.cpp" line="353"/>
+        <location filename="gc_creator.cpp" line="367"/>
         <source>Check milling for errors</source>
         <translation>Проверка фрезерования на ошибки</translation>
     </message>
@@ -103,8 +103,8 @@
     </message>
     <message>
         <location filename="gc_form.cpp" line="185"/>
-        <location filename="gc_form.cpp" line="448"/>
-        <location filename="gc_form.cpp" line="829"/>
+        <location filename="gc_form.cpp" line="458"/>
+        <location filename="gc_form.cpp" line="848"/>
         <source>Create</source>
         <translation>Создать</translation>
     </message>
@@ -114,74 +114,94 @@
         <translation>Имя:</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="258"/>
+        <location filename="gc_form.cpp" line="263"/>
         <source>Continue</source>
         <translation>Продолжить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="259"/>
+        <location filename="gc_form.cpp" line="264"/>
+        <source>Skip the contours with errors: no toolpaths are built for them</source>
+        <translation>Пропустить контуры с ошибками: траектории для них не строятся</translation>
+    </message>
+    <message>
+        <location filename="gc_form.cpp" line="268"/>
+        <source>Run with errors</source>
+        <translation>Выполнить с ошибками</translation>
+    </message>
+    <message>
+        <location filename="gc_form.cpp" line="269"/>
+        <source>Build toolpaths for all contours as if there were no errors: the listed places stay uncut</source>
+        <translation>Построить траектории для всех контуров, как будто ошибок нет: места из списка останутся необработанными</translation>
+    </message>
+    <message>
+        <location filename="gc_form.cpp" line="271"/>
         <source>Break</source>
         <translation>Прервать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="339"/>
+        <location filename="gc_form.cpp" line="271"/>
+        <source>Stop the calculation</source>
+        <translation>Остановить расчёт</translation>
+    </message>
+    <message>
+        <location filename="gc_form.cpp" line="346"/>
         <source>The tool doesn`t fit in the Working items!</source>
         <translation>Инструмент не вмещается в рабочую область!</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="343"/>
-        <location filename="gc_form.cpp" line="598"/>
+        <location filename="gc_form.cpp" line="350"/>
+        <location filename="gc_form.cpp" line="608"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="448"/>
-        <location filename="gc_form.cpp" line="829"/>
+        <location filename="gc_form.cpp" line="458"/>
+        <location filename="gc_form.cpp" line="848"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="598"/>
+        <location filename="gc_form.cpp" line="608"/>
         <source>No data for working...</source>
         <translation>Нет данных для работы...</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="649"/>
+        <location filename="gc_form.cpp" line="659"/>
         <source>Toolpath name</source>
         <translation>Имя УП</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="671"/>
+        <location filename="gc_form.cpp" line="681"/>
         <source>Toolpath &quot;%1&quot; is open for editing, but the name has been changed to &quot;%2&quot;.</source>
         <translation>УП «%1» открыта для правки, но имя изменено на «%2».</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="673"/>
+        <location filename="gc_form.cpp" line="683"/>
         <source>Rename</source>
         <translation>Переименовать</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="673"/>
+        <location filename="gc_form.cpp" line="683"/>
         <source>Save as New</source>
         <translation>Сохранить как новую</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="688"/>
+        <location filename="gc_form.cpp" line="698"/>
         <source>Toolpath &quot;%1&quot; already exists in the project.</source>
         <translation>УП «%1» уже есть в проекте.</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="689"/>
+        <location filename="gc_form.cpp" line="699"/>
         <source>Replace</source>
         <translation>Заменить</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="689"/>
+        <location filename="gc_form.cpp" line="699"/>
         <source>Add Number</source>
         <translation>Добавить номер</translation>
     </message>
     <message>
-        <location filename="gc_form.cpp" line="827"/>
+        <location filename="gc_form.cpp" line="846"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
@@ -444,7 +464,7 @@ A sender with its own tool library (an ncSender plugin) needs no limit.</source>
 <context>
     <name>GCode::PropertiesForm</name>
     <message>
-        <location filename="gc_propertiesform.cpp" line="219"/>
+        <location filename="gc_propertiesform.cpp" line="223"/>
         <source>(not set)</source>
         <translation>(не задан)</translation>
     </message>

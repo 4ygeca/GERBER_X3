@@ -64,7 +64,7 @@
    <item row="7" column="0" colspan="2">
     <widget class="QPushButton" name="pbPickUpTools">
      <property name="toolTip">
-      <string>Pick the tools of the drilling rows again by the hole diameter: a drill before an end mill, the exact diameter, a set working length, the order in the tool database.
+      <string>Pick the tools of the drilling rows again by the hole diameter. Only a tool whose working length reaches the drilling depth fits (a drill together with its point); among those a drill goes before an end mill, then the exact diameter, then the order in the tool database.
 Tools chosen or edited by hand are replaced. Pocket and profile rows and rows without a suitable tool stay as they are.</string>
      </property>
      <property name="text">
